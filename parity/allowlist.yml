@@ -10,3 +10,57 @@
   layers: [server]
   reason: The custom-styles seed has the same deliberate JSON-escaped logo URL as pwa/manifest (README, "The web app manifest is valid JSON")
   owner: views
+
+# Matchbox owns the setup screen's presentation and hides translation controls by default.
+# Its replacement gate is npm run test:kro. Seeded legacy comparisons enable translations.
+- state: auth/first_run
+  layers: [pixels, server, live, aria, network]
+  reason: Basecoat setup form and its assets replace the Rails nametag (README, Known differences); KRO browser tests cover appearance and setup behavior
+  owner: views
+
+- state: auth/first_run/from_sign_in
+  layers: [pixels, server, live, aria, network]
+  reason: The existing first-run redirect now displays the Basecoat setup form; KRO browser tests cover this redirect and the resulting form
+  owner: views
+
+- state: auth/first_run/filled
+  layers: [pixels, server, live, aria, network]
+  reason: The filled Basecoat setup form has deliberately different markup and assets; KRO browser tests exercise its fields and submission
+  owner: views
+
+- state: auth/first_run/completed
+  layers: [pixels, server, live, aria, network]
+  reason: A freshly created account hides translation controls on its welcome card; KRO browser tests verify setup, default visibility, and message caching
+  owner: views
+
+# These administrator screens include the new account setting, which shifts the layout.
+# The new control is exercised by test:kro; member screens retain strict comparisons.
+- state: account/edit/admin
+  layers: [pixels, server, live, aria, network]
+  reason: Adds the administrator-only Hide translation buttons setting (README, Known differences)
+  owner: views
+
+- state: account/edit/with_logo
+  layers: [pixels, server, live, aria, network]
+  reason: Adds the administrator-only translation visibility setting below the existing controls
+  owner: views
+
+- state: account/edit/restricted_room_creation
+  layers: [pixels, server, live, aria, network]
+  reason: Adds the administrator-only translation visibility setting beside the existing room creation preference
+  owner: views
+
+- state: account/edit/crowd
+  layers: [pixels, server, live, aria, network]
+  reason: Adds the administrator-only translation visibility setting above the user list
+  owner: views
+
+- state: account/edit/crowd/next_page
+  layers: [pixels, server, live, aria, network]
+  reason: The paginated administrator page retains the added translation visibility setting
+  owner: views
+
+- state: account/edit/saved
+  layers: [pixels, server, live, aria, network]
+  reason: The saved administrator page retains the added translation visibility setting
+  owner: views

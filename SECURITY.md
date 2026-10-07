@@ -1,8 +1,9 @@
 # Security
 
-Report vulnerabilities through our [HackerOne program](https://hackerone.com/basecamp) or at
-https://github.com/basecamp/once-campfire-rust/security. Note that Campfire is in scope for our
-security program, but is not bounty eligible.
+For Matchbox-specific vulnerabilities, use this repository's
+[Security tab](https://github.com/nyllon-software/matchbox/security). Matchbox is independently
+maintained and does not operate the Basecamp bounty program. For issues in upstream Campfire,
+follow the [upstream security policy](https://github.com/basecamp/once-campfire-rust/security/policy).
 
 ## Trust model
 

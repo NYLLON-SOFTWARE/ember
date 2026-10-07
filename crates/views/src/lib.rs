@@ -90,6 +90,7 @@ pub struct CurrentUser {
 #[derive(Clone, Debug)]
 pub struct AccountSummary {
     pub name: String,
+    pub hide_translation_buttons: bool,
     /// `fresh_account_logo_path` (no size).
     pub logo_url: String,
     /// `Current.account.logo.attached?` (adds the `account-has-logo` body class).

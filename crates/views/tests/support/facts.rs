@@ -73,6 +73,9 @@ pub fn platform(label: &str) -> Platform {
 pub struct Request {
     /// Rendered by `ApplicationController.renderer`, outside a request.
     pub partial: bool,
+    pub basecoat: bool,
+    /// Historical Rails renders explicitly keep translation controls visible.
+    pub hide_translation_buttons: bool,
     pub flash_notice: Option<String>,
     pub flash_alert: Option<String>,
 }
@@ -83,7 +86,10 @@ pub fn with_context<R>(name: &str, request: Request, f: impl FnOnce(&ViewContext
     let case = case(name);
     let assets: HashMap<String, String> =
         facts["assets"].as_object().unwrap().iter().map(|(k, v)| (k.clone(), v.as_str().unwrap().to_string())).collect();
-    let asset_path = move |logical: &str| assets.get(logical).cloned().unwrap_or_else(|| panic!("unknown asset {logical}"));
+    let asset_path = move |logical: &str| match logical {
+        "basecoat/theme-init.js" | "basecoat/app.js" | "kro/avatar-placeholder.svg" if request.basecoat => format!("/assets/{logical}"),
+        _ => assets.get(logical).cloned().unwrap_or_else(|| panic!("unknown asset {logical}")),
+    };
 
     let current = str_of(&case["as"]).map(|email| user_by_email(name, &email));
     let current_user = current.map(|user| CurrentUser {
@@ -99,6 +105,7 @@ pub fn with_context<R>(name: &str, request: Request, f: impl FnOnce(&ViewContext
         current_user,
         account: AccountSummary {
             name: str_of(&account["name"]).unwrap_or_default(),
+            hide_translation_buttons: request.hide_translation_buttons,
             logo_url: str_of(&account["logo_path"]).unwrap_or_else(|| "/account/logo".into()),
             has_logo: account["has_logo"].as_bool().unwrap_or(false),
         },
@@ -108,7 +115,11 @@ pub fn with_context<R>(name: &str, request: Request, f: impl FnOnce(&ViewContext
         vapid_public_key: str_of(&facts["vapid_public_key"]),
         asset_path: &asset_path,
         importmap_tags: facts["importmap_tags"].as_str().unwrap(),
-        stylesheet_tags: facts["stylesheet_tags"].as_str().unwrap(),
+        stylesheet_tags: if request.basecoat {
+            "<link rel=\"stylesheet\" href=\"/assets/basecoat/app.css\" data-turbo-track=\"reload\">"
+        } else {
+            facts["stylesheet_tags"].as_str().unwrap()
+        },
         custom_styles: str_of(&account["custom_styles"]),
         cable_url: "/cable".into(),
         request_url: format!("{base_url}{}", case["path"].as_str().unwrap()),

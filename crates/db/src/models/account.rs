@@ -29,6 +29,7 @@ pub struct AccountSettings {
 }
 
 const RESTRICT_ROOM_CREATION: &str = "restrict_room_creation_to_administrators";
+const HIDE_TRANSLATION_BUTTONS: &str = "hide_translation_buttons";
 
 impl AccountSettings {
     fn from_column(raw: Option<&str>) -> Self {
@@ -48,11 +49,20 @@ impl AccountSettings {
         self.data.insert(RESTRICT_ROOM_CREATION.into(), cast);
     }
 
+    /// Matchbox defaults to hiding translation controls, including for existing accounts.
+    /// Keep the default virtual so reading old settings does not rewrite their JSON.
+    pub fn hide_translation_buttons(&self) -> bool {
+        self.data.get(HIDE_TRANSLATION_BUTTONS).is_none_or(|value| present(Some(value)))
+    }
+
     /// `assign_data_with_type_casting`: every key must be in the schema.
     pub fn assign(&mut self, values: &[(&str, &str)]) -> Result<()> {
         for (key, value) in values {
             match *key {
                 RESTRICT_ROOM_CREATION => self.set_restrict_room_creation_to_administrators(value),
+                HIDE_TRANSLATION_BUTTONS => {
+                    self.data.insert(HIDE_TRANSLATION_BUTTONS.into(), cast_boolean(value).map(Value::Bool).unwrap_or(Value::Null));
+                }
                 other => {
                     return Err(Error::other(format!("undefined method '{other}=' for account settings")));
                 }

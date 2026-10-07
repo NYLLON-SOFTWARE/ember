@@ -9,6 +9,13 @@
 #            sets it together with a frozen FAKETIME for --freeze.
 set -e
 
+# The copied Rails seed explicitly enables translation controls for comparison. Production
+# defaults and the administrator toggle are covered with fresh databases by test:kro.
+if [ -f /rails/storage/db/production.sqlite3 ]; then
+  sqlite3 /rails/storage/db/production.sqlite3 \
+    "UPDATE accounts SET settings = json_set(COALESCE(settings, '{}'), '$.hide_translation_buttons', json('false'));"
+fi
+
 if [ -n "$FAKETIME" ]; then
   export LD_PRELOAD=/usr/local/lib/faketime/libfaketime.so.1
   export FAKETIME_DONT_FAKE_MONOTONIC=1

@@ -27,11 +27,16 @@ fn main() {
         println!("cargo:rerun-if-changed={}", rails_root.join(watched).display());
     }
     println!("cargo:rerun-if-changed={}", crate_dir.join("vendor").display());
-    println!("cargo:rerun-if-changed={}", crate_dir.join("overrides").display());
+    let overrides = crate_dir.join("overrides");
+    let include = |path: &Path| match path.strip_prefix(overrides.join("basecoat")) {
+        Ok(relative) => matches!(relative.to_str(), Some("" | "app.css" | "app.js" | "theme-init.js")),
+        Err(_) => true,
+    };
+    println!("cargo:rerun-if-changed={}", overrides.display());
     println!("cargo:rerun-if-changed=build");
     println!("cargo:rerun-if-env-changed=SOURCE_DATE_EPOCH");
 
-    let load_path = propshaft::LoadPath::new(&load_path_dirs(&crate_dir, &rails_root), &assets_version(&rails_root), PREFIX);
+    let load_path = propshaft::LoadPath::new(&load_path_dirs(&crate_dir, &rails_root), &assets_version(&rails_root), PREFIX, include);
     let compiled_dir = out_dir.join("compiled");
     let _ = fs::remove_dir_all(&compiled_dir);
 

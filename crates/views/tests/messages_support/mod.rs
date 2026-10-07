@@ -68,6 +68,7 @@ impl Golden {
             current_user,
             account: AccountSummary {
                 name: context["account"]["name"].as_str().unwrap().to_string(),
+                hide_translation_buttons: false,
                 logo_url: context["account"]["logo_url"].as_str().unwrap().to_string(),
                 has_logo: context["account"]["has_logo"].as_bool().unwrap(),
             },

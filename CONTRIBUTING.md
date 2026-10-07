@@ -1,13 +1,8 @@
-# How to contribute to Campfire in Rust
+# Contributing to Matchbox
 
-This repository uses GitHub
-[discussions](https://github.com/basecamp/once-campfire-rust/discussions) to track feature
-requests and questions, rather than [the issue
-tracker](https://github.com/basecamp/once-campfire-rust/issues). If you're considering opening an
-issue or pull request, please open a discussion instead.
-
-Whenever a discussion leads to an actionable and well-understood task, we'll move it to the issue
-tracker where it can be worked on.
+Use [Matchbox issues](https://github.com/nyllon-software/matchbox/issues) for bugs, feature requests,
+and questions, and open pull requests against this repository. Matchbox is independently maintained;
+please report fork-specific behavior here. Contributions are licensed under the [MIT License](MIT-LICENSE).
 
 ## What this means in practice
 
@@ -27,19 +22,17 @@ tracker where it can be worked on.
 
 ### If you've found a bug...
 
-1. If you don't have steps to reproduce the problem, or you're not certain it's a bug, open a
-   discussion.
+1. If you don't have steps to reproduce the problem, or you're not certain it's a bug, open an issue.
 2. If you have steps to reproduce, open an issue. If it's a security issue, see
    [`SECURITY.md`](SECURITY.md) instead.
 
 ### If you have an idea for a feature...
 
-1. Open a discussion. Campfire's features come from the Rails app
-   ([basecamp/once-campfire](https://github.com/basecamp/once-campfire)); this repository is about
-   running them faster and leaner.
+1. Open an issue describing the problem and proposed behavior. Keep the upstream lineage and
+   existing installations in mind when changing the interface or backend.
 
 ### If you have a question, or are having trouble with configuration...
 
-1. Open a discussion.
+1. Open an issue.
 
 Thanks for helping! ❤️

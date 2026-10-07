@@ -8,7 +8,8 @@
     "capture": "node capture/cli.ts capture",
     "compare": "node capture/cli.ts compare",
     "typecheck": "tsc --noEmit -p capture",
-    "test": "node --test capture/test/*.test.ts"
+    "test": "node --test capture/test/*.test.ts",
+    "test:kro": "node --test --test-concurrency=1 kro/first-run.test.mjs"
   },
   "dependencies": {
     "parse5": "8.0.1",

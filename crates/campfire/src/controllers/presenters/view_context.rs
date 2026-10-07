@@ -13,6 +13,7 @@
 
 use std::sync::LazyLock;
 
+use campfire_assets::StyleProfile;
 use campfire_db::{Account, User};
 use campfire_kit::{Ctx, Error, Format, Response, Result, StatusCode, format};
 use campfire_views::recorded::RecordedPage;
@@ -24,6 +25,7 @@ use crate::concerns;
 /// Everything the layout needs, loaded before rendering.
 #[derive(Debug, Clone)]
 pub struct Layout {
+    style_profile: StyleProfile,
     pub current_user: Option<CurrentUser>,
     pub account: AccountSummary,
     pub custom_styles: Option<String>,
@@ -60,6 +62,7 @@ impl Layout {
             .await?;
 
         Ok(Self {
+            style_profile: StyleProfile::Legacy,
             current_user: user.as_ref().map(|user| current_user(&secrets, user)),
             account: account_summary(account.as_ref(), has_logo),
             custom_styles: account.and_then(|account| account.custom_styles),
@@ -78,7 +81,7 @@ impl Layout {
         let base_url = c.url_for("");
         let request_url = c.request.url();
         let referrer = c.request.referer().map(str::to_string);
-        let stylesheets = stylesheet_tags();
+        let stylesheets = stylesheet_tags_for(self.style_profile);
 
         let asset_path = |path: &str| campfire_assets::asset_path(path);
         let ctx = ViewContext {
@@ -105,7 +108,8 @@ impl Layout {
     /// A page rendered in the application layout: `text/html`, plus the `Link` preload header
     /// `stylesheet_link_tag` adds (`config.action_view.preload_links_header`).
     pub fn page(&self, c: &mut Ctx, status: StatusCode, html: impl Into<RecordedPage>) -> Response {
-        let links = &stylesheet_tags().preload_links;
+        self.style_header(c);
+        let links = &stylesheet_tags_for(self.style_profile).preload_links;
         let existing = c.headers.get("link").and_then(|v| v.to_str().ok()).unwrap_or("").to_string();
         c.set_header("link", &campfire_assets::append_preload_links(&existing, links));
         render_recorded(c, status, &format::HTML, html.into())
@@ -113,7 +117,20 @@ impl Layout {
 
     /// A page rendered in turbo-rails' frame layout (no stylesheets, so no `Link` header).
     pub fn frame(&self, c: &mut Ctx, status: StatusCode, html: impl Into<RecordedPage>) -> Response {
+        self.style_header(c);
         render_recorded(c, status, &format::HTML, html.into())
+    }
+
+    fn style_header(&self, c: &mut Ctx) {
+        // Only migrated pages and requests from them need this transition hint. Legacy responses
+        // otherwise retain their existing headers, including the cached chat paths.
+        if self.style_profile == StyleProfile::Basecoat || c.request.header("X-Campfire-Style-Profile").is_some() {
+            let profile = match self.style_profile {
+                StyleProfile::Legacy => "legacy",
+                StyleProfile::Basecoat => "basecoat",
+            };
+            c.set_header("X-Campfire-Style-Profile", profile);
+        }
     }
 }
 
@@ -127,9 +144,18 @@ pub fn render_recorded(c: &mut Ctx, status: StatusCode, template: Format, page: 
 /// The layout's `stylesheet_link_tag :all, "data-turbo-track": "reload"`: the assets are fixed at
 /// build time, so it renders once per process.
 pub fn stylesheet_tags() -> &'static campfire_assets::StylesheetTags {
-    static TAGS: LazyLock<campfire_assets::StylesheetTags> =
-        LazyLock::new(|| campfire_assets::stylesheet_link_tag_all(&[("data-turbo-track", "reload")]));
-    &TAGS
+    stylesheet_tags_for(StyleProfile::Legacy)
+}
+
+fn stylesheet_tags_for(profile: StyleProfile) -> &'static campfire_assets::StylesheetTags {
+    static LEGACY: LazyLock<campfire_assets::StylesheetTags> =
+        LazyLock::new(|| campfire_assets::stylesheet_link_tag_for(StyleProfile::Legacy, &[("data-turbo-track", "reload")]));
+    static BASECOAT: LazyLock<campfire_assets::StylesheetTags> =
+        LazyLock::new(|| campfire_assets::stylesheet_link_tag_for(StyleProfile::Basecoat, &[("data-turbo-track", "reload")]));
+    match profile {
+        StyleProfile::Legacy => &LEGACY,
+        StyleProfile::Basecoat => &BASECOAT,
+    }
 }
 
 /// `Current.user` as the layout's meta tags and helpers see it.
@@ -148,6 +174,7 @@ pub fn current_user(secrets: &rails_compat::Secrets, user: &User) -> CurrentUser
 pub fn account_summary(account: Option<&Account>, has_logo: bool) -> AccountSummary {
     AccountSummary {
         name: account.map(|account| account.name.clone()).unwrap_or_default(),
+        hide_translation_buttons: account.is_none_or(|account| account.settings().hide_translation_buttons()),
         logo_url: super::accounts::fresh_account_logo_path(account, None),
         has_logo,
     }
@@ -178,6 +205,18 @@ pub async fn page_or_frame<P: Into<RecordedPage>, F: Into<RecordedPage>>(
     page_or_frame_in_any_format(c, status, full, frame).await
 }
 
+/// Opts a migrated page into its stylesheet set without changing the legacy pages' assets.
+pub async fn page_or_frame_with_styles<P: Into<RecordedPage>, F: Into<RecordedPage>>(
+    c: &mut Ctx,
+    status: StatusCode,
+    profile: StyleProfile,
+    full: impl FnOnce(&ViewContext) -> askama::Result<P>,
+    frame: impl FnOnce(&ViewContext) -> askama::Result<F>,
+) -> Result {
+    find_template(c, &format::HTML)?;
+    render_page_or_frame(c, status, profile, full, frame).await
+}
+
 /// [`page_or_frame`] without the template lookup (see [`page_in_any_format`]).
 pub async fn page_or_frame_in_any_format<P: Into<RecordedPage>, F: Into<RecordedPage>>(
     c: &mut Ctx,
@@ -185,7 +224,18 @@ pub async fn page_or_frame_in_any_format<P: Into<RecordedPage>, F: Into<Recorded
     full: impl FnOnce(&ViewContext) -> askama::Result<P>,
     frame: impl FnOnce(&ViewContext) -> askama::Result<F>,
 ) -> Result {
-    let layout = Layout::load(c).await?;
+    render_page_or_frame(c, status, StyleProfile::Legacy, full, frame).await
+}
+
+async fn render_page_or_frame<P: Into<RecordedPage>, F: Into<RecordedPage>>(
+    c: &mut Ctx,
+    status: StatusCode,
+    profile: StyleProfile,
+    full: impl FnOnce(&ViewContext) -> askama::Result<P>,
+    frame: impl FnOnce(&ViewContext) -> askama::Result<F>,
+) -> Result {
+    let mut layout = Layout::load(c).await?;
+    layout.style_profile = profile;
     if c.is_turbo_frame_request() {
         let html = layout.render(c, frame)?;
         Ok(layout.frame(c, status, html))

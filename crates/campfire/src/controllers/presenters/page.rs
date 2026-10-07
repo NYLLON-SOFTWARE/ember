@@ -20,6 +20,18 @@ use crate::controllers::presenters::view_context::{Layout, account_summary, find
 ///
 /// `framed_page!(c, StatusCode::OK, |ctx| rooms::Show { ctx, show: &show }).await`
 macro_rules! framed_page {
+    ($c:expr, $status:expr, $profile:expr, |$ctx:ident| $page:expr) => {
+        $crate::controllers::presenters::view_context::page_or_frame_with_styles(
+            $c,
+            $status,
+            $profile,
+            |$ctx| campfire_views::render_sized!($page),
+            |$ctx| {
+                let page = $page;
+                campfire_views::layouts::frame($ctx, page.as_head(), page.as_content())
+            },
+        )
+    };
     ($c:expr, $status:expr, |$ctx:ident| $page:expr) => {
         $crate::controllers::presenters::view_context::page_or_frame(
             $c,

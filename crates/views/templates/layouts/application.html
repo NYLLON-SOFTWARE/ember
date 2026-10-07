@@ -9,6 +9,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, interactive-widget=resizes-content">
     <meta name="view-transition" content="same-origin">
     <meta name="color-scheme" content="light dark">
+{% if ctx.account.hide_translation_buttons %}    <meta name="matchbox-hide-translation-buttons" content="true" data-turbo-track="reload">
+{% endif %}
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
     <meta name="apple-mobile-web-app-capable" content="yes">

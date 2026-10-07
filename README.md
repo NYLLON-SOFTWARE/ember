@@ -1,8 +1,20 @@
-# Campfire in Rust
+# Matchbox
 
-A Rust implementation of [ONCE Campfire](https://github.com/basecamp/once-campfire). It uses the
-existing SQLite database, storage layout and signed/encrypted cookies, so existing installs can
-upgrade without migrating data or signing everyone out.
+[MIT licensed](MIT-LICENSE) · [GitHub](https://github.com/nyllon-software/matchbox)
+
+Matchbox is an independently maintained fork of
+[Basecamp's Campfire in Rust](https://github.com/basecamp/once-campfire-rust), developed by
+[NYLLON-SOFTWARE](https://github.com/nyllon-software). Campfire was created by
+[37signals](https://37signals.com); the Rust implementation is based on the original
+[ONCE Campfire Rails application](https://github.com/basecamp/once-campfire).
+
+This repository preserves the upstream Git history and the pinned Rails source in `reference/`.
+Matchbox adds its own interface and configuration changes, documented under
+[Known differences](#known-differences). It is an independent project, not an official
+37signals or Basecamp release.
+
+The existing SQLite database, storage layout and signed/encrypted cookies remain compatible,
+so existing installs can upgrade without migrating data or signing everyone out.
 
 One `campfire` executable replaces Ruby, Puma, Redis, Resque and Thruster, with libvips and ffmpeg
 for media. The Rails frontend ships with a few [port-owned overrides](crates/assets/OVERRIDES.md).
@@ -10,21 +22,26 @@ The app includes TLS, HTTP/2, Web Push, bot webhooks, search and Action Cable-co
 
 ## Running it
 
-With [ONCE](https://github.com/basecamp/once), on a server with Docker:
+Build Matchbox from this repository, including the pinned upstream submodule:
 
 ```sh
-once deploy ghcr.io/basecamp/once-campfire-rust --host chat.example.com
+git clone --recurse-submodules https://github.com/nyllon-software/matchbox.git
+cd matchbox
+docker build -t matchbox .
 ```
 
-ONCE manages secrets, TLS, backups and upgrades. Or run Docker directly:
+Run the resulting image with persistent storage:
 
 ```sh
 docker run -d -p 80:80 -p 443:443 \
   -e SECRET_KEY_BASE=... -e VAPID_PUBLIC_KEY=... -e VAPID_PRIVATE_KEY=... \
   -e TLS_DOMAIN=chat.example.com \
   -v campfire:/rails/storage \
-  ghcr.io/basecamp/once-campfire-rust
+  matchbox
 ```
+
+[ONCE](https://github.com/basecamp/once) can also deploy an image you build and publish to your
+own registry. The executable and internal crate names remain `campfire` for compatibility.
 
 - `TLS_DOMAIN` enables automatic Let's Encrypt certificates; `DISABLE_SSL` enables plain HTTP.
 - `/rails/storage` holds the database, uploads, backups and certificates. Existing installs must
@@ -34,10 +51,12 @@ docker run -d -p 80:80 -p 443:443 \
 - The app listener on `TARGET_PORT` (3000) binds loopback. `TARGET_BIND` overrides this; that listener
   trusts `X-Forwarded-*` from whoever reaches it. Other settings are in
   [`config.rs`](crates/campfire/src/config.rs).
-- Images support amd64 and arm64. `:latest` and version tags track
-  [releases](https://github.com/basecamp/once-campfire-rust/releases); `:main` tracks the main branch.
+- The Dockerfile supports amd64 and arm64.
 
 ## Performance
+
+These are historical measurements from the upstream Campfire comparison, retained with attribution.
+They are not new benchmarks of Matchbox.
 
 Measured with 16 concurrent clients on an AMD Ryzen AI MAX+ 395 with 32 GB RAM,
 with four hardware cores allocated to each app.
@@ -74,12 +93,50 @@ bench/run
 
 Seed generation and parity checks need Docker. Tests without the seed skip app integration tests.
 For local development, run `cargo run -p campfire -- server` with `SECRET_KEY_BASE` set
-(or `SECRET_KEY_BASE_DUMMY=1`). Build an image with `docker build -t campfire-rust .`.
+(or `SECRET_KEY_BASE_DUMMY=1`). Build an image with `docker build -t matchbox .`.
 
 The parity harness compares HTML, DOM, accessibility trees, assets, Cable frames and screenshots
 against Rails. See [`parity/SCREENS.md`](parity/SCREENS.md) for coverage and masks,
 [`AGENTS.md`](AGENTS.md) for repository layout and working rules,
 [`CONTRIBUTING.md`](CONTRIBUTING.md) for contributions, and [`SECURITY.md`](SECURITY.md) for security reports.
+
+### Matchbox frontend
+
+The setup screen uses Basecoat's Vega components with compiled Askama templates. Shared controls
+live in `crates/views/templates/components/ui.html`; colors, fonts, radii and component overrides
+live in `crates/assets/overrides/basecoat/src/theme.css`. The form helpers retain the existing field
+names, escaping and multipart handling. Other pages keep their original stylesheet profile until
+they are migrated.
+
+Frontend dependencies are pinned. After editing the frontend sources or adding Tailwind classes,
+regenerate the assets and rebuild the Rust app:
+
+```sh
+npm ci --prefix crates/assets/overrides/basecoat
+npm run build --prefix crates/assets/overrides/basecoat
+npm test --prefix crates/assets/overrides/basecoat
+cargo build -p campfire
+```
+
+Generated CSS and JavaScript are checked in and embedded with digested URLs, so ordinary Cargo and
+Docker builds do not require Node.js. CI runs the frontend build in check mode to detect stale output.
+Source files, build tools and npm dependencies are excluded from the served asset inventory.
+Stylesheets still require rebuilding the executable; they are not loaded from disk at runtime.
+
+The Matchbox browser checks start temporary app instances and never use the normal storage directory:
+
+```sh
+npm ci --prefix parity
+npm exec --prefix parity -- playwright install chromium
+npm run test:kro --prefix parity
+```
+
+Set `CAMPFIRE_BIN` to test a different binary. The native browser checks cover setup and appearance
+without Docker; they do not replace the reference-seeded integration and parity suites.
+
+Future page batches are sign-in/invitation signup, account/profile/admin, room management/search,
+then chat/sidebar/composer. Keep each batch on the shared controls and explicitly choose its asset
+profile; do not mix the legacy and Basecoat component styles in the same document.
 
 ## Known differences
 
@@ -89,6 +146,21 @@ behavior changes and compatibility limits are listed below.
 <details>
 <summary>Differences from Rails</summary>
 
+- **Translation controls:** administrators can toggle **Hide translation buttons** in Account
+  settings. Hiding is enabled by default for new and existing installs, including sign-in,
+  invitations, room forms, profiles, and the welcome card. The choice is stored in the account's
+  existing settings JSON and applies to everyone. Changing it reloads the document to clear Turbo's
+  snapshots; other open browsers pick up the choice on their next page load.
+- **Matchbox setup screen:** `/first_run` uses a responsive Basecoat form card with visible labels and an
+  optional camera-style avatar picker, input icons, a password visibility toggle, and a Continue
+  button. The setup screen omits the field translation popups and appearance selector. It follows
+  system colors by default and honors an existing saved appearance preference. Legacy pages retain
+  their existing system-driven colors. Setup now requires a password of at least eight characters
+  in both the browser and server; rejected submissions create no account and retain the name and
+  email for correction. Existing accounts and sign-in behavior are unaffected. Multipart setup
+  submissions and signed sessions retain their existing contracts. Crossing stylesheet
+  profiles reloads the document, including a frame request that would embed the new setup form in
+  a legacy page. The setup screen has separate KRO visual and behavior checks.
 - Session-transfer auto-submit forms explicitly close their form tag; the pinned Rails
   reference omitted it.
 - Background sidebar refreshes preserve an open New Ping form and selected recipients.
@@ -171,6 +243,13 @@ server. Rich text is checked against Rails on 658 cases, including 400 fuzzed ca
 
 </details>
 
-## License
+## License and attribution
 
-MIT. See [`MIT-LICENSE`](MIT-LICENSE).
+Matchbox is distributed under the [MIT License](MIT-LICENSE), the same license as the upstream
+Campfire projects. The original 37signals copyright and permission notice are preserved.
+Matchbox contributions are also MIT licensed. Third-party assets and vendored dependencies retain
+their own notices, including [Basecoat and Tailwind](crates/assets/overrides/basecoat/LICENSES.txt).
+
+Credit for Campfire, the original Rails application, and the Rust port belongs to their respective
+upstream authors and contributors. The Campfire name and original artwork identify that lineage;
+this fork is maintained and released as Matchbox.

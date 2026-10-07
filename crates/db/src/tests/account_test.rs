@@ -36,6 +36,28 @@ fn settings() {
 }
 
 #[test]
+fn translation_visibility_defaults_to_hidden_and_persists_without_changing_other_settings() {
+    let t = TestDb::new();
+    let mut account = signal(&t);
+    assert!(account.settings().hide_translation_buttons());
+    assert_eq!(account.settings_json, None);
+    let mut copy = account.clone();
+    t.write(move |tx| copy.update(tx, None, None, Some(&[("hide_translation_buttons", "false")])));
+    account.reload_from(&t);
+    assert!(!account.settings().hide_translation_buttons());
+    let mut copy = account.clone();
+    t.write(move |tx| copy.update(tx, None, None, Some(&[("restrict_room_creation_to_administrators", "true")])));
+    account.reload_from(&t);
+    assert!(!account.settings().hide_translation_buttons());
+    assert!(account.settings().restrict_room_creation_to_administrators());
+    let mut copy = account.clone();
+    t.write(move |tx| copy.update(tx, None, None, Some(&[("hide_translation_buttons", "true")])));
+    account.reload_from(&t);
+    assert!(account.settings().hide_translation_buttons());
+    assert!(account.settings().restrict_room_creation_to_administrators());
+}
+
+#[test]
 fn updating_other_attributes_leaves_null_settings_alone() {
     // What Rails does: `update!(name:)` on the fixture account doesn't write settings.
     let t = TestDb::new();

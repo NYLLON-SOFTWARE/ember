@@ -1,0 +1,39 @@
+{# KRO layout: shared metadata and application behavior with an independent stylesheet profile. #}
+<!DOCTYPE html>
+<html lang="en" data-style-profile="basecoat">
+  <head>
+    <meta charset="utf-8">
+    {{ h::page_title_tag(self.page_title().as_deref()) }}
+    <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
+    <meta name="view-transition" content="same-origin">
+    <meta name="color-scheme" content="light dark">
+{% if ctx.account.hide_translation_buttons %}    <meta name="matchbox-hide-translation-buttons" content="true" data-turbo-track="reload">
+{% endif %}
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#09090b" media="(prefers-color-scheme: dark)">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    {{ h::current_user_meta_tags(ctx) }}
+    {{ h::script_aware_action_cable_meta_tag(ctx) }}
+    {{ h::builder_tag("meta", h::attrs().name("vapid-public-key").attr_opt("content", ctx.vapid_public_key.as_deref())) }}
+    <meta name="turbo-prefetch" content="true">
+    {{ h::builder_tag("link", h::attrs().attr("rel", "manifest").attr("href", "/webmanifest.json")) }}
+    {{ h::builder_tag("link", h::attrs().attr("rel", "icon").attr("href", ctx.account.logo_url.as_str()).type_("image/png")) }}
+    {{ h::builder_tag("link", h::attrs().attr("rel", "apple-touch-icon").attr("href", ctx.account.logo_url.as_str())) }}
+
+    <script src="{{ ctx.asset("basecoat/theme-init.js") }}" data-turbo-track="reload"></script>
+    {{ h::raw(ctx.stylesheet_tags) }}
+    {{ h::custom_styles_tag(ctx) }}
+    {{ h::raw(ctx.importmap_tags) }}
+    <script src="{{ ctx.asset("basecoat/app.js") }}" defer data-turbo-track="reload"></script>
+{% block head %}{% endblock %}
+  </head>
+  <body data-style-profile="basecoat" data-controller="local-time">
+    <a href="#main-content" class="ui-skip-link btn">Skip to main content</a>
+{% let notice = ctx.flash_notice.as_ref().or(ctx.flash_alert.as_ref()) %}{% if let Some(notice) = notice %}
+    <div class="ui-flash" role="alert" aria-atomic="true">{{ notice }}</div>
+{% endif %}
+    <main id="main-content" class="ui-shell" tabindex="-1">
+{% block content %}{% endblock %}
+    </main>
+  </body>
+</html>

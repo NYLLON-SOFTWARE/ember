@@ -38,7 +38,7 @@ const WS: &str = r"[ \t\n\x0B\x0C\r]";
 impl LoadPath {
     /// Propshaft::LoadPath#assets_by_path: earlier paths win for the same logical path, and
     /// dotfiles are skipped (but not dot-directories).
-    pub fn new(paths: &[PathBuf], version: &str, prefix: &str) -> Self {
+    pub fn new(paths: &[PathBuf], version: &str, prefix: &str, include: impl Fn(&Path) -> bool) -> Self {
         let mut assets = Vec::new();
         let mut by_logical_path = HashMap::new();
 
@@ -47,7 +47,7 @@ impl LoadPath {
                 continue;
             }
             let mut files = Vec::new();
-            all_files_from_tree(&path, &mut files);
+            all_files_from_tree(&path, &mut files, &include);
             files.sort();
             for file in files {
                 if file.file_name().unwrap().to_string_lossy().starts_with('.') {
@@ -244,11 +244,14 @@ fn dedup(paths: &[PathBuf]) -> Vec<PathBuf> {
         .collect()
 }
 
-fn all_files_from_tree(path: &Path, files: &mut Vec<PathBuf>) {
+fn all_files_from_tree(path: &Path, files: &mut Vec<PathBuf>, include: &impl Fn(&Path) -> bool) {
     for entry in fs::read_dir(path).unwrap() {
         let child = entry.unwrap().path();
+        if !include(&child) {
+            continue;
+        }
         if child.is_dir() {
-            all_files_from_tree(&child, files);
+            all_files_from_tree(&child, files, include);
         } else {
             files.push(child);
         }

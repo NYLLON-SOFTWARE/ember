@@ -2,7 +2,7 @@
 
 use super::assets::image_tag;
 use super::html::{Html, Safe};
-use super::tag::{attrs, content_tag, content_tag_text};
+use super::tag::{Attrs, attrs, content_tag, content_tag_text};
 use super::translations_table::TRANSLATIONS;
 use crate::ViewContext;
 
@@ -24,9 +24,17 @@ pub fn translations_for(key: &str) -> Html {
 
 /// `translation_button(key)`.
 pub fn translation_button(ctx: &ViewContext, key: &str) -> Html {
+    translation_button_with_summary(ctx, key, attrs().class("btn").tabindex(-1))
+}
+
+/// A presentation variant retaining the existing popup actions and translated content.
+pub fn translation_button_with_summary(ctx: &ViewContext, key: &str, summary_attrs: Attrs) -> Html {
+    if ctx.account.hide_translation_buttons {
+        return Safe(String::new());
+    }
     let summary = content_tag(
         "summary",
-        attrs().class("btn").tabindex(-1),
+        summary_attrs,
         &format!(
             "{}{}",
             image_tag(ctx, "globe.svg", attrs().size(20).aria_hidden().class("color-icon")).0,

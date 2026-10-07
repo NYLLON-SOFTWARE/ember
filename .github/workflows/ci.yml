@@ -13,6 +13,28 @@ concurrency:
 permissions: {}
 
 jobs:
+  frontend-assets:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: crates/assets/overrides/basecoat/package-lock.json
+      - name: Verify generated frontend assets
+        working-directory: crates/assets/overrides/basecoat
+        run: |
+          npm ci --ignore-scripts
+          npm test
+          npm run check
+
   test:
     runs-on: ubuntu-latest
     permissions:

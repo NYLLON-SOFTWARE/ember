@@ -98,6 +98,11 @@ impl FormWith {
         FormBuilder { object_name: self.object_name.clone().unwrap_or_default(), multipart: self.multipart.clone() }
     }
 
+    /// The default field id, also used by reusable components' label and description links.
+    pub fn field_id(&self, method: &str) -> String {
+        self.builder().tag_id(method)
+    }
+
     /// `<form ...>` plus the `_method` hidden field (`html_options_for_form_with` +
     /// `extra_tags_for_form`). No `authenticity_token`: forgery protection is by `Sec-Fetch-Site`.
     /// (See `campfire_kit::Ctx::verify_authenticity_token`.)

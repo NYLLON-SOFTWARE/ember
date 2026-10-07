@@ -1,0 +1,68 @@
+{# Reusable Basecoat presentation; the form builder still owns names, ids and submission. #}
+{% import "components/icons.html" as icons %}
+{% macro card_header(title, description) %}
+  <header>
+    <div class="ui-brand-mark">{% call icons::icon("flame") %}</div>
+    <h1>{{ title }}</h1>
+    <p class="ui-description">{{ description }}</p>
+  </header>
+{% endmacro %}
+
+{% macro field(form, name, label, control, icon_name) %}
+  <div class="ui-field">
+    <label for="{{ form.field_id(name) }}">{{ label }}</label>
+    <div class="ui-input-wrap">
+      {% call icons::icon(icon_name) %}
+      {{ control }}
+    </div>
+  </div>
+{% endmacro %}
+
+{% macro password(form, name, control, invalid) %}
+  <div class="ui-field">
+    <label for="{{ form.field_id(name) }}">Password</label>
+    <div class="ui-input-wrap ui-password">
+      {% call icons::icon("lock") %}
+      {{ control }}
+      <button class="ui-password-toggle" type="button" data-password-toggle aria-controls="{{ form.field_id(name) }}" aria-label="Show password" aria-pressed="false" hidden>
+        {% call icons::icon("eye") %}
+      </button>
+    </div>
+    {% if invalid %}
+      <p id="password-description" class="ui-description ui-field-error" role="alert">Password must be at least 8 characters.</p>
+    {% else %}
+      {% call description("password-description", "Must be at least 8 characters.") %}
+    {% endif %}
+  </div>
+{% endmacro %}
+
+{% macro description(id, text) %}
+  <p id="{{ id }}" class="ui-description">{{ text }}</p>
+{% endmacro %}
+
+{% macro submit(label) %}
+  {% filter button(h::attrs().class("btn ui-submit").type_("submit")) %}{{ label }}{% call icons::icon("arrow-right") %}{% endfilter %}
+{% endmacro %}
+
+{% macro avatar(form, name) %}
+  <div class="ui-avatar" data-controller="upload-preview">
+    <label class="ui-avatar-picker" for="{{ form.field_id(name) }}">
+      <span class="for-screen-reader">Upload profile image (optional)</span>
+      {{ h::image_tag(ctx, "kro/avatar-placeholder.svg", h::attrs().class("ui-avatar-image").size(96).alt("Avatar preview").data("upload_preview_target", "image")) }}
+      <span class="ui-avatar-camera">{% call icons::icon("camera") %}</span>
+      {{ h::ui::file_field(form, name, h::attrs().class("ui-avatar-input").accept("image/*").data("upload_preview_target", "input").data("action", "upload-preview#previewImage").aria("describedby", "avatar-description")) }}
+    </label>
+    {% call description("avatar-description", "Add a profile photo (optional).") %}
+  </div>
+{% endmacro %}
+
+{% macro appearance() %}
+  <div class="ui-appearance" data-appearance-control hidden>
+    <label for="appearance">Appearance</label>
+    <select id="appearance" class="select" data-appearance-select>
+      <option value="light">Light</option>
+      <option value="dark">Dark</option>
+      <option value="system" selected>System</option>
+    </select>
+  </div>
+{% endmacro %}

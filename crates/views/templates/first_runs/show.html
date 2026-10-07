@@ -1,57 +1,23 @@
-{% extends "layouts/application.html" %}
-{%- block head %}{% endblock %}
+{% extends "layouts/basecoat.html" %}
+{% import "components/ui.html" as ui %}
+{% block head %}{% if reload_frame %}<meta name="turbo-visit-control" content="reload">{% endif %}{% endblock %}
 
-{% block content %}{% let form = h::form_with(h::routes::first_run()).model("user").class("center max-width") %}{% filter form_with(form) %}
-  <section class="nametag u-relative">
-    <div class="flex justify-center align-center pad-block">
-      {{ h::image_tag(ctx, "lanyard.svg", h::attrs().class("nametag__lanyard").aria_hidden()) }}
-    </div>
-
-    <div class="nametag__inner flex flex-column gap">
-      <fieldset class="flex flex-column center-block">
-        <legend class="txt-large txt-align-center"><strong>{{ self.page_title().unwrap_or_default() }}</strong></legend>
-
-        <label class="align-center center avatar__form gap" data-controller="upload-preview">
-          <div class="btn input--file">
-            {{ h::image_tag(ctx, "camera.svg", h::attrs().aria_hidden()) }}
-            {{ form.file_field("avatar", h::attrs().class("input").accept("image/*").data("upload_preview_target", "input").data("action", "upload-preview#previewImage")) }}
-            <span class="for-screen-reader">Add your avatar</span>
-          </div>
-
-          <div class="btn avatar input--file txt-xx-large">
-            {{ h::image_tag(ctx, "default-avatar.svg", h::attrs().aria_hidden().data("upload_preview_target", "image").alt("Add your avatar")) }}
-            <span class="for-screen-reader">Avatar</span>
-          </div>
-        </label>
-      </fieldset>
-
-      <div class="flex align-center gap">
-        {{ h::translation_button(ctx, "user_name") }}
-        <label class="flex align-center gap flex-item-grow txt-large input input--actor">
-          {{ form.text_field("name", None, h::attrs().class("input").autocomplete("name").placeholder("Name").autofocus().required(true).data("1p-ignore", true)) }}
-          {{ h::image_tag(ctx, "person.svg", h::attrs().aria_hidden().size(24).class("colorize--black")) }}
-        </label>
+{% block content %}
+  <section class="card ui-card ui-setup-card" aria-label="Set up Campfire">
+    {% call ui::card_header("Set up Campfire", "Create the admin account for your workspace.") %}
+    {% let form = h::form_with(h::routes::first_run()).model("user").class("ui-setup-form") %}
+    {% filter form_with(form) %}
+      <div class="ui-form-body">
+        {% call ui::avatar(form, "avatar") %}
+        <div class="ui-form">
+          {% call ui::field(form, "name", "Name", h::ui::text_field(form, "name", values.name.as_deref(), h::attrs().placeholder("Jane Cooper").autocomplete("name").attr_opt("autofocus", (!values.password_error).then_some(true)).required(true).data("1p-ignore", true)), "user") %}
+          {% call ui::field(form, "email_address", "Email address", h::ui::email_field(form, "email_address", values.email_address.as_deref(), h::attrs().placeholder("jane@company.com").autocomplete("username").required(true)), "mail") %}
+          {% call ui::password(form, "password", h::ui::password_field(form, "password", h::attrs().placeholder("••••••••").autocomplete("new-password").required(true).attr("minlength", 8).maxlength(72).attr_opt("autofocus", values.password_error.then_some(true)).aria("invalid", values.password_error).aria("describedby", "password-description")), values.password_error) %}
+        </div>
       </div>
-
-      <div class="flex align-center gap">
-        {{ h::translation_button(ctx, "email_address") }}
-        <label class="flex align-center gap flex-item-grow txt-large input input--actor">
-          {{ form.email_field("email_address", None, h::attrs().class("input").autocomplete("username").placeholder("Email address").required(true)) }}
-          {{ h::image_tag(ctx, "email.svg", h::attrs().aria_hidden().size(24).class("colorize--black")) }}
-        </label>
-      </div>
-
-      <div class="flex align-center gap">
-        {{ h::translation_button(ctx, "password") }}
-        <label class="flex align-center gap flex-item-grow txt-large input input--actor">
-          {{ form.password_field("password", h::attrs().class("input").autocomplete("new-password").placeholder("Password").required(true).maxlength(72)) }}
-          {{ h::image_tag(ctx, "password.svg", h::attrs().aria_hidden().size(24).class("colorize--black")) }}
-        </label>
-      </div>
-
-      {% filter button(h::attrs().class("btn btn--reversed center txt-large").type_("submit")) %}
-        {{ h::image_tag(ctx, "arrow-right.svg", h::attrs().aria_hidden()) }}
-        <span class="for-screen-reader">Save</span>
-{% endfilter %}    </div>
+      <footer class="ui-card-footer">
+        {% call ui::submit("Continue") %}
+      </footer>
+    {% endfilter %}
   </section>
-{% endfilter %}{% endblock %}
+{% endblock %}

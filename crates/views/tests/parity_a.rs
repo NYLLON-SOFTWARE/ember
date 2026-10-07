@@ -55,6 +55,21 @@ fn sessions_incompatible_browser() {
 }
 
 #[test]
+fn hidden_translation_controls_are_omitted_and_visibility_changes_reload_turbo() {
+    with_context("sessions_new", Request { hide_translation_buttons: true, ..Default::default() }, |ctx| {
+        let html = sessions::New { ctx, email_address: None, help_contact: help_contact("sessions_new") }.render().unwrap();
+        assert!(!html.contains("language-list-menu"));
+        assert!(!html.contains(">Translate<"));
+        assert!(html.contains("name=\"matchbox-hide-translation-buttons\" content=\"true\" data-turbo-track=\"reload\""));
+    });
+    with_context("sessions_new", Request::default(), |ctx| {
+        let html = sessions::New { ctx, email_address: None, help_contact: help_contact("sessions_new") }.render().unwrap();
+        assert!(html.contains("language-list-menu"));
+        assert!(!html.contains("matchbox-hide-translation-buttons"));
+    });
+}
+
+#[test]
 fn sessions_transfer() {
     let name = "sessions_transfer";
     let html = with_context(name, Request::default(), |ctx| {
@@ -137,7 +152,17 @@ fn accounts_edit() {
             .render()
             .unwrap()
         });
-        assert_parity(name, "html", html);
+        // Compare the original page outside the added, separately exercised admin control.
+        let mut legacy = html;
+        if let Some(start) = legacy.find("    <!-- Matchbox localization setting -->") {
+            let marker = "    <!-- /Matchbox localization setting -->\n";
+            let end = legacy[start..].find(marker).unwrap() + start + marker.len();
+            assert!(legacy[start..end].contains("account[settings][hide_translation_buttons]"));
+            legacy.replace_range(start..end, "");
+        } else {
+            assert!(matches!(name, "account_edit_member" | "account_edit_with_logo_member"));
+        }
+        assert_parity(name, "html", legacy);
     }
 }
 
@@ -237,9 +262,81 @@ fn mention_user(name: &str, user_name: &str) -> users::MentionUser {
 
 #[test]
 fn first_runs_show() {
-    let name = "first_run";
-    let html = with_context(name, Request::default(), |ctx| first_runs::Show { ctx }.render().unwrap());
-    assert_parity(name, "html", html);
+    // KRO intentionally changes the setup presentation. Keep the Rails form contract instead
+    // of masking this screen out of all verification or rewriting its historical golden HTML.
+    let html = with_context("first_run", Request { basecoat: true, ..Default::default() }, |ctx| {
+        first_runs::Show { ctx, values: first_runs::FormValues::default(), reload_frame: false }.render().unwrap()
+    });
+    let tokens = normalize_html(&html);
+    let form = tokens.iter().find(|token| token.starts_with("<form ")).unwrap();
+    for attribute in ["action=\"/first_run\"", "method=\"post\"", "enctype=\"multipart/form-data\"", "accept-charset=\"UTF-8\""] {
+        assert!(form.contains(attribute), "form missing {attribute}");
+    }
+    for (name, field_type, autocomplete) in
+        [("name", "text", "name"), ("email_address", "email", "username"), ("password", "password", "new-password")]
+    {
+        let input = tokens.iter().find(|token| token.starts_with("<input ") && token.contains(&format!("name=\"user[{name}]\""))).unwrap();
+        for attribute in [
+            format!("type=\"{field_type}\""),
+            format!("id=\"user_{name}\""),
+            format!("autocomplete=\"{autocomplete}\""),
+            "required=\"required\"".into(),
+        ] {
+            assert!(input.contains(&attribute), "{name} missing {attribute}");
+        }
+        assert!(tokens.iter().any(|token| token == &format!("<label for=\"user_{name}\">")));
+    }
+    let avatar = tokens.iter().find(|token| token.starts_with("<input ") && token.contains("name=\"user[avatar]\"")).unwrap();
+    for attribute in
+        ["type=\"file\"", "accept=\"image/*\"", "data-upload-preview-target=\"input\"", "data-action=\"upload-preview#previewImage\""]
+    {
+        assert!(avatar.contains(attribute), "avatar missing {attribute}");
+    }
+    assert!(!avatar.contains("required="));
+    assert!(html.contains("maxlength=\"72\""));
+    assert!(html.contains("minlength=\"8\""));
+    assert!(html.contains("autofocus=\"autofocus\""));
+    assert!(html.contains("data-1p-ignore=\"true\""));
+    assert!(html.contains("Continue"));
+    assert!(html.contains("Set up Campfire"));
+    assert!(!html.contains("data-controller=\"popup\""));
+    assert!(html.contains("data-password-toggle"));
+    assert!(!html.contains("data-appearance-control"));
+    assert!(!html.contains("data-appearance-select"));
+    assert!(html.contains("data-style-profile=\"basecoat\""));
+    assert!(html.contains("initial-scale=1, interactive-widget=resizes-content"));
+    assert!(!html.contains("user-scalable=no"));
+    assert!(html.find("basecoat/theme-init.js").unwrap() < html.find("basecoat/app.css").unwrap());
+    assert!(!html.contains("turbo-visit-control"));
+}
+
+#[test]
+fn first_runs_frames_promote_only_when_crossing_stylesheet_profiles() {
+    with_context("first_run", Request { basecoat: true, ..Default::default() }, |ctx| {
+        for reload_frame in [false, true] {
+            let page = first_runs::Show { ctx, values: first_runs::FormValues::default(), reload_frame };
+            let html = layouts::frame(ctx, page.as_head(), page.as_content()).unwrap();
+            assert_eq!(html.text().contains("name=\"turbo-visit-control\" content=\"reload\""), reload_frame);
+            assert!(html.text().contains("name=\"user[email_address]\""));
+            assert!(!html.text().contains("basecoat/app.js"));
+        }
+    });
+}
+
+#[test]
+fn first_runs_layout_escapes_flash_and_preserves_application_metadata() {
+    let html = with_context(
+        "first_run",
+        Request { basecoat: true, flash_alert: Some("<script>alert('bad')</script>".into()), ..Default::default() },
+        |ctx| first_runs::Show { ctx, values: first_runs::FormValues::default(), reload_frame: false }.render().unwrap(),
+    );
+    assert!(html.contains("role=\"alert\" aria-atomic=\"true\""));
+    assert!(html.contains("&lt;script&gt;alert(&#39;bad&#39;)&lt;/script&gt;"));
+    for expected in
+        ["action-cable-url", "vapid-public-key", "webmanifest.json", "apple-touch-icon", "type=\"importmap\"", "Skip to main content"]
+    {
+        assert!(html.contains(expected), "missing {expected}");
+    }
 }
 
 #[test]

@@ -10,3 +10,4 @@ target/
 /bench/loadgen/verified-loadgen
 
 /bench/.work/
+/crates/assets/overrides/basecoat/node_modules/

@@ -6,6 +6,15 @@
 use crate::embedded;
 use crate::helpers::stylesheet_path;
 use ruby_compat::erb::html_escape;
+use std::sync::LazyLock;
+
+/// Mutually exclusive page styles while the frontend migrates to Basecoat.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum StyleProfile {
+    #[default]
+    Legacy,
+    Basecoat,
+}
 
 /// What `stylesheet_link_tag` renders, plus the preload links Rails adds to the response's
 /// `link` header while rendering it (`config.action_view.preload_links_header`, on by default).
@@ -23,9 +32,23 @@ pub fn all_stylesheet_paths() -> &'static [&'static str] {
     embedded::STYLESHEETS
 }
 
-/// `stylesheet_link_tag :all, **options`
+/// A page profile's styles, shared by HTML tags and HTTP preload links.
+pub fn stylesheet_paths_for(profile: StyleProfile) -> &'static [&'static str] {
+    static LEGACY: LazyLock<Vec<&'static str>> =
+        LazyLock::new(|| all_stylesheet_paths().iter().copied().filter(|path| !path.starts_with("basecoat/")).collect());
+    match profile {
+        StyleProfile::Legacy => &LEGACY,
+        StyleProfile::Basecoat => &["basecoat/app.css"],
+    }
+}
+
+pub fn stylesheet_link_tag_for(profile: StyleProfile, options: &[(&str, &str)]) -> StylesheetTags {
+    stylesheet_link_tag(stylesheet_paths_for(profile), options)
+}
+
+/// The original legacy `stylesheet_link_tag :all, **options` set, excluding Basecoat styles.
 pub fn stylesheet_link_tag_all(options: &[(&str, &str)]) -> StylesheetTags {
-    stylesheet_link_tag(all_stylesheet_paths(), options)
+    stylesheet_link_tag_for(StyleProfile::Legacy, options)
 }
 
 /// `stylesheet_link_tag *sources, **options` as Propshaft::Helper renders it: one Rails

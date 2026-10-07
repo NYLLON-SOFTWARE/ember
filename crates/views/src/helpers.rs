@@ -18,6 +18,7 @@ pub mod translations;
 #[rustfmt::skip]
 mod translations_table;
 pub mod turbo;
+pub mod ui;
 pub mod url;
 pub mod users;
 

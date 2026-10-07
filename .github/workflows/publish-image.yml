@@ -16,7 +16,7 @@ concurrency:
 permissions: {}
 
 env:
-  IMAGE_DESCRIPTION: Campfire is a web-based chat application with multiple rooms, direct messages, file attachments with previews, search, web push notifications, @mentions, and bot integrations. Single-tenant; production-ready image in a single Rust binary, with web app, WebSockets, background jobs, file serving, and SSL.
+  IMAGE_DESCRIPTION: Matchbox is an independent MIT-licensed fork of Basecamp Campfire in Rust, with chat rooms, direct messages, file attachments, search, web push, and bot integrations. One executable provides the web app, WebSockets, background jobs, file serving, and TLS.
   SOURCE_URL: https://github.com/${{ github.repository }}
 
 jobs:

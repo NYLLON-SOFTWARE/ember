@@ -14,8 +14,13 @@ use crate::controllers::presenters::page::framed_page;
 pub async fn show(c: &mut Ctx) -> Result {
     concerns::before_actions(c, Before::default().allow_unauthenticated_access()).await?;
     prevent_repeats(c).await?;
+    render(c, StatusCode::OK, first_runs::FormValues::default()).await
+}
+
+async fn render(c: &mut Ctx, status: StatusCode, values: first_runs::FormValues<'_>) -> Result {
     c.respond_to(&[&format::HTML])?;
-    framed_page!(c, StatusCode::OK, |ctx| first_runs::Show { ctx }).await
+    let reload_frame = c.is_turbo_frame_request() && c.request.header("X-Campfire-Style-Profile") != Some("basecoat");
+    framed_page!(c, status, campfire_assets::StyleProfile::Basecoat, |ctx| first_runs::Show { ctx, values, reload_frame }).await
 }
 
 pub async fn create(c: &mut Ctx) -> Result {
@@ -27,6 +32,11 @@ pub async fn create(c: &mut Ctx) -> Result {
     let name = user.get("name").and_then(|p| p.to_s());
     let email_address = user.get("email_address").and_then(|p| p.to_s()).unwrap_or_default();
     let password = user.get("password").and_then(|p| p.to_s()).unwrap_or_default();
+    // KRO setup enforces the form's minimum before hashing or staging uploaded files.
+    if password.chars().count() < 8 {
+        let values = first_runs::FormValues { name: name.as_deref(), email_address: Some(&email_address), password_error: true };
+        return render(c, StatusCode::UNPROCESSABLE_ENTITY, values).await;
+    }
     let avatar = Assignment::from_params(&user, "avatar")?;
     // users.name is NOT NULL: Rails raises ActiveRecord::NotNullViolation.
     let Some(name) = name else { return Err(Error::internal(anyhow::anyhow!("NOT NULL constraint failed: users.name"))) };
@@ -64,4 +74,121 @@ async fn prevent_repeats(c: &mut Ctx) -> Result<()> {
         return halt(c.redirect_to(&root)?);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use axum::body::{Body, to_bytes};
+    use axum::http::{Request, StatusCode};
+    use tower::ServiceExt;
+
+    use crate::app::{Booted, boot};
+    use crate::config::Config;
+
+    async fn empty_app() -> (Booted, tempfile::TempDir) {
+        let dir = tempfile::tempdir().unwrap();
+        let config = Config::from_lookup(|name| match name {
+            "SECRET_KEY_BASE" => Some("first-run-assets-test-secret".repeat(4)),
+            "DISABLE_SSL" => Some("1".into()),
+            "CAMPFIRE_STORAGE_PATH" => Some(dir.path().to_string_lossy().into_owned()),
+            _ => None,
+        })
+        .unwrap();
+        (boot(config).await.unwrap(), dir)
+    }
+
+    fn setup_request(password: Option<&str>) -> Request<Body> {
+        let mut body = "user[name]=Ada+%3CAdmin%3E&user[email_address]=ada%40example.test".to_string();
+        if let Some(password) = password {
+            body.push_str(&format!("&user[password]={}", ruby_compat::cgi_escape(password)));
+        }
+        Request::builder()
+            .method("POST")
+            .uri("/first_run")
+            .header("host", "campfire.test")
+            .header("sec-fetch-site", "same-origin")
+            .header("content-type", "application/x-www-form-urlencoded")
+            .header("accept", "text/vnd.turbo-stream.html, text/html, application/xhtml+xml")
+            .body(Body::from(body))
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn password_minimum_is_enforced_before_setup_even_without_browser_validation() {
+        let (app, _dir) = empty_app().await;
+        for password in [None, Some(""), Some("short"), Some("1234567"), Some("éééé"), Some("🔐🔐🔐🔐")] {
+            let response = app.router.clone().oneshot(setup_request(password)).await.unwrap();
+            assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+            let html = String::from_utf8(to_bytes(response.into_body(), usize::MAX).await.unwrap().to_vec()).unwrap();
+            assert!(html.contains("Password must be at least 8 characters."));
+            assert!(html.contains("value=\"Ada &lt;Admin&gt;\""));
+            assert!(html.contains("value=\"ada@example.test\""));
+            assert!(html.contains("aria-invalid=\"true\""));
+            let password_input = html.split('<').find(|tag| tag.starts_with("input ") && tag.contains("id=\"user_password\"")).unwrap();
+            assert!(!password_input.contains("value="), "never echo a submitted password");
+        }
+        let counts = app
+            .app
+            .db
+            .read(|conn| {
+                Ok(conn.query_row(
+                    "SELECT (SELECT COUNT(*) FROM accounts), (SELECT COUNT(*) FROM users), (SELECT COUNT(*) FROM sessions), (SELECT COUNT(*) FROM active_storage_blobs)",
+                    [],
+                    |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?, row.get::<_, i64>(2)?, row.get::<_, i64>(3)?)),
+                )?)
+            })
+            .await
+            .unwrap();
+        assert_eq!(counts, (0, 0, 0, 0), "rejected requests have no setup side effects");
+
+        let response = app.router.clone().oneshot(setup_request(Some("12345678"))).await.unwrap();
+        assert_eq!(response.status(), StatusCode::FOUND, "exactly eight characters can complete setup");
+        assert_eq!(app.app.db.read(campfire_db::Account::count).await.unwrap(), 1);
+    }
+
+    #[tokio::test]
+    async fn setup_uses_the_same_basecoat_assets_in_html_and_preloads() {
+        let (app, _dir) = empty_app().await;
+        let response = app
+            .router
+            .oneshot(Request::builder().uri("/first_run").header("host", "campfire.test").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers()["x-campfire-style-profile"], "basecoat");
+        let preload = response.headers()["link"].to_str().unwrap().to_owned();
+        let html = String::from_utf8(to_bytes(response.into_body(), usize::MAX).await.unwrap().to_vec()).unwrap();
+        let css = campfire_assets::asset_path("basecoat/app.css");
+        assert!(html.contains(&css));
+        assert!(preload.contains(&css));
+        assert!(!html.contains(&campfire_assets::asset_path("signup.css")));
+        assert!(!preload.contains(&campfire_assets::asset_path("signup.css")));
+        assert!(html.contains("enctype=\"multipart/form-data\""));
+        assert!(!html.contains("name=\"turbo-visit-control\""));
+    }
+
+    #[tokio::test]
+    async fn cross_profile_frames_promote_to_full_navigation() {
+        let (app, _dir) = empty_app().await;
+        for (profile, reload) in [("legacy", true), ("basecoat", false)] {
+            let response = app
+                .router
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .uri("/first_run")
+                        .header("host", "campfire.test")
+                        .header("turbo-frame", "setup")
+                        .header("x-campfire-style-profile", profile)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            assert!(!response.headers().contains_key("link"));
+            let html = String::from_utf8(to_bytes(response.into_body(), usize::MAX).await.unwrap().to_vec()).unwrap();
+            assert_eq!(html.contains("name=\"turbo-visit-control\" content=\"reload\""), reload);
+        }
+    }
 }

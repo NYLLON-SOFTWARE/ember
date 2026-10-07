@@ -68,6 +68,23 @@
         </label>
 
 {% endfilter %}    </div>
+    <!-- Matchbox localization setting -->
+    <div id="localization-settings" class="pad-block pad-inline-double fill-shade border-radius">
+{% let form = h::form_with(self.account_action()).model("account").method("put").data("controller", "form").class("flex align-center gap center") %}{% filter form_with(form) %}
+      <div class="flex-item-grow txt-align-start">
+        <div>Hide translation buttons</div>
+        <p id="localization-description" class="txt-small txt-subtle margin-none">Hide language help throughout the app for everyone.</p>
+      </div>
+{% let settings_form = form.fields_for("settings") %}
+      <label class="switch">
+        {{ settings_form.check_box("hide_translation_buttons", h::attrs().class("switch__input").data("action", "change->form#submit").aria("describedby", "localization-description"), "true", "false", ctx.account.hide_translation_buttons.to_string().as_str()) }}
+        <span class="switch__btn round"></span>
+        <span class="for-screen-reader">Hide translation buttons</span>
+      </label>
+      <noscript><button type="submit" class="btn">Save</button></noscript>
+{% endfilter %}
+    </div>
+    <!-- /Matchbox localization setting -->
 {% else %}    {{ h::account_logo_tag(ctx, Some("txt-xx-large center")) }}
     <h1 class="flex-item-grow txt-x-large">{{ ctx.account.name }}</h1>
 {% endif %}

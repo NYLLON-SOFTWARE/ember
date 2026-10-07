@@ -23,7 +23,14 @@ fn override_files() -> Vec<String> {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("overrides");
     let mut files = Vec::new();
     collect_files(&dir, &mut files);
-    files.into_iter().map(|file| file.strip_prefix(&dir).unwrap().to_string_lossy().into_owned()).collect()
+    files
+        .into_iter()
+        .map(|file| file.strip_prefix(&dir).unwrap().to_string_lossy().into_owned())
+        .filter(|logical| {
+            !logical.starts_with("basecoat/")
+                || matches!(logical.as_str(), "basecoat/app.css" | "basecoat/app.js" | "basecoat/theme-init.js")
+        })
+        .collect()
 }
 
 /// Each overridden logical path, with the reference's digested path and ours.
@@ -50,6 +57,9 @@ fn added() -> Vec<String> {
 fn collect_files(dir: &std::path::Path, files: &mut Vec<std::path::PathBuf>) {
     for entry in std::fs::read_dir(dir).unwrap() {
         let path = entry.unwrap().path();
+        if path.file_name().is_some_and(|name| name == "node_modules") {
+            continue;
+        }
         if path.is_dir() {
             collect_files(&path, files);
         } else {
@@ -124,6 +134,27 @@ fn stylesheet_link_tag_all_matches_the_reference() {
     let tags = campfire_assets::stylesheet_link_tag_all(&[("data-turbo-track", "reload")]);
     assert_eq!(tags.html, fixture("stylesheet_link_tag_all.html"));
     assert_eq!(campfire_assets::append_preload_links("", &tags.preload_links), fixture("link_header.txt"));
+}
+
+#[test]
+fn basecoat_build_inputs_are_not_published() {
+    let published: Vec<_> =
+        campfire_assets::manifest().iter().map(|(logical, _)| *logical).filter(|p| p.starts_with("basecoat/")).collect();
+    assert_eq!(published, ["basecoat/app.css", "basecoat/app.js", "basecoat/theme-init.js"]);
+    assert!(campfire_assets::try_asset_path("basecoat/src/theme.css").is_err());
+}
+
+#[test]
+fn style_profiles_keep_stylesheets_and_preloads_separate() {
+    use campfire_assets::{StyleProfile, stylesheet_link_tag_for};
+    let legacy = stylesheet_link_tag_for(StyleProfile::Legacy, &[("data-turbo-track", "reload")]);
+    assert_eq!(legacy.html, fixture("stylesheet_link_tag_all.html"));
+    assert!(legacy.preload_links.iter().all(|link| !link.contains("basecoat/")));
+    let basecoat = stylesheet_link_tag_for(StyleProfile::Basecoat, &[("data-turbo-track", "reload")]);
+    assert_eq!(basecoat.preload_links.len(), 1);
+    assert!(basecoat.preload_links[0].contains(&campfire_assets::asset_path("basecoat/app.css")));
+    assert_eq!(basecoat.html.matches("<link").count(), 1);
+    assert!(basecoat.html.contains("data-turbo-track=\"reload\""));
 }
 
 #[test]

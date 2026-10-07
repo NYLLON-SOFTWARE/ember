@@ -24,7 +24,8 @@ pub use helpers::{
 };
 pub use serve::{Body, StaticRequest, StaticResponse, serve};
 pub use tags::{
-    StylesheetTags, all_stylesheet_paths, append_preload_links, javascript_importmap_tags, stylesheet_link_tag, stylesheet_link_tag_all,
+    StyleProfile, StylesheetTags, all_stylesheet_paths, append_preload_links, javascript_importmap_tags, stylesheet_link_tag,
+    stylesheet_link_tag_all, stylesheet_link_tag_for, stylesheet_paths_for,
 };
 
 /// The URL prefix digested assets are served under (`config.assets.prefix`).
