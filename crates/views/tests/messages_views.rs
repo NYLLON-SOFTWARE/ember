@@ -3,7 +3,7 @@
 mod messages_support;
 
 use askama::Template;
-use campfire_views::messages::{self, EditView, MessageView, RoomKind, UserView};
+use matchbox_views::messages::{self, EditView, MessageView, RoomKind, UserView};
 use messages_support::golden;
 
 #[test]

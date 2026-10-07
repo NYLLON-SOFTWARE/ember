@@ -7,20 +7,20 @@
 //!   parity/bin/reference up --seed default --port 3141
 //!   parity/bin/reference runner --port 3141 crates/cable/tests/golden/fixtures.rb > target/cable-fixtures.json
 //!   CABLE_REFERENCE_URL=ws://127.0.0.1:3141/cable CABLE_REFERENCE_FIXTURES=$PWD/target/cable-fixtures.json \
-//!     cargo test -p campfire_cable --test golden -- --ignored record_reference
+//!     cargo test -p matchbox_cable --test golden -- --ignored record_reference
 //!
 //! (The fixtures script starts a fresh session each time, because the script signs it out.)
 //!
-//! The replay builds Campfire's channels over the same fixture values, so every frame must match
+//! The replay builds Matchbox's channels over the same fixture values, so every frame must match
 //! byte for byte; only ping timestamps are normalized.
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use campfire_cable::turbo::StreamsChannel;
-use campfire_cable::{
+use futures_util::{SinkExt, StreamExt};
+use matchbox_cable::turbo::StreamsChannel;
+use matchbox_cable::{
     Authenticate, Channel, ChannelResult, Config, ConnectRequest, EmptyChannel, Identified, Params, Server, Subscription,
 };
-use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tokio_tungstenite::tungstenite::Message;
@@ -313,7 +313,7 @@ async fn record_reference() {
 #[tokio::test]
 async fn replays_reference_frames() {
     let golden: Recording = serde_json::from_str(&std::fs::read_to_string(GOLDEN).unwrap()).unwrap();
-    let target = start_campfire_like_server(&golden.tokens).await;
+    let target = start_matchbox_like_server(&golden.tokens).await;
     let sessions = run_script(&target, &golden.tokens).await;
     for (session, expected) in &golden.sessions {
         for (expected, actual) in expected.iter().zip(&sessions[session]) {
@@ -323,7 +323,7 @@ async fn replays_reference_frames() {
     }
 }
 
-// Campfire's channels (reference/app/channels), over the fixture values the reference used.
+// Matchbox's channels (reference/app/channels), over the fixture values the reference used.
 
 struct User {
     id: u64,
@@ -397,14 +397,14 @@ impl Channel<User> for TypingNotificationsChannel {
 }
 
 fn room_gid_param(id: &str) -> String {
-    campfire_cable::naming::gid_param(&rails_compat::global_id::GlobalId {
+    matchbox_cable::naming::gid_param(&rails_compat::global_id::GlobalId {
         app: "campfire".into(),
         model_name: "Rooms::Open".into(),
         id: id.into(),
     })
 }
 
-async fn start_campfire_like_server(tokens: &BTreeMap<String, String>) -> Target {
+async fn start_matchbox_like_server(tokens: &BTreeMap<String, String>) -> Target {
     let cookie = "session_token=replay".to_string();
     let signed: BTreeMap<String, String> = [
         (tokens["ROOMS_SIGNED"].clone(), "rooms".to_string()),

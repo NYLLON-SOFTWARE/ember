@@ -31,7 +31,7 @@ ensure_host_modules() {
 
 docker_image() {
   local hash; hash=$(cat "$PARITY/Dockerfile.playwright" "$PARITY/package-lock.json" | sha256sum | cut -c1-12)
-  local image=campfire-parity-playwright:$hash
+  local image=matchbox-parity-playwright:$hash
   if ! docker image inspect "$image" >/dev/null 2>&1; then
     echo "parity: building $image" >&2
     docker build -q -f "$PARITY/Dockerfile.playwright" -t "$image" "$PARITY" >&2
@@ -47,7 +47,7 @@ run_in_image() {
   # network is every docker run/rm. Its proxies reach the servers through capture/forward.ts,
   # which runs on the host network, over a Unix socket in NET_DIR.
   # Unix socket paths are limited to 107 bytes on Linux, even in a long checkout path.
-  local net_dir; net_dir=$(mktemp -d /tmp/campfire-parity-net.XXXXXX)
+  local net_dir; net_dir=$(mktemp -d /tmp/matchbox-parity-net.XXXXXX)
   NET_DIRS+=("$net_dir")
   local socket=$net_dir/upstream.sock
   case "$runtime" in

@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use campfire_views::{AccountSummary, CurrentUser, Platform, ViewContext};
+use matchbox_views::{AccountSummary, CurrentUser, Platform, ViewContext};
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
@@ -22,7 +22,10 @@ pub fn golden(name: &str) -> Golden {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/golden/b").join(format!("{name}.json"));
     let json: Value =
         serde_json::from_str(&std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path:?}: {e}"))).expect("golden is JSON");
-    let assets = serde_json::from_value(json["context"]["assets"].clone()).unwrap_or_default();
+    let mut assets: HashMap<String, String> = serde_json::from_value(json["context"]["assets"].clone()).unwrap_or_default();
+    if let Some(original) = assets.get("campfire-icon.png") {
+        assets.insert("matchbox-icon.png".into(), original.replace("campfire-icon", "matchbox-icon"));
+    }
     Golden { name: name.to_string(), kind: json["kind"].as_str().unwrap().to_string(), json, assets }
 }
 
@@ -96,7 +99,9 @@ impl Golden {
     /// Asserts DOM parity for a template rendered without a layout against a reference page:
     /// the page's main content (or a frame layout's body) is compared with the whole render.
     pub fn assert_content(&self, actual_html: &str) {
-        let expected = without_forgery_tokens(serde_json::from_value(self.json["expected"].clone()).unwrap());
+        // Normalize the intentional product name change, preserving the frozen Rails evidence.
+        let expected =
+            without_forgery_tokens(serde_json::from_str(&self.json["expected"].to_string().replace("Campfire", "Matchbox")).unwrap());
         let expected = if self.kind == "page" {
             let regions = regions_named(&expected, &["main"]);
             regions.into_iter().next().map(|(_, tokens)| tokens).unwrap_or_default()
@@ -107,7 +112,9 @@ impl Golden {
     }
 
     pub fn assert_dom(&self, actual_html: &str) {
-        let expected = without_forgery_tokens(serde_json::from_value(self.json["expected"].clone()).unwrap());
+        // Normalize the intentional product name change, preserving the frozen Rails evidence.
+        let expected =
+            without_forgery_tokens(serde_json::from_str(&self.json["expected"].to_string().replace("Campfire", "Matchbox")).unwrap());
         let actual = tokens(actual_html);
         if self.kind == "page" {
             let regions = regions(&expected);

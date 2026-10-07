@@ -1,5 +1,5 @@
 # Runs inside the reference app (bin/rails runner, production, after assets:precompile) and
-# exports everything campfire_assets needs from it:
+# exports everything matchbox_assets needs from it:
 #
 #   vendor/<gem>/<path>     every gem-provided directory on the Propshaft load path, copied verbatim
 #   vendor/LOAD_PATH        the load path, in Propshaft's order, as `reference:<dir>` / `vendor:<dir>`

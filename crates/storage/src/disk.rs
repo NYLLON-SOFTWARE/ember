@@ -40,7 +40,7 @@ pub struct DiskToken {
 }
 
 impl DiskService {
-    /// Campfire's `local` service: `root: Rails.root.join("storage", "files")` (config/storage.yml).
+    /// Matchbox's `local` service: `root: Rails.root.join("storage", "files")` (config/storage.yml).
     pub fn new(root: impl Into<PathBuf>, name: impl Into<String>) -> Self {
         Self { root: root.into(), name: name.into() }
     }

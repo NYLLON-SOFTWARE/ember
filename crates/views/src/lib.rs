@@ -1,6 +1,6 @@
 //! Askama templates mirroring `reference/app/views`, one template file per ERB file at the same
 //! relative path under `templates/`. Views take plain view-model structs defined here, never
-//! database rows, so this crate doesn't depend on `campfire_db`. Rich text arrives pre-rendered
+//! database rows, so this crate doesn't depend on `matchbox_db`. Rich text arrives pre-rendered
 //! as sanitized HTML. Every template renders with the per-request [`ViewContext`] below.
 
 pub mod accounts;
@@ -30,7 +30,7 @@ pub struct ViewContext<'a> {
     pub platform: Platform,
     /// `Rails.configuration.x.vapid.public_key`; `None` omits the meta tag's content attribute.
     pub vapid_public_key: Option<String>,
-    /// Resolves a logical asset path ("campfire-icon.png") to its digested URL.
+    /// Resolves a logical asset path ("matchbox-icon.png") to its digested URL.
     pub asset_path: &'a dyn Fn(&str) -> String,
     /// The `<script type="importmap">` + modulepreload tags (`javascript_importmap_tags`).
     pub importmap_tags: &'a str,

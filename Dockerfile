@@ -6,12 +6,12 @@
 # 80, and with TLS_DOMAIN, HTTPS on 443 with Let's Encrypt certificates cached in
 # /rails/storage/thruster, where the reference's Thruster keeps them.
 #
-#   docker build -t campfire-rust --build-arg APP_VERSION=... --build-arg GIT_REVISION=... .
+#   docker build -t matchbox-rust --build-arg APP_VERSION=... --build-arg GIT_REVISION=... .
 #
 # Media: variants and video posters must be byte-identical to the reference's, so libvips and
 # ffmpeg are built from the same Debian trixie source packages the reference image ships
 # (libvips 8.16.1-1+deb13u1, ffmpeg 7:7.1.5-0+deb13u1), with the same compiler flags, against the
-# same Debian libraries. What's left out is only what Campfire never reaches:
+# same Debian libraries. What's left out is only what Matchbox never reaches:
 #
 #   * libvips: the loaders that Vips.block_untrusted and the variable content types already rule
 #     out (ImageMagick, OpenSlide, PDF, SVG, JPEG XL, JPEG 2000, OpenEXR, FITS, Matlab), and
@@ -92,14 +92,14 @@ RUN apt-get source -qq ffmpeg=${FFMPEG_VERSION} && \
 
 # The toolchain CI runs rustfmt, clippy and the tests in, with the source bind-mounted: the same
 # libvips and ffmpeg as the image, so the storage vectors' byte comparisons run rather than skip
-# (CAMPFIRE_REQUIRE_MEDIA_VECTORS turns a version mismatch into a failure).
+# (MATCHBOX_REQUIRE_MEDIA_VECTORS turns a version mismatch into a failure).
 FROM media-base AS toolchain
 COPY --from=vips /opt/vips /opt/vips
 COPY --from=ffmpeg /opt/ffmpeg /opt/ffmpeg
 ENV LIBRARY_PATH=/opt/vips/lib \
     LD_LIBRARY_PATH=/opt/vips/lib:/opt/ffmpeg/lib \
     PATH=/opt/ffmpeg/bin:$PATH \
-    CAMPFIRE_REQUIRE_MEDIA_VECTORS=1
+    MATCHBOX_REQUIRE_MEDIA_VECTORS=1
 RUN rustup component add clippy rustfmt
 
 
@@ -118,11 +118,11 @@ COPY crates crates
 # crates/assets/build.rs digests and embeds the reference's assets and public/ at build time.
 COPY reference reference
 
-RUN --mount=type=cache,id=campfire-rust-cargo-registry,target=/usr/local/cargo/registry \
-    --mount=type=cache,id=campfire-rust-target,target=/src/target \
+RUN --mount=type=cache,id=matchbox-rust-cargo-registry,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=matchbox-rust-target,target=/src/target \
     if [ "$TARGETARCH" = arm64 ]; then export JEMALLOC_SYS_WITH_LG_PAGE=14; fi && \
-    cargo build --release --locked -p campfire && \
-    install -D -m 755 target/release/campfire /out/campfire
+    cargo build --release --locked -p matchbox && \
+    install -D -m 755 target/release/matchbox /out/matchbox
 
 
 # The shared libraries and executables that go into the runtime, in one directory tree.
@@ -163,7 +163,7 @@ RUN groupadd --system --gid 1000 rails && \
 
 WORKDIR /rails
 
-COPY --from=build /out/campfire /usr/local/bin/campfire
+COPY --from=build /out/matchbox /usr/local/bin/matchbox
 
 # bin/boot: what the reference's `thrust bin/start-app` did, in one process: HTTP_PORT (80) and,
 # with TLS_DOMAIN, HTTPS_PORT (443), with the app itself also on TARGET_PORT (3000, loopback only unless TARGET_BIND says otherwise). Thruster's
@@ -171,7 +171,7 @@ COPY --from=build /out/campfire /usr/local/bin/campfire
 # forms) means the same.
 COPY --chmod=755 <<'EOF' /rails/bin/boot
 #!/bin/sh
-exec /usr/local/bin/campfire server
+exec /usr/local/bin/matchbox server
 EOF
 
 # The storage root is Rails.root.join("storage"): storage/db/<env>.sqlite3, storage/files,
@@ -179,12 +179,12 @@ EOF
 RUN mkdir -p /rails/storage/db /rails/storage/files /rails/storage/backups && \
     chown -R 1000:1000 /rails
 
-# ONCE backup/restore hooks. pre-backup is script/admin/prepare-backup (`campfire backup`);
+# ONCE backup/restore hooks. pre-backup is script/admin/prepare-backup (`matchbox backup`);
 # post-restore is the reference's own script.
 COPY --chmod=755 <<'EOF' /hooks/pre-backup
 #!/bin/bash
 cd /rails
-exec /usr/local/bin/campfire backup
+exec /usr/local/bin/matchbox backup
 EOF
 COPY --chmod=755 reference/hooks/post-restore /hooks/post-restore
 

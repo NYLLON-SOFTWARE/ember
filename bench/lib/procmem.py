@@ -4,7 +4,7 @@
   procmem.py sample CGROUP_DIR OUT.jsonl        # every 250 ms until killed or the cgroup goes
   procmem.py phases OUT.jsonl LOADGEN.stderr    # peak per role within each loadgen PHASE window
 
-Roles, from each process's command line: `campfire` (the Rust app: one process, its own front
+Roles, from each process's command line: `matchbox` (the Rust app: one process, its own front
 server included), `puma` (the Rails app: Puma's master and workers, which also serve Action Cable),
 `thrust` (Thruster), `redis` (the reference's cable pub/sub and Resque queue), `jobs` (resque-pool
 and its workers), `other`. Each sample sums, per role, Pss (proportional set size, so pages the
@@ -15,8 +15,8 @@ import json, os, re, sys, time
 
 
 def role(cmdline):
-    if "campfire" in cmdline:
-        return "campfire"
+    if "matchbox" in cmdline:
+        return "matchbox"
     if "puma" in cmdline:
         return "puma"
     if "thrust" in cmdline:

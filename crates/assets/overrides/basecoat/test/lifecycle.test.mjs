@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
-import { preferenceKey } from "../src/appearance.js";
+import { preferenceKey, readMode } from "../src/appearance.js";
 import { install } from "../src/lifecycle.js";
 
 class Events {
@@ -51,6 +51,14 @@ function fixture({ mode = null, dark = false, storageUnavailable = false } = {})
   });
   return { window, document, media, select, control, storage, calls, setComponents: value => { components = value; } };
 }
+
+test("appearance keeps legacy preferences and gives the Matchbox preference priority", () => {
+  const { window, storage } = fixture();
+  storage.set("campfire:appearance", "dark");
+  assert.equal(readMode(window), "dark");
+  storage.set(preferenceKey, "light");
+  assert.equal(readMode(window), "light");
+});
 
 test("the shipped prepaint script honors explicit preferences, system and inaccessible storage", async () => {
   const script = await readFile(new URL("../theme-init.js", import.meta.url), "utf8");
@@ -119,14 +127,14 @@ test("cross-profile frames navigate to the final URL; same-profile and non-HTML 
   install(f.window, f.document);
   const options = { headers: {} };
   f.document.emit("turbo:before-fetch-request", { detail: { fetchOptions: options } });
-  assert.equal(options.headers["X-Campfire-Style-Profile"], "basecoat");
+  assert.equal(options.headers["X-Matchbox-Style-Profile"], "basecoat");
   let prevented = 0;
   for (const [profile, type, ok] of [["legacy", "text/html", true], ["basecoat", "text/html", true], ["legacy", "application/json", true], ["legacy", "text/html", false]]) {
     f.document.emit("turbo:before-fetch-response", {
       target: { closest: () => ({}) },
       preventDefault: () => prevented++,
       detail: { fetchResponse: { response: {
-        ok, url: "http://localhost/rooms/1", headers: new Headers({ "X-Campfire-Style-Profile": profile, "Content-Type": type }),
+        ok, url: "http://localhost/rooms/1", headers: new Headers({ "X-Matchbox-Style-Profile": profile, "Content-Type": type }),
       } } },
     });
   }

@@ -77,7 +77,7 @@ def cpu():
                                      # eh_frame unwinding through the signal frame; the default loses the callers of
                                      # frame-pointer-less Rust code.
                                      "TCMALLOC_STACKTRACE_METHOD": os.environ.get("PROFILER_UNWIND", "libgcc")})
-    pid = app.pids["campfire"]
+    pid = app.pids["matchbox"]
     toggle = lambda: os.kill(pid, signal.SIGUSR2)
     done = []
     try:
@@ -106,7 +106,7 @@ def cpu():
                 toggle()
                 r = b.http(app, sess, rts[t], conc, a.secs)
                 toggle()
-                b.log(f"{t} c={conc}: {r['rps']} rps, campfire {r['cpu_ms_per_req']['campfire']} CPU ms/req")
+                b.log(f"{t} c={conc}: {r['rps']} rps, matchbox {r['cpu_ms_per_req']['matchbox']} CPU ms/req")
             done.append(t)
             time.sleep(0.5)
     finally:
@@ -116,7 +116,7 @@ def cpu():
         f = os.path.join(raw, f"cpu.{i}")
         if os.path.exists(f):
             subprocess.run([sys.executable, os.path.join(b.BENCH, "lib", "cpuprof.py"), f, "--out", os.path.join(out, f"cpu-{t}"),
-                            "--title", f"campfire {a.label}: {t}"], check=True)
+                            "--title", f"matchbox {a.label}: {t}"], check=True)
 
 
 def jemalloc_stats(stderr_text):

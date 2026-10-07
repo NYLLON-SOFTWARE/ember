@@ -7,9 +7,9 @@ use axum::Router;
 use axum::body::Body as AxumBody;
 use axum::extract::ConnectInfo;
 use axum::http::{Request as HttpRequest, header};
-use campfire_kit::exceptions::ErrorPages;
-use campfire_kit::format::{HTML, JSON, TURBO_STREAM};
-use campfire_kit::{
+use matchbox_kit::exceptions::ErrorPages;
+use matchbox_kit::format::{HTML, JSON, TURBO_STREAM};
+use matchbox_kit::{
     Cookie, Ctx, ExpiresIn, Freshness, Kit, KitConfig, Redirect, Result, SendOptions, SharedClock, StatusCode, TestClock, action, front,
     halt,
 };
@@ -196,33 +196,33 @@ async fn index_fresh(c: &mut Ctx) -> Result {
 fn kit_with(config: KitConfig) -> Kit {
     static SECRETS: LazyLock<Arc<Secrets>> = LazyLock::new(|| Arc::new(Secrets::new("test-secret")));
     let clock: SharedClock = Arc::new(TestClock::frozen_at("2024-06-01T12:00:00Z".parse().unwrap()));
-    Kit::new(config, SECRETS.clone(), clock, AppState { name: "Campfire" })
+    Kit::new(config, SECRETS.clone(), clock, AppState { name: "Matchbox" })
 }
 
 fn app_with(config: KitConfig) -> Router {
     let router = Router::new()
-        .route("/rooms/{id}", campfire_kit::get(show))
-        .route("/form", campfire_kit::get(form).post(action(create)))
-        .route("/echo/{id}", campfire_kit::get(echo).post(action(echo)).patch(action(echo)).delete(action(echo)))
-        .route("/upload", campfire_kit::patch(upload).post(action(upload)))
-        .route("/session", campfire_kit::get(session_get).post(action(session_set)).delete(action(session_reset)))
-        .route("/noop", campfire_kit::get(noop))
-        .route("/notice", campfire_kit::get(notice))
-        .route("/flash", campfire_kit::get(show_flash))
-        .route("/sign_in", campfire_kit::get(sign_in))
-        .route("/live_sign_in", campfire_kit::get(live_sign_in))
-        .route("/whoami", campfire_kit::get(whoami))
-        .route("/sign_out", campfire_kit::get(sign_out))
-        .route("/admin", campfire_kit::get(admin))
-        .route("/messages", campfire_kit::get(messages).post(action(messages)))
-        .route("/messages.{format}", campfire_kit::get(messages))
-        .route("/autocomplete", campfire_kit::get(autocomplete))
-        .route("/redirect", campfire_kit::get(redirects))
-        .route("/created", campfire_kit::get(created))
-        .route("/file", campfire_kit::get(file))
-        .route("/logo", campfire_kit::get(logo))
-        .route("/fresh", campfire_kit::get(index_fresh));
-    campfire_kit::app(router, kit_with(config))
+        .route("/rooms/{id}", matchbox_kit::get(show))
+        .route("/form", matchbox_kit::get(form).post(action(create)))
+        .route("/echo/{id}", matchbox_kit::get(echo).post(action(echo)).patch(action(echo)).delete(action(echo)))
+        .route("/upload", matchbox_kit::patch(upload).post(action(upload)))
+        .route("/session", matchbox_kit::get(session_get).post(action(session_set)).delete(action(session_reset)))
+        .route("/noop", matchbox_kit::get(noop))
+        .route("/notice", matchbox_kit::get(notice))
+        .route("/flash", matchbox_kit::get(show_flash))
+        .route("/sign_in", matchbox_kit::get(sign_in))
+        .route("/live_sign_in", matchbox_kit::get(live_sign_in))
+        .route("/whoami", matchbox_kit::get(whoami))
+        .route("/sign_out", matchbox_kit::get(sign_out))
+        .route("/admin", matchbox_kit::get(admin))
+        .route("/messages", matchbox_kit::get(messages).post(action(messages)))
+        .route("/messages.{format}", matchbox_kit::get(messages))
+        .route("/autocomplete", matchbox_kit::get(autocomplete))
+        .route("/redirect", matchbox_kit::get(redirects))
+        .route("/created", matchbox_kit::get(created))
+        .route("/file", matchbox_kit::get(file))
+        .route("/logo", matchbox_kit::get(logo))
+        .route("/fresh", matchbox_kit::get(index_fresh));
+    matchbox_kit::app(router, kit_with(config))
 }
 
 fn app() -> Router {
@@ -283,7 +283,7 @@ fn form_post(uri: &str, body: &str) -> HttpRequest<AxumBody> {
 async fn renders_html_with_rails_headers() {
     let reply = send(&app(), get("/rooms/5").body(AxumBody::empty()).unwrap()).await;
     assert_eq!(reply.status, StatusCode::OK);
-    assert_eq!(reply.text(), "<p>Campfire room 5</p>");
+    assert_eq!(reply.text(), "<p>Matchbox room 5</p>");
     assert_eq!(reply.header("content-type"), Some("text/html; charset=utf-8"));
     assert_eq!(reply.header("x-frame-options"), Some("SAMEORIGIN"));
     assert_eq!(reply.header("x-content-type-options"), Some("nosniff"));
@@ -379,7 +379,7 @@ async fn method_override_from_form_param_and_header() {
 
 #[tokio::test]
 async fn multipart_uploads_with_method_override() {
-    let boundary = "----campfire";
+    let boundary = "----matchbox";
     let body = format!(
         "--{b}\r\nContent-Disposition: form-data; name=\"_method\"\r\n\r\npatch\r\n\
          --{b}\r\nContent-Disposition: form-data; name=\"user[name]\"\r\n\r\nJo\r\n\
@@ -401,7 +401,7 @@ async fn missing_required_param_is_400() {
     assert_eq!(reply.status, StatusCode::BAD_REQUEST);
 }
 
-/// The test app as Campfire runs it in production: behind TLS (`assume_ssl`) with `force_ssl`.
+/// The test app as Matchbox runs it in production: behind TLS (`assume_ssl`) with `force_ssl`.
 fn ssl_app() -> Router {
     let error_pages = ErrorPages::new([(422, "<h1>Unprocessable</h1>".into())]);
     let mut config = KitConfig { error_pages, force_ssl: true, ..KitConfig::default() };
@@ -626,7 +626,7 @@ async fn send_file_with_disposition_and_the_whole_file() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("logo.png");
     std::fs::write(&path, b"0123456789").unwrap();
-    let encoded = campfire_kit::cookies::escape(path.to_str().unwrap());
+    let encoded = matchbox_kit::cookies::escape(path.to_str().unwrap());
     let app = app();
 
     let whole = send(&app, get(&format!("/file?path={encoded}")).body(AxumBody::empty()).unwrap()).await;

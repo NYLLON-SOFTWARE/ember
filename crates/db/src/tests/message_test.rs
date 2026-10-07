@@ -30,7 +30,7 @@ fn creating_a_message_enqueues_to_push_later() {
     assert_eq!(pushes, vec![Event::PushMessage { room_id: id("designers"), message_id: message.id }]);
 }
 
-/// Which mentioned users are mentionees; reading the mentions is `campfire_richtext`'s.
+/// Which mentioned users are mentionees; reading the mentions is `matchbox_richtext`'s.
 #[test]
 fn mentionees() {
     let t = TestDb::new();

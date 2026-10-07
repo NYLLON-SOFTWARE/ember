@@ -25,7 +25,7 @@ pub fn room_display_name(name: Option<&str>, direct: bool, other_member_names: &
 
 /// `mention_prompt_tag(room)`'s `src`: `autocompletable_users_path(room_id: room.id)`.
 pub fn mention_prompt_src(room_id: i64) -> String {
-    format!("{}?room_id={room_id}", campfire_routes::autocompletable_users())
+    format!("{}?room_id={room_id}", matchbox_routes::autocompletable_users())
 }
 
 /// A persisted room.
@@ -50,9 +50,9 @@ impl RoomView {
     /// `edit_polymorphic_path(room)`: `/rooms/opens/1/edit` and so on.
     pub fn edit_path(&self) -> String {
         match self.kind {
-            RoomKind::Open => campfire_routes::edit_rooms_open(self.id),
-            RoomKind::Closed => campfire_routes::edit_rooms_closed(self.id),
-            RoomKind::Direct => campfire_routes::edit_rooms_direct(self.id),
+            RoomKind::Open => matchbox_routes::edit_rooms_open(self.id),
+            RoomKind::Closed => matchbox_routes::edit_rooms_closed(self.id),
+            RoomKind::Direct => matchbox_routes::edit_rooms_direct(self.id),
         }
     }
 
@@ -239,10 +239,10 @@ impl FormRoom {
     /// `form_with model: room`'s action for an open or closed room.
     fn action(&self, kind: RoomKind) -> String {
         match (self.id, kind) {
-            (Some(id), RoomKind::Open) => campfire_routes::rooms_open(id),
-            (Some(id), _) => campfire_routes::rooms_closed(id),
-            (None, RoomKind::Open) => campfire_routes::rooms_opens(),
-            (None, _) => campfire_routes::rooms_closeds(),
+            (Some(id), RoomKind::Open) => matchbox_routes::rooms_open(id),
+            (Some(id), _) => matchbox_routes::rooms_closed(id),
+            (None, RoomKind::Open) => matchbox_routes::rooms_opens(),
+            (None, _) => matchbox_routes::rooms_closeds(),
         }
     }
 
@@ -297,7 +297,7 @@ impl ClosedsEdit<'_> {
 
 /// `button_to_delete_room(room)`.
 pub fn button_to_delete_room(ctx: &ViewContext, room_id: i64, display_name: &str) -> h::Html {
-    let url = ctx.url(&campfire_routes::room(room_id));
+    let url = ctx.url(&matchbox_routes::room(room_id));
     let content = format!(
         r#"<img aria-hidden="true" src="{}" width="20" height="20" /><span class="overflow-ellipsis">{}</span>"#,
         h::escape(&ctx.asset("trash.svg")),

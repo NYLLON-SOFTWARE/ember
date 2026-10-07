@@ -325,7 +325,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
-name = "campfire"
+name = "matchbox"
 version = "0.1.0"
 dependencies = [
  "aes-gcm",
@@ -335,14 +335,14 @@ dependencies = [
  "axum",
  "base64 0.22.1",
  "bytes",
- "campfire_assets",
- "campfire_cable",
- "campfire_db",
- "campfire_kit",
- "campfire_richtext",
- "campfire_routes",
- "campfire_storage",
- "campfire_views",
+ "matchbox_assets",
+ "matchbox_cable",
+ "matchbox_db",
+ "matchbox_kit",
+ "matchbox_richtext",
+ "matchbox_routes",
+ "matchbox_storage",
+ "matchbox_views",
  "flate2",
  "futures-util",
  "hex",
@@ -379,7 +379,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "campfire_assets"
+name = "matchbox_assets"
 version = "0.1.0"
 dependencies = [
  "fancy-regex",
@@ -390,7 +390,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "campfire_cable"
+name = "matchbox_cable"
 version = "0.1.0"
 dependencies = [
  "async-trait",
@@ -411,11 +411,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "campfire_db"
+name = "matchbox_db"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
- "campfire_db",
+ "matchbox_db",
  "crc32fast",
  "hex",
  "jiff",
@@ -433,7 +433,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "campfire_kit"
+name = "matchbox_kit"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -479,7 +479,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "campfire_richtext"
+name = "matchbox_richtext"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
@@ -492,11 +492,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "campfire_routes"
+name = "matchbox_routes"
 version = "0.1.0"
 
 [[package]]
-name = "campfire_storage"
+name = "matchbox_storage"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
@@ -514,11 +514,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "campfire_views"
+name = "matchbox_views"
 version = "0.1.0"
 dependencies = [
  "askama",
- "campfire_routes",
+ "matchbox_routes",
  "crc32fast",
  "html5ever",
  "jiff",

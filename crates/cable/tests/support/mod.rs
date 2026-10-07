@@ -4,11 +4,11 @@
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use campfire_cable::turbo::StreamsChannel;
-use campfire_cable::{
+use futures_util::{SinkExt, StreamExt};
+use matchbox_cable::turbo::StreamsChannel;
+use matchbox_cable::{
     Authenticate, Channel, ChannelResult, Config, ConnectRequest, EmptyChannel, Identified, Params, Server, Subscription,
 };
-use futures_util::{SinkExt, StreamExt};
 use serde_json::{Value, json};
 use tokio::net::TcpStream;
 use tokio_tungstenite::tungstenite::Message;

@@ -1,4 +1,4 @@
-//! The Active Storage flows Campfire drives, over one disk service and the app verifier:
+//! The Active Storage flows Matchbox drives, over one disk service and the app verifier:
 //! uploads (`create_and_upload!`), analysis, tracked variants (`VariantWithRecord`) and video
 //! previews (`ActiveStorage::Preview`).
 //!

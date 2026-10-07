@@ -31,7 +31,7 @@ pub fn stream_name_from(streamables: &[&str]) -> String {
     streamables.join(":")
 }
 
-/// `ActiveSupport::Inflector.underscore` without acronym inflections (Campfire defines none).
+/// `ActiveSupport::Inflector.underscore` without acronym inflections (Matchbox defines none).
 fn underscore(word: &str) -> String {
     let chars: Vec<char> = word.replace("::", "/").chars().collect();
     let mut out = String::with_capacity(chars.len() + 4);

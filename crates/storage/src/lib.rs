@@ -1,4 +1,4 @@
-//! Active Storage-compatible storage for Campfire: blobs and their rows, the disk service and its
+//! Active Storage-compatible storage for Matchbox: blobs and their rows, the disk service and its
 //! signed URLs, Marcel content type identification, analyzers, tracked variants processed with
 //! libvips (as image_processing does) and video previews via ffmpeg (as VideoPreviewer does).
 //!

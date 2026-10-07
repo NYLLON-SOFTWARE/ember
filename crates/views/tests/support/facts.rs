@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
-use campfire_views::{AccountSummary, CurrentUser, Platform, ViewContext};
+use matchbox_views::{AccountSummary, CurrentUser, Platform, ViewContext};
 use serde_json::Value;
 
 pub fn golden_dir() -> PathBuf {
@@ -21,7 +21,11 @@ pub fn facts() -> &'static Value {
 }
 
 pub fn golden(name: &str, ext: &str) -> String {
-    std::fs::read_to_string(golden_dir().join(format!("{name}.{ext}"))).unwrap()
+    // Keep the frozen Rails evidence intact; only the intentional product name differs.
+    std::fs::read_to_string(golden_dir().join(format!("{name}.{ext}")))
+        .unwrap()
+        .replace("Campfire", "Matchbox")
+        .replace("campfire-icon", "matchbox-icon")
 }
 
 pub fn case(name: &str) -> &'static Value {
@@ -87,6 +91,7 @@ pub fn with_context<R>(name: &str, request: Request, f: impl FnOnce(&ViewContext
     let assets: HashMap<String, String> =
         facts["assets"].as_object().unwrap().iter().map(|(k, v)| (k.clone(), v.as_str().unwrap().to_string())).collect();
     let asset_path = move |logical: &str| match logical {
+        "matchbox-icon.png" => assets["campfire-icon.png"].replace("campfire-icon", "matchbox-icon"),
         "basecoat/theme-init.js" | "basecoat/app.js" | "kro/avatar-placeholder.svg" if request.basecoat => format!("/assets/{logical}"),
         _ => assets.get(logical).cloned().unwrap_or_else(|| panic!("unknown asset {logical}")),
     };

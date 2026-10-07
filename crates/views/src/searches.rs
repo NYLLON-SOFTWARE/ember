@@ -43,7 +43,7 @@ impl Page for Index<'_> {
 
 /// `searches_path(q: query)`.
 pub fn search_path(query: &str) -> String {
-    format!("{}?q={}", campfire_routes::searches(), ruby_compat::cgi_escape(query))
+    format!("{}?q={}", matchbox_routes::searches(), ruby_compat::cgi_escape(query))
 }
 
 #[cfg(test)]

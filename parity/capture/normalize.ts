@@ -5,6 +5,7 @@
 // still differs, and timestamps are decoded relative to the seed clock instead of masked away.
 import { createHash } from "node:crypto"
 import { parse, parseFragment } from "parse5"
+import { maskProductBranding } from "./branding.ts"
 
 export interface NormalizeOptions {
   seedTime?: number // epoch ms: the seed's clock.now, which timestamps are decoded against
@@ -135,7 +136,7 @@ function maskAttr(tag: string, name: string, value: string, attrs: any[], option
 }
 
 export function maskText(text: string, options: NormalizeOptions): string {
-  return text
+  return maskProductBranding(text)
     .replace(QR_CODE, (_, encoded) => `/qr_code/«qr:${maskText(decodeBase64(encoded)?.toString("utf8") ?? encoded, options)}»`)
     .replace(ISO_TIME, (iso) => relativeIso(iso, options))
     .replace(SIGNED_TOKEN, (token) => describeSignedToken(token, options))

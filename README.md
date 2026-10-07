@@ -16,7 +16,7 @@ Matchbox adds its own interface and configuration changes, documented under
 The existing SQLite database, storage layout and signed/encrypted cookies remain compatible,
 so existing installs can upgrade without migrating data or signing everyone out.
 
-One `campfire` executable replaces Ruby, Puma, Redis, Resque and Thruster, with libvips and ffmpeg
+One `matchbox` executable replaces Ruby, Puma, Redis, Resque and Thruster, with libvips and ffmpeg
 for media. The Rails frontend ships with a few [port-owned overrides](crates/assets/OVERRIDES.md).
 The app includes TLS, HTTP/2, Web Push, bot webhooks, search and Action Cable-compatible WebSockets.
 
@@ -36,12 +36,12 @@ Run the resulting image with persistent storage:
 docker run -d -p 80:80 -p 443:443 \
   -e SECRET_KEY_BASE=... -e VAPID_PUBLIC_KEY=... -e VAPID_PRIVATE_KEY=... \
   -e TLS_DOMAIN=chat.example.com \
-  -v campfire:/rails/storage \
+  -v matchbox:/rails/storage \
   matchbox
 ```
 
 [ONCE](https://github.com/basecamp/once) can also deploy an image you build and publish to your
-own registry. The executable and internal crate names remain `campfire` for compatibility.
+own registry. The executable is `matchbox` and the application crate lives in `crates/matchbox/`.
 
 - `TLS_DOMAIN` enables automatic Let's Encrypt certificates; `DISABLE_SSL` enables plain HTTP.
 - `/rails/storage` holds the database, uploads, backups and certificates. Existing installs must
@@ -50,7 +50,7 @@ own registry. The executable and internal crate names remain `campfire` for comp
   URL; its default is `https://` plus the first `TLS_DOMAIN`, or the project's URL.
 - The app listener on `TARGET_PORT` (3000) binds loopback. `TARGET_BIND` overrides this; that listener
   trusts `X-Forwarded-*` from whoever reaches it. Other settings are in
-  [`config.rs`](crates/campfire/src/config.rs).
+  [`config.rs`](crates/matchbox/src/config.rs).
 - The Dockerfile supports amd64 and arm64.
 
 ## Performance
@@ -84,7 +84,7 @@ native media dependencies are specified in the [`Dockerfile`](Dockerfile).
 git submodule update --init
 parity/bin/reference build
 parity/bin/seed build
-CAMPFIRE_REQUIRE_SEED=1 cargo test --workspace --exclude html5ever
+MATCHBOX_REQUIRE_SEED=1 cargo test --workspace --exclude html5ever
 cargo clippy --workspace --exclude html5ever --all-targets
 parity/bin/candidate build
 parity/bin/candidate compare
@@ -92,7 +92,7 @@ bench/run
 ```
 
 Seed generation and parity checks need Docker. Tests without the seed skip app integration tests.
-For local development, run `cargo run -p campfire -- server` with `SECRET_KEY_BASE` set
+For local development, run `cargo run -p matchbox -- server` with `SECRET_KEY_BASE` set
 (or `SECRET_KEY_BASE_DUMMY=1`). Build an image with `docker build -t matchbox .`.
 
 The parity harness compares HTML, DOM, accessibility trees, assets, Cable frames and screenshots
@@ -115,7 +115,7 @@ regenerate the assets and rebuild the Rust app:
 npm ci --prefix crates/assets/overrides/basecoat
 npm run build --prefix crates/assets/overrides/basecoat
 npm test --prefix crates/assets/overrides/basecoat
-cargo build -p campfire
+cargo build -p matchbox
 ```
 
 Generated CSS and JavaScript are checked in and embedded with digested URLs, so ordinary Cargo and
@@ -131,7 +131,7 @@ npm exec --prefix parity -- playwright install chromium
 npm run test:kro --prefix parity
 ```
 
-Set `CAMPFIRE_BIN` to test a different binary. The native browser checks cover setup and appearance
+Set `MATCHBOX_BIN` to test a different binary. The native browser checks cover setup and appearance
 without Docker; they do not replace the reference-seeded integration and parity suites.
 
 Future page batches are sign-in/invitation signup, account/profile/admin, room management/search,
@@ -146,6 +146,15 @@ behavior changes and compatibility limits are listed below.
 <details>
 <summary>Differences from Rails</summary>
 
+- **Matchbox branding:** application copy, page titles, translations, sharing prompts, installation
+  instructions, the web app manifest, executable, Rust crates, and developer tooling use Matchbox.
+  New workspaces default to Matchbox; an existing workspace named exactly Campfire displays as
+  Matchbox without rewriting its stored name. Other workspace names and message contents stay intact.
+  `MATCHBOX_*` environment variables replace the old prefix, with `CAMPFIRE_*` accepted as a fallback
+  and the new name taking precedence. Existing browser appearance preferences are also honored.
+  The `_campfire_session` cookie, GlobalID namespace, mention MIME type, and upstream asset module
+  paths remain compatible so existing sessions, links, and messages work. Upstream source, URLs,
+  copyright notices, recorded benchmarks, and Rails golden fixtures retain their original names.
 - **Translation controls:** administrators can toggle **Hide translation buttons** in Account
   settings. Hiding is enabled by default for new and existing installs, including sign-in,
   invitations, room forms, profiles, and the welcome card. The choice is stored in the account's
@@ -236,7 +245,7 @@ behavior changes and compatibility limits are listed below.
   beyond 400 nesting levels or 400 attributes per element are stored unchanged with empty plain
   text. These messages render as unrenderable.
 - **Not ported:** Active Storage streaming's duplicate `session_token` cookie or legacy AES-CBC
-  cookies; Campfire uses AES-GCM.
+  cookies; Matchbox uses AES-GCM.
 
 HTTP-01 ACME validation is only unit-tested; TLS-ALPN-01 is tested end to end against a local ACME
 server. Rich text is checked against Rails on 658 cases, including 400 fuzzed cases.

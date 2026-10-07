@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Regenerates the campfire_storage golden vectors inside the reference image:
+# Regenerates the matchbox_storage golden vectors inside the reference image:
 #
 #   docker build -t campfire-reference reference
 #   reference-tools/storage/run.sh            # → vectors/storage.json + vectors/storage/

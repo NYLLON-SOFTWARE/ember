@@ -1,5 +1,5 @@
-# Golden vectors for the Rust ports of the useragent gem (crates/campfire/src/concerns/user_agent.rs),
-# ApplicationPlatform and AllowBrowser's BrowserBlocker (crates/campfire/src/concerns/platform.rs).
+# Golden vectors for the Rust ports of the useragent gem (crates/matchbox/src/concerns/user_agent.rs),
+# ApplicationPlatform and AllowBrowser's BrowserBlocker (crates/matchbox/src/concerns/platform.rs).
 #
 #   parity/bin/reference runner reference-tools/campfire/user_agents.rb > vectors/campfire_user_agents.json
 #

@@ -1,2 +1,2 @@
 require_relative "verification"
-CampfireVerification.load("validate_acks.rb", __FILE__)
+MatchboxVerification.load("validate_acks.rb", __FILE__)

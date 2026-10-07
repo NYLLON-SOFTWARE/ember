@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url"
 import { chromium } from "playwright"
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
-const binary = path.resolve(process.env.CAMPFIRE_BIN || path.join(repo, "target/debug/campfire"))
+const binary = path.resolve(process.env.MATCHBOX_BIN || path.join(repo, "target/debug/matchbox"))
 const artifacts = path.join(repo, "parity/out/kro")
 const password = "kro-browser-test-password"
 let browser
@@ -32,22 +32,22 @@ async function freePort(except) {
 }
 
 async function freshServer(t) {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "campfire-kro-browser-"))
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "matchbox-kro-browser-"))
   const port = await freePort()
   const targetPort = await freePort(port)
   const origin = `http://127.0.0.1:${port}`
   const env = { ...process.env }
   // Never inherit the developer's database paths, TLS domains, fixed clock, or front-server ports.
   for (const key of Object.keys(env)) {
-    if (/^(CAMPFIRE_|THRUSTER_|VAPID_)/.test(key)) delete env[key]
+    if (/^(MATCHBOX_|CAMPFIRE_|THRUSTER_|VAPID_)/.test(key)) delete env[key]
   }
   Object.assign(env, {
     SECRET_KEY_BASE: "kro-disposable-browser-test-secret".repeat(4),
-    CAMPFIRE_STORAGE_PATH: dir,
-    CAMPFIRE_DATABASE_PATH: path.join(dir, "db/production.sqlite3"),
-    CAMPFIRE_FILES_PATH: path.join(dir, "files"),
-    CAMPFIRE_BACKUPS_PATH: path.join(dir, "backups"),
-    CAMPFIRE_LOG: "error",
+    MATCHBOX_STORAGE_PATH: dir,
+    MATCHBOX_DATABASE_PATH: path.join(dir, "db/production.sqlite3"),
+    MATCHBOX_FILES_PATH: path.join(dir, "files"),
+    MATCHBOX_BACKUPS_PATH: path.join(dir, "backups"),
+    MATCHBOX_LOG: "error",
     RAILS_ENV: "production",
     DISABLE_SSL: "1",
     THRUSTER_HTTP_PORT: String(port),
@@ -79,14 +79,14 @@ async function freshServer(t) {
   const deadline = Date.now() + 20_000
   while (Date.now() < deadline) {
     if (spawnError) throw spawnError
-    if (child.exitCode !== null) throw new Error(`Campfire exited: ${log}`)
+    if (child.exitCode !== null) throw new Error(`Matchbox exited: ${log}`)
     try {
       const response = await fetch(`${origin}/first_run`, { signal: AbortSignal.timeout(1000) })
       if (response.ok) return { origin, dir }
     } catch { /* The listening sockets are not ready yet. */ }
     await new Promise((resolve) => setTimeout(resolve, 100))
   }
-  throw new Error(`Campfire did not become ready: ${log}`)
+  throw new Error(`Matchbox did not become ready: ${log}`)
 }
 
 async function newPage(t, server, options = {}) {
@@ -217,10 +217,17 @@ test("setup creates an account, switches style profiles, signs in, and prevents 
   await page.goto("/session/new")
   assert.equal(new URL(page.url()).pathname, "/first_run", "empty installation redirects sign-in to setup")
   await profile(page, "basecoat")
+  assert.equal(await page.title(), "Set up Matchbox")
   const setupHTML = await (await context.request.get("/first_run")).text()
   await page.evaluate(() => { window.kroDocumentMarker = "setup" })
   await fillSignup(page, "ada@example.test")
   await submitSignup(page)
+  await page.getByText("Welcome to Matchbox", { exact: true }).waitFor()
+  const manifest = await (await context.request.get("/webmanifest.json")).json()
+  assert.equal(manifest.name, "Matchbox")
+  assert.ok(!JSON.stringify(manifest).includes("Campfire"))
+  assert.ok(!await page.locator("body").innerText().then(text => text.includes("Campfire")))
+  assert.ok((await (await context.request.get("/502.html")).text()).includes("Starting Matchbox"))
   assert.equal(await page.evaluate(() => window.kroDocumentMarker), undefined, "cross-profile signup creates a new document")
   // MessagesController#index uses fresh_when for non-empty pages; a new install's empty page is
   // deliberately 204, so create a message before checking the unchanged cache contract.
@@ -229,10 +236,11 @@ test("setup creates an account, switches style profiles, signs in, and prevents 
     headers: { Accept: "text/vnd.turbo-stream.html", "Sec-Fetch-Site": "same-origin" },
     form: { "message[body]": `<div>${body}</div>` },
   })
-  assert.equal((await postMessage("KRO cache regression")).status(), 200)
+  assert.equal((await postMessage("Campfire is the upstream project")).status(), 200)
   const firstMessages = await context.request.get(messagesPath)
   const warmMessages = await context.request.get(messagesPath)
   assert.equal(firstMessages.status(), 200)
+  assert.match(await firstMessages.text(), /Campfire is the upstream project/, "branding must not rewrite chat contents")
   assert.equal(warmMessages.status(), 200)
   const etag = firstMessages.headers().etag
   assert.match(etag, /^W\/".+"$/, "legacy message pages retain their weak ETag")
@@ -362,16 +370,16 @@ test("appearance follows the system without a selector and honors saved preferen
   await page.emulateMedia({ colorScheme: "light" })
   await expectDark(page, false)
   // Existing preferences from earlier versions remain valid even without a selector on setup.
-  await page.evaluate(() => localStorage.setItem("campfire:appearance", "dark"))
+  await page.evaluate(() => localStorage.setItem("matchbox:appearance", "dark"))
   await page.reload()
   await expectDark(page, true)
   assert.equal(await page.evaluate(() => window.kroDarkWhenBodyAppeared), true)
-  await page.evaluate(() => localStorage.setItem("campfire:appearance", "light"))
+  await page.evaluate(() => localStorage.setItem("matchbox:appearance", "light"))
   await page.emulateMedia({ colorScheme: "dark" })
   await page.reload()
   await expectDark(page, false)
   assert.equal(await page.evaluate(() => window.kroDarkWhenBodyAppeared), false)
-  await page.evaluate(() => localStorage.removeItem("campfire:appearance"))
+  await page.evaluate(() => localStorage.removeItem("matchbox:appearance"))
   await page.reload()
   await expectDark(page, true)
 })
@@ -385,7 +393,7 @@ test("first-run visual contract on desktop and a 320-pixel phone in both modes",
       await page.emulateMedia({ colorScheme: scheme })
       await page.goto("/first_run")
       await expectDark(page, scheme === "dark")
-      await page.getByRole("heading", { name: "Set up Campfire", exact: true }).waitFor()
+      await page.getByRole("heading", { name: "Set up Matchbox", exact: true }).waitFor()
       await profile(page, "basecoat")
       const geometry = await page.evaluate(() => {
         const form = document.querySelector('form[action="/first_run"]')

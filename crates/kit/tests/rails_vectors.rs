@@ -8,7 +8,7 @@ use std::sync::Arc;
 use axum::Router;
 use axum::body::Body;
 use axum::http::{Request, header};
-use campfire_kit::{Ctx, Kit, KitConfig, Result, StatusCode, TestClock, action};
+use matchbox_kit::{Ctx, Kit, KitConfig, Result, StatusCode, TestClock, action};
 use serde_json::{Value, json};
 use tower::ServiceExt;
 
@@ -33,8 +33,8 @@ fn app(vectors: &Value) -> (Router, Arc<rails_compat::Secrets>) {
     let secrets = Arc::new(rails_compat::Secrets::new(vectors["secret_key_base"].as_str().unwrap()));
     let now = vectors["now"].as_str().unwrap().parse().unwrap();
     let kit = Kit::new(KitConfig::default(), secrets.clone(), Arc::new(TestClock::frozen_at(now)), ());
-    let router = Router::new().route("/session", action_post()).route("/whoami", campfire_kit::get(whoami));
-    (campfire_kit::app(router, kit), secrets)
+    let router = Router::new().route("/session", action_post()).route("/whoami", matchbox_kit::get(whoami));
+    (matchbox_kit::app(router, kit), secrets)
 }
 
 fn action_post() -> axum::routing::MethodRouter<Kit> {
@@ -50,7 +50,7 @@ async fn post_session(app: &Router, cookie: &str, site: &str, token: Option<&str
     let body = match token {
         Some(token) => {
             request = request.header(header::CONTENT_TYPE, "application/x-www-form-urlencoded");
-            format!("authenticity_token={}", campfire_kit::cookies::escape(token))
+            format!("authenticity_token={}", matchbox_kit::cookies::escape(token))
         }
         None => String::new(),
     };
@@ -62,7 +62,7 @@ async fn rails_sessions_carry_over() {
     let vectors = vectors();
     let session = &vectors["session"];
     let (app, secrets) = app(&vectors);
-    let cookie = format!("_campfire_session={}", campfire_kit::cookies::escape(session["session_cookie_raw"].as_str().unwrap()));
+    let cookie = format!("_campfire_session={}", matchbox_kit::cookies::escape(session["session_cookie_raw"].as_str().unwrap()));
     let form_token = session["session_form_token"].as_str().unwrap();
 
     // A form from a page Rails rendered still posts its token; it's ignored, not required.
@@ -99,7 +99,7 @@ async fn rails_signed_session_token_cookie_is_read() {
     let vectors = vectors();
     let session = &vectors["session"];
     let (app, _) = app(&vectors);
-    let cookie = format!("session_token={}", campfire_kit::cookies::escape(session["session_token_raw"].as_str().unwrap()));
+    let cookie = format!("session_token={}", matchbox_kit::cookies::escape(session["session_token_raw"].as_str().unwrap()));
     let request = Request::get("/whoami").header(header::COOKIE, cookie).body(Body::empty()).unwrap();
     let response = app.oneshot(request).await.unwrap();
     let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();

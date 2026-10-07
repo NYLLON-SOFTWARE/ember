@@ -9,14 +9,14 @@ drifts hit every configuration alike.
   bench/attrib-report DIR
 
 Each run records throughput and latency (as bench/run), and CPU seconds per request for every
-server-side process (campfire, thrust, docker-proxy) and for the load generator, read from
+server-side process (matchbox, thrust, docker-proxy) and for the load generator, read from
 /proc/<pid>/stat around each run. The cable run also records RssAnon per fan-out phase.
 
 The load generator sends no User-Agent unless given one with --user-agent, which it then sends on
 every request; a desktop Chrome, say:
   --user-agent 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36'
 
-Knobs (env): SERVER_CPUS=8-11 LOADGEN_CPUS=12-15 PORT=4390 RUST_IMAGE=campfire-rust:app,
+Knobs (env): SERVER_CPUS=8-11 LOADGEN_CPUS=12-15 PORT=4390 RUST_IMAGE=matchbox-rust:app,
 NATIVE_<LABEL>_BIN / NATIVE_<LABEL>_PRELOAD for native-<label> configurations.
 """
 import argparse, json, os, subprocess, sys, time
@@ -67,7 +67,7 @@ try:
             result = {"config": config, "rep": rep, "cold_start_s": round(app.cold_start_s, 3), "pids": app.pids, "load_start": load0}
             try:
                 time.sleep(2)
-                result["idle"] = b.rss(app.pids["campfire"])
+                result["idle"] = b.rss(app.pids["matchbox"])
                 sess = b.session(app, labels)
                 rts = b.routes(sess)
                 result["http"] = []

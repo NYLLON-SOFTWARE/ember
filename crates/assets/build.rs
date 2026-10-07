@@ -28,9 +28,12 @@ fn main() {
     }
     println!("cargo:rerun-if-changed={}", crate_dir.join("vendor").display());
     let overrides = crate_dir.join("overrides");
-    let include = |path: &Path| match path.strip_prefix(overrides.join("basecoat")) {
-        Ok(relative) => matches!(relative.to_str(), Some("" | "app.css" | "app.js" | "theme-init.js")),
-        Err(_) => true,
+    let include = |path: &Path| {
+        !path.starts_with(overrides.join("public"))
+            && match path.strip_prefix(overrides.join("basecoat")) {
+                Ok(relative) => matches!(relative.to_str(), Some("" | "app.css" | "app.js" | "theme-init.js")),
+                Err(_) => true,
+            }
     };
     println!("cargo:rerun-if-changed={}", overrides.display());
     println!("cargo:rerun-if-changed=build");
@@ -93,6 +96,8 @@ fn main() {
     public_files.retain(|file| !file.starts_with(public.join("assets")));
     for (i, file) in public_files.iter().enumerate() {
         let url = format!("/{}", file.strip_prefix(&public).unwrap().display());
+        let override_path = overrides.join("public").join(file.strip_prefix(&public).unwrap());
+        let file = if override_path.is_file() { &override_path } else { file };
         writeln!(code, "static PUBLIC_{i}: &[u8] = include_bytes!({:?});", file.display().to_string()).unwrap();
         files.push((url, format!("PUBLIC_{i}")));
     }

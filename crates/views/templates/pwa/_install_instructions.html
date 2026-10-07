@@ -1,12 +1,12 @@
 {% if !(ctx.platform.chrome || (ctx.platform.firefox && !ctx.platform.android)) %}  <details class="notifications-help pwa__instructions hide-in-pwa" data-controller="pwa-install" data-pwa-install-prompting-class="pwa--can-install" data-notifications-target="details">
     <summary class="btn">
       {{ h::image_tag(ctx, "external/install.svg", h::attrs().aria_hidden().size(20)) }}
-      <strong>Install Campfire as a web app.</strong>
+      <strong>Install Matchbox as a web app.</strong>
       {{ h::image_tag(ctx, "disclosure.svg", h::attrs().aria_hidden().size(10).class("disclosure")) }}
     </summary>
 
 {% if ctx.platform.edge %}        <ol>
-          <li>Click <em>{{ h::image_tag(ctx, "install-edge.svg", h::attrs().alt("the app available - install Campfire chat button").size(16)) }}</em>in the address bar.</li>
+          <li>Click <em>{{ h::image_tag(ctx, "install-edge.svg", h::attrs().alt("the app available - install Matchbox chat button").size(16)) }}</em>in the address bar.</li>
           <li>Click <em>Install</em>.</li>
         </ol>
 {% elif ctx.platform.chrome && ctx.platform.android %}        <ol>
@@ -21,12 +21,12 @@
           <li>Click <em>File</em> in the top left.</li>
           <li>Click <em>Add to Dock…</em>.</li>
         </ol>
-{% elif (ctx.platform.safari || ctx.platform.chrome) && ctx.platform.ios %}        <p>To receive push notifications in {{ h::capitalize(ctx.platform.browser.as_str()) }} for {{ ctx.platform.operating_system }}, you must install Campfire as a web app.</p>
+{% elif (ctx.platform.safari || ctx.platform.chrome) && ctx.platform.ios %}        <p>To receive push notifications in {{ h::capitalize(ctx.platform.browser.as_str()) }} for {{ ctx.platform.operating_system }}, you must install Matchbox as a web app.</p>
         <ol>
           <li>Tap <em>{{ h::image_tag(ctx, "external/share.svg", h::attrs().alt("the share button").size(20)) }}</em></li>
           <li>Tap <em>Add to Home Screen</em>.</li>
         </ol>
-{% else %}        <p>Some platforms require you to install Campfire as a web app to receive push notifications.</p>
+{% else %}        <p>Some platforms require you to install Matchbox as a web app to receive push notifications.</p>
 {% endif %}
     <div class="margin-block-start txt-align-center pwa__installer">
       <hr class="separator margin-block">

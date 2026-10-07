@@ -6,8 +6,8 @@
 mod support;
 
 use askama::Template;
-use campfire_views::helpers as h;
-use campfire_views::*;
+use matchbox_views::helpers as h;
+use matchbox_views::*;
 use support::dom::{diff, normalize_html};
 use support::facts::*;
 
@@ -298,7 +298,7 @@ fn first_runs_show() {
     assert!(html.contains("autofocus=\"autofocus\""));
     assert!(html.contains("data-1p-ignore=\"true\""));
     assert!(html.contains("Continue"));
-    assert!(html.contains("Set up Campfire"));
+    assert!(html.contains("Set up Matchbox"));
     assert!(!html.contains("data-controller=\"popup\""));
     assert!(html.contains("data-password-toggle"));
     assert!(!html.contains("data-appearance-control"));
@@ -429,7 +429,7 @@ fn users_push_subscriptions() {
     assert_parity(name, "html", html);
 }
 
-fn sidebar<'a>(name: &str, ctx: &'a campfire_views::ViewContext<'a>) -> users::SidebarShow<'a> {
+fn sidebar<'a>(name: &str, ctx: &'a matchbox_views::ViewContext<'a>) -> users::SidebarShow<'a> {
     let sidebar = &data(name)["sidebar"];
     let me = user_by_email(name, case(name)["as"].as_str().unwrap());
     let me_name = me["name"].as_str().unwrap();
@@ -614,7 +614,7 @@ fn users_partials() {
 
     let name = "user_json";
     let jz = user(name, "JZ");
-    let json = rails_compat::json::encode(&campfire_views::messages::json::UserJson {
+    let json = rails_compat::json::encode(&matchbox_views::messages::json::UserJson {
         id: jz["id"].as_i64().unwrap(),
         name: "JZ".into(),
         role: jz["role"].as_str().unwrap().into(),

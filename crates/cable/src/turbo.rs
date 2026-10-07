@@ -14,7 +14,7 @@ pub const STREAMS_CHANNEL: &str = "Turbo::StreamsChannel";
 type Verifier = Arc<dyn Fn(&str) -> Option<String> + Send + Sync>;
 type Guard = Arc<dyn Fn(&str) -> bool + Send + Sync>;
 
-/// `Turbo::StreamsChannel`, optionally with a guard prepended the way Campfire prepends
+/// `Turbo::StreamsChannel`, optionally with a guard prepended the way Matchbox prepends
 /// `RoomStreamsAreAuthorized` (reference/app/channels/concerns/room_streams_are_authorized.rb).
 #[derive(Clone)]
 pub struct StreamsChannel {

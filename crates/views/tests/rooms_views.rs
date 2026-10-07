@@ -3,7 +3,7 @@
 mod messages_support;
 
 use askama::Template;
-use campfire_views::rooms::{self, ClosedFormView, DirectEditView, InvolvementView, OpenFormView, RefreshView, ShowView};
+use matchbox_views::rooms::{self, ClosedFormView, DirectEditView, InvolvementView, OpenFormView, RefreshView, ShowView};
 use messages_support::golden;
 
 fn show(name: &str) {
@@ -16,8 +16,8 @@ fn show(name: &str) {
 /// a fragment the kit gets as it is: rendered into the fragment cache first, then read from it.
 #[test]
 fn show_recorded_keeps_every_message_as_a_fragment() {
-    use campfire_views::fragment_cache::{self, FragmentCache};
-    use campfire_views::layouts;
+    use matchbox_views::fragment_cache::{self, FragmentCache};
+    use matchbox_views::layouts;
 
     let g = golden("rooms_show_member");
     let show: ShowView = g.input();
@@ -27,7 +27,7 @@ fn show_recorded_keeps_every_message_as_a_fragment() {
         g.render(|ctx| {
             fragment_cache::with(&cache, || {
                 let page = || rooms::Show { ctx, show: &show };
-                let recorded = campfire_views::render_sized!(page()).unwrap();
+                let recorded = matchbox_views::render_sized!(page()).unwrap();
                 let plain = page().render().unwrap();
                 assert_eq!(recorded.to_string(), plain, "{round}");
                 assert_eq!(recorded.fragments().len(), show.messages.len(), "{round}");

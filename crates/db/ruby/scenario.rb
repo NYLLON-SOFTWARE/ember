@@ -1,6 +1,6 @@
 # Runs the scenario mirrored by `src/tests/differential_test.rs` against a database the
 # reference app loaded with `bin/rails db:fixtures:load`, for
-# `CAMPFIRE_RUBY_SCENARIO_DB=... cargo test -p campfire_db scenario_matches_ruby -- --ignored`.
+# `MATCHBOX_RUBY_SCENARIO_DB=... cargo test -p matchbox_db scenario_matches_ruby -- --ignored`.
 #
 #   RAILS_ENV=test bin/rails db:prepare db:fixtures:load
 #   cp storage/db/test.sqlite3 /tmp/fixtures_ruby.sqlite3     # for fixtures_match_ruby_row_for_row

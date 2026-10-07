@@ -36,7 +36,7 @@ pub struct IncompatibleBrowser<'a> {
 
 impl Page for IncompatibleBrowser<'_> {
     fn page_title(&self) -> Option<String> {
-        Some(if self.ctx.platform.apple_messages { "Campfire" } else { "Unsupported browser" }.into())
+        Some(if self.ctx.platform.apple_messages { "Matchbox" } else { "Unsupported browser" }.into())
     }
 }
 

@@ -3,7 +3,7 @@
 //! This is a port of `ActionDispatch::ParamBuilder` (Rails 8.2, itself derived from
 //! `Rack::QueryParser`) plus the pair splitting of `ActionDispatch::QueryParser.each_pair` and
 //! `Rack::QueryParser#parse_query_pairs`, the deep munging applied to JSON bodies
-//! (`Request::Utils::NoNilParamEncoder`), and the strong-parameters subset Campfire uses
+//! (`Request::Utils::NoNilParamEncoder`), and the strong-parameters subset Matchbox uses
 //! (`require`, `permit`, `fetch`).
 //!
 //! [`parse_nested`] exposes the query-string parser as JSON for differential tests against
@@ -257,7 +257,7 @@ impl ParamMap {
         self.get(key).cloned().unwrap_or(default)
     }
 
-    /// `ActionController::Parameters#permit`, for the filter shapes Campfire uses.
+    /// `ActionController::Parameters#permit`, for the filter shapes Matchbox uses.
     pub fn permit(&self, filters: &[Permit]) -> ParamMap {
         let mut permitted = ParamMap::new();
         for filter in filters {

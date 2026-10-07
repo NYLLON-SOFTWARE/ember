@@ -1,4 +1,4 @@
-//! The Active Storage analyzers Campfire runs, in `config.active_storage.analyzers` order:
+//! The Active Storage analyzers Matchbox runs, in `config.active_storage.analyzers` order:
 //! `ImageAnalyzer::Vips`, `VideoAnalyzer` and `AudioAnalyzer` (ImageMagick never accepts,
 //! because the variant processor is `:vips`), falling back to `NullAnalyzer`.
 

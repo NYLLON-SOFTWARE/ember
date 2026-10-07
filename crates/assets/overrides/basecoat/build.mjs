@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL(".", import.meta.url));
 const checking = process.argv.includes("--check");
-const temporary = await mkdtemp(join(tmpdir(), "campfire-basecoat-"));
+const temporary = await mkdtemp(join(tmpdir(), "matchbox-basecoat-"));
 const license = `/*!\n${await readFile(join(root, "LICENSES.txt"), "utf8")}\n*/\n`;
 const generated = new Map();
 
@@ -28,7 +28,7 @@ try {
       write: false,
       // Turbo retains head scripts. Also tolerate reexecution without reinstalling listeners
       // or replacing Basecoat's registry while live components still use it.
-      banner: { js: entry === "app" ? `${license}(()=>{if(window.__campfireBasecoatLoaded)return;window.__campfireBasecoatLoaded=true;` : "" },
+      banner: { js: entry === "app" ? `${license}(()=>{if(window.__matchboxBasecoatLoaded)return;window.__matchboxBasecoatLoaded=true;` : "" },
       footer: { js: entry === "app" ? "})();" : "" },
     });
     generated.set(`${entry}.js`, output.outputFiles[0].text);

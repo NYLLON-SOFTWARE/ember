@@ -82,7 +82,7 @@ results = []
 for rep in range(1, a.reps + 1):
     for where in ("disk", "tmpfs"):
         if where == "tmpfs":
-            os.environ["BENCH_WORK_DIR"] = "/dev/shm/campfire-bench"
+            os.environ["BENCH_WORK_DIR"] = "/dev/shm/matchbox-bench"
         else:
             os.environ.pop("BENCH_WORK_DIR", None)
         import importlib
@@ -105,9 +105,9 @@ for rep in range(1, a.reps + 1):
         lines = [l for l in open(io_file)] if os.path.exists(io_file) else []
         open(io_file, "w").writelines(l for l in lines if int(l.split()[0]) >= t_start * 1e6)
         res = analyze(trace, io_file)
-        res.update(where=where, rep=rep, conc=a.conc, rps=r["rps"], campfire_cpu_ms_per_req=r["cpu_ms_per_req"]["campfire"], load=b.loadavg())
+        res.update(where=where, rep=rep, conc=a.conc, rps=r["rps"], matchbox_cpu_ms_per_req=r["cpu_ms_per_req"]["matchbox"], load=b.loadavg())
         results.append(res)
         b.log(json.dumps(res))
 json.dump(results, open(os.path.join(out, f"stall-c{a.conc}.json"), "w"), indent=1)
-if os.path.isdir("/dev/shm/campfire-bench"):
-    subprocess.run(["rm", "-rf", "/dev/shm/campfire-bench"])
+if os.path.isdir("/dev/shm/matchbox-bench"):
+    subprocess.run(["rm", "-rf", "/dev/shm/matchbox-bench"])

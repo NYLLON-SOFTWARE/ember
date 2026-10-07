@@ -1,18 +1,18 @@
 //! Golden vectors from `reference-tools/storage/generate.rb` (`vectors/storage.json`).
 //!
-//! Set `CAMPFIRE_STORAGE_VECTORS=/path/to/storage.json` to check against another run (e.g. one
+//! Set `MATCHBOX_STORAGE_VECTORS=/path/to/storage.json` to check against another run (e.g. one
 //! generated on a host whose libvips/ffmpeg match the local ones). Processed media is compared
 //! byte for byte only when the local libvips/ffmpeg versions match the ones that produced the
 //! vectors; otherwise the mismatch is reported and the byte checks are skipped, unless
-//! `CAMPFIRE_REQUIRE_MEDIA_VECTORS` is set, as it is in the Dockerfile's toolchain stage that CI
+//! `MATCHBOX_REQUIRE_MEDIA_VECTORS` is set, as it is in the Dockerfile's toolchain stage that CI
 //! tests in: there a mismatch fails.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use campfire_storage::key::checksum_file;
-use campfire_storage::marshal::Value;
-use campfire_storage::{Blob, DiskService, Filename, Json, Storage, Variation, disk, disposition, marcel, paths};
+use matchbox_storage::key::checksum_file;
+use matchbox_storage::marshal::Value;
+use matchbox_storage::{Blob, DiskService, Filename, Json, Storage, Variation, disk, disposition, marcel, paths};
 use rails_compat::{MessageVerifier, Secrets};
 use rusqlite::Connection;
 use serde_json::Value as J;
@@ -22,7 +22,7 @@ fn repo_root() -> PathBuf {
 }
 
 fn vectors_path() -> PathBuf {
-    std::env::var_os("CAMPFIRE_STORAGE_VECTORS").map(PathBuf::from).unwrap_or_else(|| repo_root().join("vectors/storage.json"))
+    rails_compat::env::var_os("MATCHBOX_STORAGE_VECTORS").map(PathBuf::from).unwrap_or_else(|| repo_root().join("vectors/storage.json"))
 }
 
 fn vectors() -> J {
@@ -34,7 +34,7 @@ fn fixture(name: &str) -> PathBuf {
     repo_root().join("reference/test/fixtures/files").join(name)
 }
 
-/// `ActiveStorage.verifier`, built as the app builds it (crates/campfire/src/app.rs).
+/// `ActiveStorage.verifier`, built as the app builds it (crates/matchbox/src/app.rs).
 fn verifier() -> MessageVerifier {
     let env = std::fs::read_to_string(repo_root().join("parity/.env.reference")).unwrap();
     let secret_key_base = env.lines().find_map(|l| l.strip_prefix("SECRET_KEY_BASE=")).unwrap();
@@ -182,9 +182,9 @@ fn route_paths() {
 
         // `blob.url` → the disk service URL, with the forced disposition for non-inline types.
         let content_type = blob.content_type();
-        let disposition = campfire_storage::content_types::forced_disposition(content_type).unwrap_or("inline");
+        let disposition = matchbox_storage::content_types::forced_disposition(content_type).unwrap_or("inline");
         let service_path = |disposition: &str| {
-            let d = campfire_storage::content_types::forced_disposition(content_type).unwrap_or(disposition);
+            let d = matchbox_storage::content_types::forced_disposition(content_type).unwrap_or(disposition);
             format!(
                 "http://campfire.test{}",
                 service.url_path(
@@ -192,7 +192,7 @@ fn route_paths() {
                     &blob.key,
                     None,
                     &blob.filename,
-                    Some(campfire_storage::content_types::for_serving(content_type)),
+                    Some(matchbox_storage::content_types::for_serving(content_type)),
                     d
                 )
             )
@@ -236,7 +236,7 @@ struct Comparison {
 
 impl Comparison {
     fn new(versions: &J) -> Self {
-        let local_vips = campfire_storage::vips::version().unwrap();
+        let local_vips = matchbox_storage::vips::version().unwrap();
         let local_ffmpeg = ffmpeg_version();
         let compare_images = versions["libvips"] == local_vips.as_str();
         let compare_video = compare_images && versions["ffmpeg"] == local_ffmpeg.as_str();
@@ -245,7 +245,7 @@ impl Comparison {
                 "vectors have libvips {} / {}, local libvips {local_vips} / {local_ffmpeg}",
                 versions["libvips"], versions["ffmpeg"]
             );
-            assert!(std::env::var_os("CAMPFIRE_REQUIRE_MEDIA_VECTORS").is_none(), "byte comparisons would be skipped: {versions}");
+            assert!(rails_compat::env::var_os("MATCHBOX_REQUIRE_MEDIA_VECTORS").is_none(), "byte comparisons would be skipped: {versions}");
             // Straight to stderr: libtest captures eprintln! from passing tests.
             let _ = writeln!(std::io::stderr(), "note: skipping byte comparisons that depend on versions: {versions}");
         }
@@ -295,10 +295,10 @@ fn pipeline_matches_the_reference() {
         assert_eq!(storage.path_for(&image), root.path().join(image.key.get(0..2).unwrap()).join(&image.key[2..4]).join(&image.key));
         // The saved reference file is the variant blob's content, and ours is what we recorded.
         let expected = std::fs::read(files.join(v["file"].as_str().unwrap())).unwrap();
-        assert_eq!(campfire_storage::key::checksum(&expected), v["blob"]["checksum"].as_str().unwrap(), "{label} vector file");
+        assert_eq!(matchbox_storage::key::checksum(&expected), v["blob"]["checksum"].as_str().unwrap(), "{label} vector file");
         let actual = std::fs::read(storage.path_for(&image)).unwrap();
-        assert_eq!(campfire_storage::key::checksum(&actual), image.checksum.clone().unwrap(), "{label} stored file");
-        let record_id = campfire_storage::blob::find_variant_record(conn, source.id, v["variation_digest"].as_str().unwrap()).unwrap();
+        assert_eq!(matchbox_storage::key::checksum(&actual), image.checksum.clone().unwrap(), "{label} stored file");
+        let record_id = matchbox_storage::blob::find_variant_record(conn, source.id, v["variation_digest"].as_str().unwrap()).unwrap();
         let attached = Blob::attached(conn, "ActiveStorage::VariantRecord", record_id.unwrap(), "image").unwrap();
         assert_eq!(attached.map(|b| b.id), Some(image.id), "{label} variant record attachment");
     };
@@ -307,7 +307,7 @@ fn pipeline_matches_the_reference() {
         let name = m["fixture"].as_str().unwrap();
         let data = std::fs::read(fixture(name)).unwrap();
         let mut blob = storage.create_and_upload(&conn, &data, Filename::new(name), m["declared_type"].as_str(), now()).unwrap();
-        campfire_storage::blob::insert_attachment(&conn, "attachment", "Message", 1, blob.id, now()).unwrap();
+        matchbox_storage::blob::insert_attachment(&conn, "attachment", "Message", 1, blob.id, now()).unwrap();
         storage.analyze(&conn, &mut blob).unwrap();
         comparison.blob(name, &blob, &m["blob"], false, false);
         assert_eq!(blob.is_variable(), m["variable"].as_bool().unwrap(), "{name} variable?");

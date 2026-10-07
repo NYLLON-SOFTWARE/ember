@@ -3,7 +3,7 @@
 mod messages_support;
 
 use askama::Template;
-use campfire_views::searches::{self, IndexView};
+use matchbox_views::searches::{self, IndexView};
 use messages_support::golden;
 
 #[test]

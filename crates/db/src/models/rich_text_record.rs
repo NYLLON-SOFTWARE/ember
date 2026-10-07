@@ -1,4 +1,4 @@
-//! `ActionText::RichText` rows (`action_text_rich_texts`). Campfire has one: `Message#body`.
+//! `ActionText::RichText` rows (`action_text_rich_texts`). Matchbox has one: `Message#body`.
 
 use rusqlite::{Connection, params};
 

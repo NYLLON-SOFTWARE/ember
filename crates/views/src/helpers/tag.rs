@@ -133,7 +133,7 @@ impl Attrs {
         self.attr(prefixed("aria-", key), value)
     }
 
-    /// `aria: { hidden: "true" }`, the most common option in Campfire's views.
+    /// `aria: { hidden: "true" }`, the most common option in Matchbox's views.
     pub fn aria_hidden(self) -> Self {
         self.aria("hidden", "true")
     }

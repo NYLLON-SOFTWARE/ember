@@ -1,5 +1,5 @@
 # Shared correctness gates live in the standalone verification repository.
-module CampfireVerification
+module MatchboxVerification
   ROOT = File.expand_path(ENV.fetch("VERIFICATION_ROOT") { File.expand_path("../../once-campfire-verification", __dir__) })
 
   def self.load(name, caller_file)

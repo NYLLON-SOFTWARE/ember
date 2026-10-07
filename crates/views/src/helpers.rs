@@ -1,4 +1,4 @@
-//! Ports of `reference/app/helpers` and the Rails built-in helpers Campfire's views use.
+//! Ports of `reference/app/helpers` and the Rails built-in helpers Matchbox's views use.
 //!
 //! Helpers return [`Html`] (askama's `Safe<String>`, the SafeBuffer equivalent), which templates
 //! print unescaped; everything else is escaped by [`ErbEscaper`] exactly like ERB. Block helpers
@@ -35,4 +35,4 @@ pub use url::*;
 pub use users::*;
 
 /// Path helpers, re-exported so templates can write `h::routes::user_profile()`.
-pub use campfire_routes as routes;
+pub use matchbox_routes as routes;

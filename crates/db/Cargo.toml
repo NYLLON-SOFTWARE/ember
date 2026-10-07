@@ -1,5 +1,5 @@
 [package]
-name = "campfire_db"
+name = "matchbox_db"
 version = "0.1.0"
 edition.workspace = true
 license.workspace = true
@@ -23,16 +23,16 @@ tracing.workspace = true
 base64 = { workspace = true, optional = true }
 
 [features]
-# `campfire_db::fixtures`, the reference's test fixtures loaded into a database, and
-# `campfire_db::testing`: `Env::default`, event sinks and a rich-text stand-in.
+# `matchbox_db::fixtures`, the reference's test fixtures loaded into a database, and
+# `matchbox_db::testing`: `Env::default`, event sinks and a rich-text stand-in.
 test-support = ["dep:serde_yaml", "dep:crc32fast", "dep:base64"]
 
 [dev-dependencies]
-campfire_db = { path = ".", features = ["test-support"] }
+matchbox_db = { path = ".", features = ["test-support"] }
 tempfile.workspace = true
 sha1.workspace = true
 hex.workspace = true
 
 # The self dev-dependency turns on `test-support` for the crate's own tests.
 [package.metadata.cargo-shear]
-ignored = ["campfire_db"]
+ignored = ["matchbox_db"]

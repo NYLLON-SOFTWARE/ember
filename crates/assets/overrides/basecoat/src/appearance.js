@@ -1,11 +1,11 @@
-export const preferenceKey = "campfire:appearance";
+export const preferenceKey = "matchbox:appearance";
 
 export function normalizeMode(mode) {
   return ["light", "dark", "system"].includes(mode) ? mode : "system";
 }
 
 export function readMode(window) {
-  try { return normalizeMode(window.localStorage.getItem(preferenceKey)); }
+  try { return normalizeMode(window.localStorage.getItem(preferenceKey) ?? window.localStorage.getItem("campfire:appearance")); }
   catch { return "system"; }
 }
 

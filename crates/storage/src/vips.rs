@@ -63,7 +63,7 @@ pub fn init() -> Result<()> {
     // SAFETY: the OnceLock runs this once and other callers wait for it, so vips_init is never
     // entered twice; argv0 and the operation name are static NUL-terminated strings.
     INIT.get_or_init(|| unsafe {
-        if vips_init(c"campfire".as_ptr()) != 0 {
+        if vips_init(c"matchbox".as_ptr()) != 0 {
             return Err(format!("vips_init failed: {}", take_error()));
         }
         vips_block_untrusted_set(1);

@@ -57,7 +57,7 @@ jobs:
           context: .
           file: Dockerfile
           target: toolchain
-          tags: campfire-toolchain
+          tags: matchbox-toolchain
           load: true
           cache-from: type=gha,scope=toolchain
           cache-to: type=gha,scope=toolchain,mode=max
@@ -82,8 +82,8 @@ jobs:
           docker run --rm --user "$(id -u):$(id -g)" \
             --volume "$PWD:/src" --workdir /src \
             --env HOME=/tmp --env CARGO_HOME=/src/.cargo-home --env CARGO_TERM_COLOR=always \
-            --env CAMPFIRE_REQUIRE_SEED=1 \
-            campfire-toolchain sh -uc '
+            --env MATCHBOX_REQUIRE_SEED=1 \
+            matchbox-toolchain sh -uc '
               status=0
               cargo fmt --all --check || status=1
               cargo clippy --locked --workspace --exclude html5ever --all-targets -- -D warnings || status=1

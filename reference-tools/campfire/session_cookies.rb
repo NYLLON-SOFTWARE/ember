@@ -1,6 +1,6 @@
 # Session cookies as Rails issues them (`cookies.signed.permanent[:session_token]`, Authentication
 # #set_authentication_cookie) for sessions in the default seed, plus a blob redirect path, for
-# crates/campfire/src/app/tests.rs.
+# crates/matchbox/src/app/tests.rs.
 #
 #   parity/bin/reference runner --seed default reference-tools/campfire/session_cookies.rb > vectors/campfire_sessions.json
 require "json"

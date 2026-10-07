@@ -8,8 +8,8 @@ npx --prefix parity playwright install chromium
 npm run test:kro --prefix parity
 ```
 
-`CAMPFIRE_BIN` can select another built binary (default `target/debug/campfire`). These checks
-start fresh Campfire processes on dynamically chosen ports, with private temporary SQLite and
+`MATCHBOX_BIN` can select another built binary (default `target/debug/matchbox`). These checks
+start fresh Matchbox processes on dynamically chosen ports, with private temporary SQLite and
 file storage. They never connect to the development server or use its accounts. A Rails seed and
 Docker are not needed for this gate; the seed-backed integration and Rails parity gates remain
 separate checks.
@@ -38,3 +38,7 @@ differences from Rails. A completed setup also hides the welcome card's translat
 its cable traffic remains subject to comparison. For other legacy comparisons the candidate
 image explicitly enables translation controls in its disposable copied seed, matching Rails.
 This does not change production defaults. Member settings pages retain strict comparisons.
+
+Branding checks require Matchbox on setup, page titles, the welcome screen, the web app manifest,
+and the static startup page. Rails parity normalizes the deliberate product-name and logo-path
+differences; application text is equalized before screenshots, while chat contents are left alone.

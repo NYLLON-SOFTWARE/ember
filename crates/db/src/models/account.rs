@@ -111,6 +111,11 @@ columns! {
 }
 
 impl Account {
+    /// Display the former default workspace name with the current branding without rewriting data.
+    pub fn display_name(&self) -> &str {
+        if self.name == "Campfire" { "Matchbox" } else { &self.name }
+    }
+
     /// `Account.first` (`Current.account`).
     pub fn first(conn: &Connection) -> Result<Option<Self>> {
         query_one(

@@ -116,7 +116,7 @@ export function contextOptions(cell: Cell, browserVersion: string): BrowserConte
     forcedColors: "none",
     timezoneId: TIMEZONE,
     locale: LOCALE,
-    // Campfire's service worker (reference/app/views/pwa/service_worker.js) handles push and
+    // Matchbox's service worker (reference/app/views/pwa/service_worker.js) handles push and
     // notification clicks only, never fetch, so allowing it hides no requests from the harness.
     serviceWorkers: "allow",
     ignoreHTTPSErrors: true,

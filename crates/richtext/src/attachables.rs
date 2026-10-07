@@ -1,5 +1,5 @@
 //! Resolving `<action-text-attachment>` nodes to what they attach, and rendering each attachable's
-//! partial, as Action Text, Lexxy and Campfire's extensions do.
+//! partial, as Action Text, Lexxy and Matchbox's extensions do.
 
 use rails_compat::encoding;
 use regex::Regex;
@@ -59,7 +59,7 @@ pub enum SignedLookup {
 /// two lookups Action Text performs.
 pub trait AttachableResolver {
     /// `GlobalID::Locator.locate_signed(sgid, for: "attachable")` (and, when that finds nothing,
-    /// whether `SignedGlobalID.parse(sgid, for: "attachable")` still verifies). Campfire's only
+    /// whether `SignedGlobalID.parse(sgid, for: "attachable")` still verifies). Matchbox's only
     /// attachables are users (mentions).
     fn locate_signed(&self, sgid: &str) -> SignedLookup;
 
@@ -136,7 +136,7 @@ static VIDEO_CONTENT_TYPE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?
 static MARSHALED_GID_RE: LazyLock<regex::bytes::Regex> =
     LazyLock::new(|| regex::bytes::Regex::new(r"(?-u)(gid://campfire/[^/]+/[0-9]+)").unwrap());
 
-/// Campfire's `ActionText::Attachment.from_node` (reference/lib/rails_ext/action_text_attachables.rb):
+/// Matchbox's `ActionText::Attachment.from_node` (reference/lib/rails_ext/action_text_attachables.rb):
 /// an opengraph embed, else a User found through a possibly invalid SGID, else Action Text's own
 /// lookup (as extended by Lexxy).
 pub fn attachment_from_node(dom: &Dom, node: NodeId, ctx: &RenderContext) -> Result<Attachment, Error> {
@@ -155,7 +155,7 @@ fn attachable_from_node(dom: &Dom, node: NodeId, ctx: &RenderContext) -> Result<
 }
 
 /// `ActionText::Attachable.from_node`, with Lexxy's RemoteVideo fallback for missing attachables.
-/// `Content#attachables` (and so `Message#mentionees`) uses this directly, without Campfire's
+/// `Content#attachables` (and so `Message#mentionees`) uses this directly, without Matchbox's
 /// invalid-signature fallback.
 pub fn action_text_attachable_from_node(dom: &Dom, node: NodeId, ctx: &RenderContext) -> Attachable {
     let signed = dom.attr(node, "sgid").map(|sgid| ctx.resolver.locate_signed(sgid)).unwrap_or(SignedLookup::Invalid);
@@ -297,7 +297,7 @@ fn has_class(dom: &Dom, node: NodeId, class: &str) -> bool {
     dom.attr(node, "class").is_some_and(|c| c.split([' ', '\t', '\n', '\r']).any(|token| token == class))
 }
 
-/// `web_url`: an absolute http(s) URL on a named host other than this Campfire's.
+/// `web_url`: an absolute http(s) URL on a named host other than this Matchbox's.
 pub fn web_url(value: Option<&str>, request_host: &str) -> Result<Option<String>, Error> {
     let Some(value) = value.filter(|v| !is_blank(v)) else { return Ok(None) };
     match uri::parse(value) {

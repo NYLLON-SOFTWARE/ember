@@ -20,7 +20,7 @@ pub const DEFAULT_ALLOWED_TAGS: &[&str] = &[
 
 /// `Rails::HTML::Concern::Scrubber::SafeList::DEFAULT_ALLOWED_ATTRIBUTES` without `name`, which let
 /// a message clobber the page's DOM globals (`<img name="body">` shadows `document.body`). Nothing
-/// Campfire's composer writes has one.
+/// Matchbox's composer writes has one.
 pub const DEFAULT_ALLOWED_ATTRIBUTES: &[&str] =
     &["abbr", "alt", "cite", "class", "datetime", "height", "href", "lang", "src", "title", "width", "xml:lang"];
 
@@ -60,7 +60,7 @@ impl SafeList {
 
     /// `ActionText::ContentHelper.allowed_tags`/`allowed_attributes` as configured at boot: Action
     /// Text's defaults, then Lexxy's additions (lexxy/engine.rb, "lexxy.sanitization"), then
-    /// Campfire's (reference/lib/rails_ext/action_text_allowed_tags.rb).
+    /// Matchbox's (reference/lib/rails_ext/action_text_allowed_tags.rb).
     pub fn action_text() -> &'static Self {
         static LIST: LazyLock<SafeList> = LazyLock::new(|| {
             let mut tags = DEFAULT_ALLOWED_TAGS.to_vec();

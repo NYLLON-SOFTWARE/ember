@@ -458,7 +458,7 @@ mod tests {
 
     #[tokio::test]
     async fn compresses_unencoded_bodies_with_zstd() {
-        let body = "hello campfire ".repeat(200);
+        let body = "hello matchbox ".repeat(200);
         let (headers, bytes) = apply("zstd", response("text/html; charset=utf-8", body.clone())).await;
         assert_eq!(headers[header::CONTENT_ENCODING], "zstd");
         assert_eq!(vary(&headers), ["Accept-Encoding"]);
@@ -468,7 +468,7 @@ mod tests {
 
     #[tokio::test]
     async fn compresses_with_gzip_and_a_jitter_comment() {
-        let body = "hello campfire ".repeat(200);
+        let body = "hello matchbox ".repeat(200);
         let (headers, bytes) = apply("gzip", response("text/css", body.clone())).await;
         assert_eq!(headers[header::CONTENT_ENCODING], "gzip");
         let mut decoder = flate2::read::GzDecoder::new(&bytes[..]);
@@ -481,7 +481,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_failing_body_fails_the_response() {
-        let chunks = [Ok(Bytes::from("hello campfire ".repeat(100))), Err(std::io::Error::other("disk gone"))];
+        let chunks = [Ok(Bytes::from("hello matchbox ".repeat(100))), Err(std::io::Error::other("disk gone"))];
         let failing = Response::builder().header(header::CONTENT_TYPE, "text/html").body(Body::from_stream(stream::iter(chunks))).unwrap();
         let response = Compression::new(32, false).apply(negotiation("gzip"), failing, HeaderMerge::Append).await;
         assert!(response.headers().get(header::CONTENT_ENCODING).is_none());

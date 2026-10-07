@@ -182,7 +182,7 @@ mod tests {
     use tokio::net::TcpListener;
 
     fn certs() -> Arc<CertManager> {
-        certs_in(std::env::temp_dir().join("campfire-front-tls-test"))
+        certs_in(std::env::temp_dir().join("matchbox-front-tls-test"))
     }
 
     fn certs_in(storage_path: std::path::PathBuf) -> Arc<CertManager> {

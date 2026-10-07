@@ -1,16 +1,16 @@
 # syntax = docker/dockerfile:1
 #
 # The parity candidate image: the unmodified Rust production image (built from /Dockerfile as
-# campfire-rust:app) plus what the harness needs around it, mirroring parity/docker/Dockerfile for
+# matchbox-rust:app) plus what the harness needs around it, mirroring parity/docker/Dockerfile for
 # the reference. App code is untouched.
 #
 #   * libfaketime (built exactly as for the reference image), so the server clock can start at a
-#     chosen instant and tick (FAKETIME, see entrypoint); --freeze also sets CAMPFIRE_FROZEN_TIME
+#     chosen instant and tick (FAKETIME, see entrypoint); --freeze also sets MATCHBOX_FROZEN_TIME
 #   * sqlite3 and procps, for inspecting databases and processes
 #
 # Built by `parity/bin/candidate build`.
 
-ARG BASE_IMAGE=campfire-rust:app
+ARG BASE_IMAGE=matchbox-rust:app
 
 FROM docker.io/library/debian:trixie-slim AS faketime
 RUN apt-get update -qq && apt-get install --no-install-recommends -y build-essential ca-certificates curl

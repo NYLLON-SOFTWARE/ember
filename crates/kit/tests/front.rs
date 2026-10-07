@@ -6,7 +6,7 @@
 //!   docker run -d --name pebble --network host --add-host campfire.test:127.0.0.1 \
 //!     -e PEBBLE_VA_NOSLEEP=1 -e PEBBLE_WFE_NONCEREJECT=0 ghcr.io/letsencrypt/pebble:latest
 //!   docker cp pebble:/test/certs/pebble.minica.pem /tmp/pebble.minica.pem
-//!   PEBBLE_MINICA=/tmp/pebble.minica.pem cargo test -p campfire_kit --test front acme -- --test-threads 1
+//!   PEBBLE_MINICA=/tmp/pebble.minica.pem cargo test -p matchbox_kit --test front acme -- --test-threads 1
 //!
 //! Pebble validates TLS-ALPN-01 on port 5001, so the test serves HTTPS there. (HTTP-01 can't be
 //! tested this way: like autocert, the challenge handler checks the `Host` header, port included,
@@ -24,8 +24,8 @@ use axum::extract::ws::{Message, WebSocketUpgrade};
 use axum::extract::{ConnectInfo, Request};
 use axum::http::{HeaderMap, Response};
 use axum::routing::{any, get, post};
-use campfire_kit::front::{self, AcmeOptions, FrontConfig};
 use futures_util::{SinkExt, StreamExt};
+use matchbox_kit::front::{self, AcmeOptions, FrontConfig};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::sync::oneshot;
@@ -150,7 +150,7 @@ fn get_request(path: &str, extra: &str) -> String {
     format!("GET {path} HTTP/1.1\r\nHost: chat.test\r\nConnection: close\r\n{extra}\r\n")
 }
 
-/// An app with the kinds of responses Campfire sends.
+/// An app with the kinds of responses Matchbox sends.
 fn test_app() -> (Router, Arc<AtomicUsize>) {
     let hits = Arc::new(AtomicUsize::new(0));
     let counter = hits.clone();
@@ -201,7 +201,7 @@ fn test_app() -> (Router, Arc<AtomicUsize>) {
             get(|| async {
                 Response::builder()
                     .header("content-type", "text/html; charset=utf-8")
-                    .body(Body::from("<p>campfire</p>".repeat(200)))
+                    .body(Body::from("<p>matchbox</p>".repeat(200)))
                     .unwrap()
             }),
         )
@@ -333,7 +333,7 @@ async fn compresses_what_the_app_left_unencoded() {
     let server = Server::start(&[], app).await;
     let zstd = exchange(server.http, &get_request("/page", "Accept-Encoding: zstd\r\n")).await;
     assert_eq!(zstd.get("content-encoding"), Some("zstd"));
-    assert_eq!(zstd::stream::decode_all(&zstd.body[..]).unwrap(), "<p>campfire</p>".repeat(200).as_bytes());
+    assert_eq!(zstd::stream::decode_all(&zstd.body[..]).unwrap(), "<p>matchbox</p>".repeat(200).as_bytes());
     let plain = exchange(server.http, &get_request("/page", "")).await;
     assert_eq!(plain.get("content-encoding"), None);
     let head = exchange(server.http, "HEAD /page HTTP/1.1\r\nHost: chat.test\r\nConnection: close\r\nAccept-Encoding: gzip\r\n\r\n").await;

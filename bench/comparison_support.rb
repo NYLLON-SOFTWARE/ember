@@ -1,2 +1,2 @@
 require_relative "verification"
-CampfireVerification.load("comparison_support.rb", __FILE__)
+MatchboxVerification.load("comparison_support.rb", __FILE__)

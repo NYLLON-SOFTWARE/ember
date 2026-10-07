@@ -12,7 +12,8 @@ for Tailwind utilities. Add an official `basecoat-css/components/...` import the
 a later page needs a new component. Components use the shared `ui-*` classes with
 Basecoat's `input`, `select`, `btn`, and `card` primitives.
 
-`src/theme-init.js` applies the browser's `campfire:appearance` preference before paint.
+`src/theme-init.js` applies the browser's `matchbox:appearance` preference before paint, falling back to the previous
+`campfire:appearance` key for existing browsers.
 `src/app.js` bundles the Basecoat runtime and the Turbo lifecycle adapter. Import individual
 Basecoat component scripts there only when a migrated page needs them. The first-run page
 uses native controls plus a small delegated password-visibility toggle, so it needs no
@@ -33,8 +34,8 @@ Generated sizes for the first-run delivery, measured on 2026-10-07 with Node 24.
 | Asset | Minified bytes | Gzip bytes |
 | --- | ---: | ---: |
 | `app.css` | 156,537 | 16,164 |
-| `app.js` | 6,559 | 2,705 |
-| `theme-init.js` | 454 | 285 |
+| `app.js` | 6,606 | 2,697 |
+| `theme-init.js` | 501 | 300 |
 
 The stylesheet retains the official Vega style pack, which Basecoat distributes as one
 file, plus only the component structures used by this delivery.

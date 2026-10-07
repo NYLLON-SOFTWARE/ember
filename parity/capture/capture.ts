@@ -11,6 +11,7 @@ import { PARITY_DIR, REPO_DIR } from "./config.ts"
 import { cellId, interpolate, interpolateStep, isFragment, loadLabels } from "./inventory.ts"
 import type { Job, Labels, Masks, State } from "./inventory.ts"
 import { maskText, normalizeResponse, normalizeDocument } from "./normalize.ts"
+import { normalizeBrandingForScreenshot } from "./branding.ts"
 import { CableLog, NetworkLog } from "./network.ts"
 import { DETERMINISM_SCRIPT, PageTracker, READINESS_SCRIPT, waitForReady } from "./readiness.ts"
 import type { SessionCache } from "./session.ts"
@@ -186,6 +187,7 @@ async function capturePage(
     const el = document.activeElement
     return `${document.hasFocus() ? "window focused" : "window blurred"}; active ${el ? el.tagName.toLowerCase() + (el.id ? "#" + el.id : "") + (el.className && typeof el.className === "string" ? "." + el.className.trim().split(/\s+/).join(".") : "") : "none"}`
   })
+  await normalizeBrandingForScreenshot(capturePage)
   await rasterAfresh(capturePage)
   const shot = await stableScreenshot(capturePage, env.timeoutMs, await pixelMasks(capturePage, state.masks, meta))
   fs.writeFileSync(base + ".png", shot.png)

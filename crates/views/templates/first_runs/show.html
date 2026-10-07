@@ -3,8 +3,8 @@
 {% block head %}{% if reload_frame %}<meta name="turbo-visit-control" content="reload">{% endif %}{% endblock %}
 
 {% block content %}
-  <section class="card ui-card ui-setup-card" aria-label="Set up Campfire">
-    {% call ui::card_header("Set up Campfire", "Create the admin account for your workspace.") %}
+  <section class="card ui-card ui-setup-card" aria-label="Set up Matchbox">
+    {% call ui::card_header("Set up Matchbox", "Create the admin account for your workspace.") %}
     {% let form = h::form_with(h::routes::first_run()).model("user").class("ui-setup-form") %}
     {% filter form_with(form) %}
       <div class="ui-form-body">

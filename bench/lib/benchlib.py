@@ -26,7 +26,7 @@ LOADGEN = os.environ.get("LOADGEN", os.path.join(VERIFICATION_ROOT, "loadgen", "
 SERVER_CPUS = os.environ.get("SERVER_CPUS", "8-11")
 LOADGEN_CPUS = os.environ.get("LOADGEN_CPUS", "12-15")
 PORT = int(os.environ.get("PORT", "4390"))
-IMAGE = os.environ.get("RUST_IMAGE", "campfire-rust:app")
+IMAGE = os.environ.get("RUST_IMAGE", "matchbox-rust:app")
 CONTAINER = f"bench-attrib-{PORT}"
 # BENCH_WORK_DIR puts the app's storage elsewhere (e.g. on tmpfs, to take fsync out of the picture).
 WORK = os.path.join(os.environ.get("BENCH_WORK_DIR", os.path.join(BENCH, ".work")), f"attrib-{PORT}")
@@ -160,16 +160,16 @@ class App:
 
     def discover(self):
         if self.proc is not None:
-            self.pids["campfire"] = self.proc.pid
+            self.pids["matchbox"] = self.proc.pid
         else:
             root = int(subprocess.check_output(["docker", "inspect", "-f", "{{.State.Pid}}", CONTAINER]).strip())
-            if comm(root) == "campfire":
-                self.pids["campfire"] = root
+            if comm(root) == "matchbox":
+                self.pids["matchbox"] = root
             else:
                 self.pids["thrust"] = root
                 for c in children(root):
-                    if comm(c) == "campfire":
-                        self.pids["campfire"] = c
+                    if comm(c) == "matchbox":
+                        self.pids["matchbox"] = c
             for i, p in enumerate(docker_proxy_pids(PORT)):
                 self.pids[f"docker-proxy{i or ''}"] = p
 
@@ -210,7 +210,7 @@ def start(config, seed, extra_env=None):
         penv = {k: v for k, v in os.environ.items() if k in ("PATH", "HOME", "USER", "LANG")}
         penv.update(env)
         # The front server (crates/kit/src/front, what Thruster did) on PORT, the bare app beside it.
-        penv.update(HTTP_PORT=str(PORT), TARGET_PORT=str(PORT + 1), CAMPFIRE_STORAGE_PATH=storage)
+        penv.update(HTTP_PORT=str(PORT), TARGET_PORT=str(PORT + 1), MATCHBOX_STORAGE_PATH=storage)
         if preload:
             penv["LD_PRELOAD"] = preload
         logf = open(os.path.join(WORK, "app.log"), "w")
@@ -233,7 +233,7 @@ def start(config, seed, extra_env=None):
             args += ["-e", f"{k}={v}"]
         args.append(IMAGE)
         if entry == "direct":
-            args += ["campfire", "server"]
+            args += ["matchbox", "server"]
         subprocess.run(args, check=True, stdout=subprocess.DEVNULL)
         app = App(config)
     try:
@@ -318,7 +318,7 @@ class MemSampler(threading.Thread):
 
     def run(self):
         while self.running:
-            m = rss(self.app.pids["campfire"])
+            m = rss(self.app.pids["matchbox"])
             if m:
                 thrust = rss(self.app.pids["thrust"]).get("RssAnon", 0) if "thrust" in self.app.pids else 0
                 cg = int(open(self.cgroup).read()) / 1048576 if self.cgroup else 0

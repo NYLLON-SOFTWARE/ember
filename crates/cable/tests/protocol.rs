@@ -3,7 +3,7 @@ mod support;
 
 use std::time::Duration;
 
-use campfire_cable::Config;
+use matchbox_cable::Config;
 use serde_json::{Value, json};
 use support::{Frame, identifier, start, test_config};
 

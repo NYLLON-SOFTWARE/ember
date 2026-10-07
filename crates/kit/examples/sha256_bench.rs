@@ -4,8 +4,8 @@
 //! runs, each hashing about 64 MB. First it prints a digest over every length from 0 to 2 KB, which
 //! must come out the same from both backends.
 //!
-//!   cargo run --release -p campfire_kit --example sha256_bench
-//!   cargo run --release -p campfire_kit --example sha256_bench --features sha2/force-soft
+//!   cargo run --release -p matchbox_kit --example sha256_bench
+//!   cargo run --release -p matchbox_kit --example sha256_bench --features sha2/force-soft
 //!
 //! The second is the software backend alone: on aarch64 it's what the app ran before sha2's `asm`
 //! feature was turned on there (crates/kit/Cargo.toml), so the two runs are the before and after.

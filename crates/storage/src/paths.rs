@@ -2,7 +2,7 @@
 //!
 //! `rails_blob_path` and `url_for(representation)` resolve through
 //! `resolve_model_to_route = :rails_storage_redirect`; `rails_storage_proxy_path` gives the
-//! proxy variants. `urls_expire_in` is unset in Campfire, so these signed ids never expire.
+//! proxy variants. `urls_expire_in` is unset in Matchbox, so these signed ids never expire.
 
 use rails_compat::MessageVerifier;
 

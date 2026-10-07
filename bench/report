@@ -151,11 +151,11 @@ def procmem(n, phase, what):
         p = c["process_memory"][phase]
         roles = p["roles"]
         if what == "app":
-            return roles["campfire" if r["app"] == "rust" else "puma"]["peak_pss_mb"]
+            return roles["matchbox" if r["app"] == "rust" else "puma"]["peak_pss_mb"]
         if what == "app_anon":
-            return roles["campfire" if r["app"] == "rust" else "puma"]["peak_anon_mb"]
+            return roles["matchbox" if r["app"] == "rust" else "puma"]["peak_anon_mb"]
         if what == "serving":  # everything that takes part in a cable delivery
-            keys = ["campfire"] if r["app"] == "rust" else ["puma", "redis", "thrust"]
+            keys = ["matchbox"] if r["app"] == "rust" else ["puma", "redis", "thrust"]
             return sum(roles[k]["peak_pss_mb"] for k in keys if k in roles)
         return p["peak_total_pss_mb"]
     return get
@@ -163,7 +163,7 @@ def procmem(n, phase, what):
 
 if all("process_memory" in c for a in apps for r in runs[a] for c in r["cable"]):
     header("Memory during cable fan-out, by process (MB, peak within the phase)", note=(
-        "App process: Rails' Puma master and workers (Action Cable runs in them), or Rust's one campfire\n"
+        "App process: Rails' Puma master and workers (Action Cable runs in them), or Rust's one matchbox\n"
         "process (its front server included). Pss counts pages shared between forked workers once;\n"
         "RssAnon counts them in every process."))
     for c in first["cable"]:

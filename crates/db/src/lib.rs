@@ -1,4 +1,4 @@
-//! Campfire's data layer: rusqlite over the Rails schema, with models that write rows
+//! Matchbox's data layer: rusqlite over the Rails schema, with models that write rows
 //! exactly as Active Record does and perform the same callback side effects in the same
 //! transactions. See `plans/rust-conversion.md`, "Persisted data".
 //!

@@ -3,10 +3,10 @@
 //! test/models/action_text_attachment_test.rb and the plain-text parts of the message tests.
 
 use base64::Engine;
-use campfire_richtext::attachables::{render_mention, web_url};
-use campfire_richtext::content::Content;
-use campfire_richtext::dom::Dom;
-use campfire_richtext::{
+use matchbox_richtext::attachables::{render_mention, web_url};
+use matchbox_richtext::content::Content;
+use matchbox_richtext::dom::Dom;
+use matchbox_richtext::{
     AttachableResolver, GidLookup, MentionUser, RenderContext, SignedLookup, editable_value, filters, mentioned_users,
     message_presentation, to_plain_text,
 };
@@ -356,7 +356,7 @@ fn drops_a_link_and_an_image_that_arent_web_urls() {
 }
 
 #[test]
-fn drops_a_link_and_an_image_on_this_campfires_own_host_however_it_is_spelled() {
+fn drops_a_link_and_an_image_on_this_matchboxs_own_host_however_it_is_spelled() {
     for value in [
         "https://once.campfire.test/rooms/1",
         "http://once.campfire.test/rooms/1",
@@ -420,5 +420,5 @@ fn mentionees_are_the_mentioned_users_once_each() {
 fn webhook_plain_body_drops_the_recipients_mentions() {
     let plain = to_plain_text(&format!("<p>{} hello</p>", mention_attachment_for_david()), &ctx()).unwrap();
     assert_eq!(plain, "@David hello");
-    assert_eq!(campfire_richtext::without_recipient_mentions(&plain, "David"), "hello");
+    assert_eq!(matchbox_richtext::without_recipient_mentions(&plain, "David"), "hello");
 }

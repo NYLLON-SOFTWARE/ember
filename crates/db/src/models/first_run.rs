@@ -7,7 +7,7 @@ use crate::models::{Account, NewUser, PasswordDigest, Role, Room, RoomType, User
 pub struct FirstRun;
 
 impl FirstRun {
-    pub const ACCOUNT_NAME: &'static str = "Campfire";
+    pub const ACCOUNT_NAME: &'static str = "Matchbox";
     pub const FIRST_ROOM_NAME: &'static str = "All Talk";
 
     /// `FirstRun.create!(user_params)`: the account, an administrator, and the first (open)
