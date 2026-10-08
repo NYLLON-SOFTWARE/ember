@@ -50,7 +50,7 @@ pub async fn index(c: &mut Ctx) -> Result {
 
 /// Stands in for the digest `ETagWithTemplateDigest` adds for `messages/index` (only the ETag's
 /// shape has to match the reference).
-const TEMPLATE_DIGEST_INDEX: &str = "messages/index/matchbox-svg-v1";
+const TEMPLATE_DIGEST_INDEX: &str = "messages/index/matchbox-compact-actions-v1";
 
 /// `create`: `set_room` runs inside the action, and a room that's gone renders `room_not_found`.
 pub async fn create(c: &mut Ctx) -> Result {

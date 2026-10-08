@@ -121,12 +121,13 @@ unread activity, and the mobile drawer live in
 [`matchbox/shell.js`](crates/assets/overrides/matchbox/shell.js). Edit these two files for shared
 workspace behavior and appearance; page markup remains in `crates/views/templates/`.
 
-The workspace bundle contains 47,756 bytes of CSS (8,774 gzip) and 7,400 bytes of shell JavaScript
+The workspace bundle contains 49,575 bytes of CSS (9,055 gzip) and 7,400 bytes of shell JavaScript
 (2,330 gzip), measured with gzip level 9. Channel ordering, icon selection, and SVG previews use separate Stimulus
 controllers, discovered through the digested importmap alongside the inherited controllers.
+The compact message-actions controller adds 3,992 bytes (1,198 gzip).
 Assets use the existing digested URLs and compression pipeline. Message fragment recording and
 content-addressed response caches retain their existing mechanisms; the message presentation digest
-and index ETag version change when introducing SVG markup so old HTML is not reused.
+and index ETag version change when introducing SVG markup and compact actions so old HTML is not reused.
 
 Channel icons use [Lucide](https://lucide.dev/icons/), pinned to `lucide-static` 1.53.0. The committed
 `crates/assets/overrides/lucide/catalog.json` contains 1,869 canonical icons; the build emits a
@@ -207,6 +208,12 @@ behavior changes and compatibility limits are listed below.
   conversations and counts. Conversation search filters the existing sidebar rows.
   Follow-up message timestamps appear to the right of the message body on hover or keyboard focus,
   with their space reserved to avoid moving the text; the first message keeps its header timestamp.
+  Message options use a compact bar with three quick reactions, reply or attachment actions, copy
+  link, and edit. More reactions opens a small tray with the other reactions and custom boost.
+  The bar stays within the conversation on mobile and near scroll boundaries, supports keyboard
+  focus and Escape, and closes before Turbo caches the page. Without JavaScript, the disclosure
+  includes the full reaction tray. Message show/index/create DOM snapshots and the three
+  message-rendering fragment parity exceptions cover this deliberate presentation change.
   The design does not fabricate channels, people, or an Apps section. Sign-in and invitation signup
   use form cards; account/profile screens have persistent labels and visible actions. First-run
   retains its separate Basecoat card. All other pages inherit the shared workspace styles, including

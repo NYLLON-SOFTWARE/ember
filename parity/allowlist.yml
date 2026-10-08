@@ -3,6 +3,11 @@
 # HTTP status remains strict even when the server-HTML layer is allowed. Network and Cable
 # are deliberately NOT exempt: changed HTML hashes/assets/sidebar broadcasts need narrow review
 # when running the full Rails capture. New states and non-page fragments remain strict by default.
+# These three responses embed the owned compact message actions; only their HTML presentation
+# differs. HTTP statuses, network/Cable checks, and all other protocol fragments remain strict.
+- { state: messages/index/fragment, layers: [server], reason: Matchbox compact message actions; README Known differences, owner: views }
+- { state: messages/show/fragment, layers: [server], reason: Matchbox compact message actions; README Known differences, owner: views }
+- { state: rooms/refresh/fragment, layers: [server], reason: Matchbox compact message actions; README Known differences, owner: views }
 # Matchbox snapshots also cover the unified logo picker, personal channel order controls,
 # Lucide channel icon picker, and notification setup dialog. Icon persistence, access checks,
 # and live sidebar/header updates use disposable native browser tests. SVG preview behavior

@@ -334,6 +334,7 @@ fn message_digest() -> &'static str {
         fragment_cache::digest(&[
             include_str!("../templates/messages/_message.html"),
             include_str!("../templates/messages/_actions.html"),
+            include_str!("../templates/messages/_reaction.html"),
             include_str!("../templates/messages/_presentation.html"),
             include_str!("messages/presentation.rs"),
             include_str!("../templates/messages/_unrenderable.html"),

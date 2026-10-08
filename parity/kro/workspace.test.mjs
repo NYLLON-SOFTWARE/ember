@@ -145,7 +145,8 @@ async function setUp(t, options) {
   await page.locator("#user_password").fill(password)
   await page.getByRole("button", { name: "Continue", exact: true }).click()
   await page.locator("#composer").waitFor()
-  await page.locator("#shared_rooms a").first().waitFor()
+  // On mobile the loaded conversation list lives inside the closed drawer.
+  await page.locator("#shared_rooms a").first().waitFor({ state: "attached" })
   const roomPath = new URL(page.url()).pathname
   const joinURL = await page.locator("#invite_url").inputValue()
   return { server, page, context, roomPath, joinURL }
@@ -877,7 +878,8 @@ test("follow-up timestamps sit after message content without shifting it", { tim
   for (const width of [1311, 390, 320]) {
     await page.setViewportSize({ width, height: 844 })
     await noOverflow(page, `${width}px inline timestamps`)
-    await imageMessage.scrollIntoViewIfNeeded()
+    // Attachment updates can replace the message while Playwright waits for a stable element.
+    await imageMessage.evaluate((node) => node.scrollIntoView({ block: "center", behavior: "instant" }))
     const image = await imageMessage.locator('img.message__attachment').boundingBox()
     const stamp = await imageMessage.locator('.message__permalink').boundingBox()
     assert.ok(stamp.x >= image.x + image.width && stamp.x + stamp.width <= width - 8, `${width}px attachment timestamp stays beside the image and inside the viewport: ${JSON.stringify({ image, stamp })}`)
@@ -1094,5 +1096,114 @@ test('channel icon picker fits small dark screens and closed channels work witho
   } finally {
     // The shared screenshot helper awaits animation frames, which disabled JS cannot schedule.
     await plainContext.close()
+  }
+})
+
+test("compact message actions preserve reactions, reply, copying, and keyboard focus", { timeout: 90_000 }, async (t) => {
+  const { page, context, roomPath } = await setUp(t, { viewport: { width: 1311, height: 900 } })
+  await context.grantPermissions(["clipboard-read", "clipboard-write"])
+  const message = await submitMessage(page, roomPath, "A compact set of message actions.")
+  const trigger = message.locator(".message__options-btn")
+  const menu = message.locator(".mb-message-actions-menu")
+  const bar = message.locator(".mb-message-action-bar")
+  const tray = message.locator(".mb-message-reaction-tray")
+  const more = menu.getByRole("button", { name: "More reactions", exact: true })
+  const open = async () => {
+    await message.hover()
+    await trigger.click()
+    await bar.waitFor()
+    await page.waitForFunction(() => document.querySelector('.mb-message-actions[open] > .mb-message-actions-menu')?.style.left)
+  }
+  await open()
+  assert.equal(await tray.isVisible(), false)
+  assert.equal(await bar.locator("form").count(), 3)
+  assert.equal(await more.locator("svg").count(), 1, "the more-reactions control has a visible icon")
+  const bounds = await bar.boundingBox()
+  assert.ok(bounds.width < 300 && bounds.height < 52, `compact bar is a single short row: ${JSON.stringify(bounds)}`)
+  await capture(page, { path: path.join(artifacts, "workspace-compact-actions-desktop.png"), fullPage: true })
+
+  await menu.getByRole("button", { name: "Copy link", exact: true }).click()
+  const link = new URL(await menu.getByRole("button", { name: "Copy link", exact: true }).getAttribute("data-copy-to-clipboard-url-value"), page.url()).href
+  await page.waitForFunction(async (link) => await navigator.clipboard.readText() === link, link)
+  await more.click()
+  assert.equal(await tray.isVisible(), true)
+  await page.keyboard.press("Tab")
+  assert.equal(await tray.evaluate((node) => node.contains(document.activeElement)), true)
+  await page.keyboard.press("Escape")
+  assert.equal(await tray.isVisible(), false)
+  assert.equal(await more.evaluate((node) => node === document.activeElement), true)
+  await page.keyboard.press("Escape")
+  assert.equal(await menu.isVisible(), false)
+  assert.equal(await trigger.evaluate((node) => node === document.activeElement), true)
+
+  await page.keyboard.press("Enter")
+  await bar.waitFor()
+  await more.click()
+  const boosted = page.waitForResponse((response) => response.request().method() === "POST" && /\/boosts$/.test(new URL(response.url()).pathname))
+  await tray.getByRole("button", { name: "Fire", exact: true }).click()
+  assert.ok([302, 303].includes((await boosted).status()))
+  await message.locator(".boost").filter({ hasText: "🔥" }).waitFor()
+  assert.equal(await menu.isVisible(), false)
+
+  await open()
+  await menu.getByRole("button", { name: "Reply", exact: true }).click()
+  await page.locator("#composer blockquote").getByText("A compact set of message actions.", { exact: true }).waitFor()
+  assert.equal(await menu.isVisible(), false)
+  await page.locator('#composer lexxy-editor [contenteditable="true"]').fill("")
+
+  await open()
+  await more.click()
+  await tray.getByRole("link", { name: "New boost", exact: true }).click()
+  await message.locator(".input--boost").fill("Nicely done")
+  const customBoost = page.waitForResponse((response) => response.request().method() === "POST" && /\/boosts$/.test(new URL(response.url()).pathname))
+  await message.getByRole("button", { name: "Submit", exact: true }).click()
+  assert.ok([302, 303].includes((await customBoost).status()))
+  await message.locator(".boost").filter({ hasText: "Nicely done" }).waitFor()
+
+  await open()
+  await more.click()
+  await page.locator('#nav a[href="/searches"]').click()
+  await page.locator("#q").waitFor()
+  await page.goBack()
+  await page.locator("#composer").waitFor()
+  assert.equal(await page.locator(".mb-message-actions[open]").count(), 0, "Turbo restores closed action bars")
+  await open()
+  assert.equal(await tray.isVisible(), false)
+  await page.locator("#nav").click({ position: { x: 120, y: 20 } })
+  assert.equal(await menu.isVisible(), false, "clicking outside closes the bar")
+})
+
+test("compact message actions fit mobile edges, attachments, and dark mode", { timeout: 90_000 }, async (t) => {
+  const { page, context, roomPath } = await setUp(t, { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, colorScheme: "dark" })
+  await submitMessage(page, roomPath, "A message before the attachment.")
+  const response = await context.request.post(`${roomPath}/messages`, {
+    headers: { ...sameOrigin, Accept: "text/vnd.turbo-stream.html" },
+    multipart: { "message[attachment]": { name: "action-test.txt", mimeType: "text/plain", buffer: Buffer.from("Compact bar download") } },
+  })
+  assert.equal(response.status(), 200)
+  await page.reload()
+  const message = page.locator(".message[data-message-id]").filter({ hasText: "action-test.txt" })
+  for (const width of [390, 320]) {
+    await page.setViewportSize({ width, height: width === 320 ? 620 : 844 })
+    await message.locator(".message__options-btn").click()
+    const menu = message.locator(".mb-message-actions-menu")
+    await menu.waitFor()
+    await menu.getByRole("button", { name: "More reactions", exact: true }).click()
+    const bounds = await menu.boundingBox()
+    const timeline = await page.locator(".messages").boundingBox()
+    const trigger = await message.locator(".message__options-btn").boundingBox()
+    assert.ok(bounds.x >= 7 && bounds.x + bounds.width <= width - 7, `${width}px bar and tray fit horizontally: ${JSON.stringify(bounds)}`)
+    assert.ok(bounds.y >= timeline.y && bounds.y + bounds.height <= timeline.y + timeline.height, "bar and tray stay above the composer")
+    if (trigger.y + trigger.height + bounds.height + 6 > timeline.y + timeline.height - 8) {
+      assert.ok(bounds.y < trigger.y, "the bar flips above its trigger when there is no room below")
+    }
+    assert.equal(await menu.getByRole("button", { name: "Reply", exact: true }).count(), 0)
+    assert.equal(await menu.getByRole("link", { name: "Download", exact: true }).isVisible(), true)
+    const download = await context.request.get(await menu.getByRole("link", { name: "Download", exact: true }).getAttribute("href"))
+    assert.equal(await download.text(), "Compact bar download")
+    await noOverflow(page, `${width}px compact message actions`)
+    await capture(page, { path: path.join(artifacts, `workspace-compact-actions-${width}-dark.png`), fullPage: true })
+    await page.locator("#nav").click({ position: { x: 120, y: 20 } })
+    assert.equal(await menu.isVisible(), false)
   }
 })

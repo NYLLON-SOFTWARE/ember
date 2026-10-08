@@ -448,9 +448,23 @@ body.mb-app.mb-authenticated {
 .mb-app .message--threaded .message__meta:has(.message__room) .message__heading { min-block-size: 0; }
 .mb-app .message--threaded .message__heading .message__room { margin-inline-start: 0; }
 .mb-app .message .message__meta > .message__actions { inset: -6px 0 auto auto; justify-content: flex-end; position: absolute; transform: none; }
-.mb-app .message__actions-menu { box-shadow: 0 5px 20px #00000018; inset-inline-end: 0; inset-inline-start: auto; min-inline-size: 180px; transform: none; }
-.mb-app .message__actions-menu::before, .mb-app .message__actions-menu::after { inset-inline-start: calc(100% - 17px); }
-.mb-app .popup-orientation-top .message__actions-menu { inset-inline-end: 0; inset-inline-start: auto; }
+.mb-app .mb-message-actions-menu { background: transparent; border: 0; box-shadow: none; gap: 7px; inline-size: max-content; inset: 34px 0 auto auto; max-inline-size: calc(100dvw - 16px); min-inline-size: 0; padding: 0; transform: none; }
+.mb-app .mb-message-actions[open] > .mb-message-actions-menu { display: grid; }
+.mb-app .mb-message-actions--positioned > .mb-message-actions-menu { inset: auto; position: fixed; z-index: 30; }
+.mb-app .mb-message-actions-menu::before, .mb-app .mb-message-actions-menu::after { display: none; }
+.mb-app .mb-message-action-bar, .mb-app .mb-message-reaction-tray { background: var(--mb-canvas); border: 1px solid var(--mb-border); border-radius: 11px; box-shadow: 0 4px 16px #00000014; }
+.mb-app .mb-message-action-bar { align-items: center; display: flex; flex-wrap: wrap; padding: 5px; }
+.mb-app .mb-message-actions-menu .quick-boosts { display: flex; flex-wrap: wrap; gap: 0; }
+.mb-app .mb-message-actions-menu form { margin: 0; }
+.mb-app .mb-message-actions-menu .message__action-btn { --btn-size: 32px; --btn-padding: 0; --hover-size: 0; aspect-ratio: auto; block-size: 34px; border: 0; border-radius: 6px; color: var(--mb-ink); flex: 0 0 auto; inline-size: 32px; min-inline-size: 0; padding: 0; }
+.mb-app .mb-message-actions-menu .message__action-btn:hover, .mb-app .mb-message-more[aria-expanded="true"] { background: var(--mb-hover); }
+.mb-app .mb-message-actions-menu .btn--success { color: var(--color-positive); }
+.mb-app .mb-message-actions-menu .message__action-btn:focus-visible { outline: 2px solid var(--mb-ink); outline-offset: -2px; }
+.mb-app .message__options-btn svg, .mb-app .mb-message-actions-menu svg { block-size: 18px; flex: none; inline-size: 18px; }
+.mb-app .mb-message-action-divider { block-size: 22px; border-inline-start: 1px solid var(--mb-border); margin-inline: 5px; }
+.mb-app .mb-message-reaction-tray { inline-size: max-content; justify-self: end; max-inline-size: 100%; padding: 8px; }
+.mb-app .mb-message-reaction-label { color: var(--mb-muted); display: block; font-size: 11px; font-weight: 500; margin: 0 3px 5px; }
+.mb-app .mb-message-actions-menu [hidden] { display: none !important; }
 .mb-app .message__options-btn { --btn-size: 30px; --btn-background: transparent; --btn-border-color: transparent; border-radius: 8px; }
 .mb-app .message__day-separator { align-items: center; color: var(--mb-muted); column-gap: 12px; font-size: 12px; font-weight: 400; margin: 6px 0 24px; text-transform: none; }
 .mb-app .message__day-separator::before, .mb-app .message__day-separator::after { border-block-start: 1px solid var(--mb-border); }
@@ -625,7 +639,7 @@ body.mb-app.mb-authenticated {
   .mb-app .message--threaded [data-reply-target="body"] { padding-inline-end: 0; }
   .mb-app .message .message__meta > .message__actions { inset-block-start: -11px; inset-inline-end: -6px; }
   .mb-app .message__options-btn { --btn-size: 44px; block-size: 44px; min-inline-size: 44px; opacity: 0.5; }
-  .mb-app .message__actions-menu { min-inline-size: 180px; }
+  .mb-app .mb-message-actions-menu .message__action-btn { block-size: 40px; inline-size: 34px; }
   .mb-app .message__action-btn { min-block-size: 44px; }
   .mb-app .message__day-separator { column-gap: 8px; font-size: 11px; margin-block-end: 18px; }
   .mb-app #system_welcome.mb-welcome-card { margin-inline: 12px; max-inline-size: calc(100% - 24px); padding: 16px; }

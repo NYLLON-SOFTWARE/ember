@@ -51,7 +51,8 @@ test("workspace presentation entries keep network, Cable, and protocol fragments
   for (const state of states) {
     assert.equal(allowlist.match(state.id, "chromium-desktop-light", "network"), undefined, state.id)
     assert.equal(allowlist.match(state.id, "chromium-desktop-light", "cable"), undefined, state.id)
-    if (state.kind === "fragment" && !state.id.startsWith("pwa/manifest")) {
+    const messagePresentation = ["messages/index/fragment", "messages/show/fragment", "rooms/refresh/fragment"]
+    if (state.kind === "fragment" && !state.id.startsWith("pwa/manifest") && !messagePresentation.includes(state.id)) {
       assert.equal(allowlist.match(state.id, "chromium-desktop-light", "server"), undefined, state.id)
     }
   }

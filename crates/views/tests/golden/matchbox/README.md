@@ -7,7 +7,9 @@ Historical Rails HTML, JSON facts, and assets remain unchanged.
 
 `parity_a.rs` selects Matchbox snapshots for application-layout pages and redesigned sidebar
 fragments. The view-B tests select them for page renders. Unchanged message, rich-text, and protocol
-fragments still compare with the original Rails goldens. Existing behavior assertions remain in the
+fragments still compare with the original Rails goldens. Message show/index/create renders use
+Matchbox snapshots for the compact actions bar, as do room refresh streams; their routes and Turbo targets retain behavior
+coverage. Existing behavior assertions remain in the
 tests alongside these presentation snapshots.
 
 After making an intentional UI change, rebuild snapshots explicitly:

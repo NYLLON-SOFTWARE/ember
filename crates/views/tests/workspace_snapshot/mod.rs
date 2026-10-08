@@ -1,4 +1,4 @@
-//! Matchbox owns the redesigned page DOM; Rails remains the golden for message/protocol fragments.
+//! Matchbox owns redesigned page/message DOM; Rails remains the golden for unchanged fragments.
 pub fn assert_snapshot(group: &str, name: &str, actual: &[String]) {
     // Some cases also exercise the wrapper with the same expectation in parallel.
     static UPDATE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());

@@ -1,8 +1,12 @@
-//! Channel icons come from the pinned, generated Lucide catalog, never user-supplied markup.
+//! Icons come from the pinned, generated Lucide catalog, never user-supplied markup.
 
 use std::fmt::Write;
 
 use super::{Html, Safe, escape};
+
+pub fn lucide_icon(name: &str) -> Safe<&'static str> {
+    Safe(matchbox_assets::lucide_icon(name).expect("template icon must exist in the pinned Lucide catalog").svg)
+}
 
 pub fn channel_icon(name: Option<&str>) -> Safe<&'static str> {
     Safe(name.and_then(matchbox_assets::lucide_icon).map_or("#", |icon| icon.svg))

@@ -11,6 +11,7 @@ path.
 | `matchbox/shell.js` | Turbo-aware mobile drawer, conversation filtering, active navigation, unread activity, and select-on-entry single-line inputs |
 | `controllers/channel_order_controller.js` | Hold-and-drag or keyboard channel ordering, persisted per user, with alphabetical reset and save rollback |
 | `controllers/icon_picker_controller.js` | Searchable, staged Lucide icon selection, a lazy cached catalog, keyboard navigation, and a native select fallback |
+| `controllers/message_actions_controller.js` | Compact message bar and extra reaction tray, viewport-aware placement, Escape/focus behavior, and cleanup before Turbo caching |
 | `lucide/catalog.json`, `lucide/LICENSE.txt` | Locally generated canonical Lucide SVGs and their license attribution, pinned through the Basecoat frontend build |
 | `controllers/svg_preview_controller.js` | Bounded, lazy SVG previews in isolated image contexts; originals stay download-only |
 | `controllers/notifications_controller.js` | Permission request within the click, subscription persistence before readiness, and actionable errors |
