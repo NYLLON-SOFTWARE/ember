@@ -215,8 +215,9 @@ behavior changes and compatibility limits are listed below.
   includes the full reaction tray. Message show/index/create DOM snapshots and the three
   message-rendering fragment parity exceptions cover this deliberate presentation change.
   The design does not fabricate channels, people, or an Apps section. Sign-in and invitation signup
-  use form cards; account/profile screens have persistent labels and visible actions. First-run
-  retains its separate Basecoat card. All other pages inherit the shared workspace styles, including
+  use form cards; account/profile screens have persistent labels and visible actions.
+  Search shows recent searches once above the results instead of duplicating the links in navigation.
+  First-run retains its separate Basecoat card. All other pages inherit the shared workspace styles, including
   room management, search, bots, and user settings. Account custom CSS remains supported.
   The redesign changes templates, shared CSS, and shell JavaScript; the database, sessions, message
   submission, rich-text editor, uploads, notifications, and fragment/cache mechanisms retain their

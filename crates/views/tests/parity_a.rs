@@ -647,6 +647,7 @@ fn application_layout_wrapper_matches_extended_pages() {
         }
         .render()
         .unwrap();
+        assert!(wrapped.starts_with("<!DOCTYPE html>"), "the application document starts with its doctype");
         assert_parity(name, "html", wrapped);
     });
 }
