@@ -4,4 +4,4 @@
 {% block nav %}{{ nav }}{% endblock %}
 {% block content %}{{ content }}{% endblock %}
 {% block footer %}{{ footer }}{% endblock %}
-{% block sidebar %}{{ sidebar }}{% endblock %}
+{% block sidebar %}{% if sidebar.0.is_empty() && !ctx.request_url.ends_with("/users/me/sidebar") %}{{ h::sidebar_turbo_frame_tag(Some(h::routes::user_sidebar().as_str()), "") }}{% else %}{{ sidebar }}{% endif %}{% endblock %}

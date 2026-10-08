@@ -150,6 +150,27 @@ pub(crate) fn room_name_param(c: &Ctx) -> Result<Option<Option<String>>> {
     Ok(permitted.get("name").map(|name| name.as_str().map(str::to_string)))
 }
 
+/// Missing preserves the existing icon; an empty string restores the default hashtag.
+/// Validate before entering a write transaction so an invalid icon cannot change other fields.
+pub(crate) fn room_icon_param(c: &Ctx) -> Result<Option<Option<String>>> {
+    parse_room_icon(c.params.require("room")?.get("icon"))
+}
+
+fn parse_room_icon(icon: Option<&matchbox_kit::Param>) -> Result<Option<Option<String>>> {
+    let Some(icon) = icon else { return Ok(None) };
+    match icon.as_str() {
+        Some("") => Ok(Some(None)),
+        Some(name) if matchbox_assets::lucide_icon(name).is_some() => Ok(Some(Some(name.to_string()))),
+        _ => Err(Error::Status(StatusCode::UNPROCESSABLE_ENTITY)),
+    }
+}
+
+pub(crate) async fn room_icon(c: &Ctx, room_id: i64) -> Result<Option<String>> {
+    c.app()
+        .read(move |conn| Ok(Account::first(conn)?.and_then(|account| account.settings().channel_icon(room_id).map(str::to_owned))))
+        .await
+}
+
 /// `params.fetch(:user_ids, [])` as ids `User.where(id:)` can match.
 pub(crate) fn user_ids_param(c: &Ctx) -> Vec<i64> {
     match c.param("user_ids") {
@@ -173,7 +194,7 @@ pub(crate) async fn render_shared_room(c: &Ctx, room: &Room) -> Result<Rendered>
         .app()
         .read(move |conn| {
             let presenter = Presenter::new(conn, &app, None);
-            let sidebar_room = presenter.sidebar_room(&room);
+            let sidebar_room = presenter.sidebar_room(&room)?;
             let account = Account::first(conn)?;
             Ok(page::render_detached_at(&app, account.as_ref(), &base_url, |_| {
                 matchbox_views::users::SidebarSharedPartial { room: sidebar_room }.render()

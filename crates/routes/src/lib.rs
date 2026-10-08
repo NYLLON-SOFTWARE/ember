@@ -41,6 +41,7 @@ path!(user(id), "/users/{id}");
 path!(user_avatar(user_id), "/users/{user_id}/avatar");
 path!(user_ban(user_id), "/users/{user_id}/ban");
 path!(user_sidebar, "/users/me/sidebar");
+path!(user_sidebar_order, "/users/me/sidebar/order");
 path!(user_profile, "/users/me/profile");
 path!(edit_user_profile, "/users/me/profile/edit");
 path!(user_push_subscriptions, "/users/me/push_subscriptions");

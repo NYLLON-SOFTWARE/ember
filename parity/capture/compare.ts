@@ -93,20 +93,23 @@ export function compareJob(job: Job, runDir: string, expectedName: string, actua
     result.error = errors.join("\n")
     return result
   }
+  // A presentation exception may allow different HTML, never a different HTTP outcome.
+  // Return before finish() so a broad server-layer entry cannot hide a status regression.
+  if (result.expected.meta!.status !== result.actual.meta!.status) {
+    result.status = "fail"
+    result.layers.push({
+      layer: "server",
+      equal: false,
+      text: diffText(`HTTP ${result.expected.meta!.status}`, `HTTP ${result.actual.meta!.status}`),
+    })
+    return result
+  }
   if (result.expected.meta!.kind === "fragment") {
     // A response, not a rendering: status, content type and normalized body are one text layer.
     const text = diffText(readText(expectedBase + ".server.norm.html"), readText(actualBase + ".server.norm.html"))
     result.layers.push({ layer: "server", equal: text.equal, text })
     return finish(result, allowlist)
   }
-  if (result.expected.meta!.status !== result.actual.meta!.status) {
-    result.layers.push({
-      layer: "server",
-      equal: false,
-      text: diffText(`HTTP ${result.expected.meta!.status}`, `HTTP ${result.actual.meta!.status}`),
-    })
-  }
-
   const diffImage = path.join(runDir, "diff", actualName, job.state.id, `${cell}.png`)
   fs.rmSync(diffImage, { force: true })
   fs.mkdirSync(path.dirname(diffImage), { recursive: true })

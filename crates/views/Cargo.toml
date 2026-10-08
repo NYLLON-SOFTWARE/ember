@@ -10,6 +10,7 @@ workspace = true
 
 [dependencies]
 askama = { workspace = true, features = ["blocks"] }
+matchbox_assets.workspace = true
 matchbox_routes.workspace = true
 crc32fast.workspace = true
 rails_compat.workspace = true

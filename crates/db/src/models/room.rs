@@ -254,8 +254,24 @@ impl Room {
         Ok(())
     }
 
+    /// Matchbox channel appearance is shared across members; no Rails table changes are needed.
+    /// `icon` has already been validated against the embedded catalog by the controller.
+    pub fn set_icon(&mut self, tx: &mut Tx<'_>, icon: Option<&str>) -> Result<()> {
+        if self.direct() {
+            let mut errors = Errors::default();
+            errors.add("icon", "cannot be set for direct messages");
+            return errors.into_result();
+        }
+        if crate::Account::set_channel_icon(tx, self.id, icon)? {
+            self.updated_at = tx.now();
+            tx.conn().execute_cached(r#"UPDATE "rooms" SET "updated_at" = ? WHERE "id" = ?"#, params![self.updated_at, self.id])?;
+        }
+        Ok(())
+    }
+
     /// `room.destroy`: memberships are deleted without callbacks, messages are destroyed.
     pub fn destroy(&self, tx: &mut Tx<'_>) -> Result<()> {
+        crate::Account::set_channel_icon(tx, self.id, None)?;
         tx.conn().execute_cached(r#"DELETE FROM "memberships" WHERE "memberships"."room_id" = ?"#, [self.id])?;
         for message in Message::for_room(tx.conn(), self.id)? {
             message.destroy(tx)?;

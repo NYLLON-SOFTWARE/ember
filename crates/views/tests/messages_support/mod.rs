@@ -11,6 +11,9 @@ use matchbox_views::{AccountSummary, CurrentUser, Platform, ViewContext};
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
+#[path = "../workspace_snapshot/mod.rs"]
+mod workspace_snapshot;
+
 pub struct Golden {
     pub name: String,
     pub kind: String,
@@ -26,6 +29,8 @@ pub fn golden(name: &str) -> Golden {
     if let Some(original) = assets.get("campfire-icon.png") {
         assets.insert("matchbox-icon.png".into(), original.replace("campfire-icon", "matchbox-icon"));
     }
+    assets.insert("matchbox/shell.js".into(), "/assets/matchbox/shell.js".into());
+    assets.insert("lucide/catalog.json".into(), "/assets/lucide/catalog.json".into());
     Golden { name: name.to_string(), kind: json["kind"].as_str().unwrap().to_string(), json, assets }
 }
 
@@ -112,6 +117,10 @@ impl Golden {
     }
 
     pub fn assert_dom(&self, actual_html: &str) {
+        if self.kind == "page" {
+            workspace_snapshot::assert_snapshot("b", &self.name, &tokens(actual_html));
+            return;
+        }
         // Normalize the intentional product name change, preserving the frozen Rails evidence.
         let expected =
             without_forgery_tokens(serde_json::from_str(&self.json["expected"].to_string().replace("Campfire", "Matchbox")).unwrap());

@@ -15,6 +15,7 @@ ruby_compat.workspace = true
 [build-dependencies]
 fancy-regex.workspace = true
 ruby_compat.workspace = true
+serde_json.workspace = true
 sha1.workspace = true
 
 [dev-dependencies]

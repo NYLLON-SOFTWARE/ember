@@ -3,6 +3,7 @@
 {%- block head %}{% endblock %}
 
 {%- block nav %}
+  <h1 class="mb-header-title">Search messages</h1>
   {%- if let Some(query) = index.query %}
     <div class="searches__query flex align-center gap pad-block-start-half">
       <div class="btn btn--reversed btn--faux align-center gap txt-nowrap">
@@ -11,23 +12,18 @@
 </div>    </div>
   {%- endif %}
 
-  <div class="searches__recents align-center gap pad-block-half overflow-y overflow-hide-scrollbar">
-    {% include "searches/_recents.html" %}
-  </div>
-{%- endblock %}
-
-{%- block sidebar %}
-  <div class="rooms position-relative flex flex-column gap overflow-y overflow-hide-scrollbar">
-    {% include "searches/_recents.html" %}
-  </div>
 {%- endblock %}
 
 {%- block content %}
+<div class="searches__recents mb-search-recents align-center gap" aria-label="Recent searches">
+  {% include "searches/_recents.html" %}
+</div>
 <div id="message-area" class="message-area">
   <div class="message-area--empty min-width center">
     <figure class="center pad">
       <img aria-hidden="true" class="colorize--black translucent" src="{{ ctx.asset("search.svg") }}" />
     </figure>
+    {% if index.query.is_some() %}<h2>No messages found</h2><p>Try a different word or phrase.</p>{% else %}<h2>Find a conversation</h2><p>Search messages across your channels and direct messages.</p>{% endif %}
   </div>
 
   <div id="search-results" class="messages searches__results" data-controller="search-results" data-search-results-target="messages" data-search-results-me-class="message--me" data-search-results-threaded-class="message--threaded" data-search-results-mentioned-class="message--mentioned" data-search-results-formatted-class="message--formatted">
@@ -47,7 +43,7 @@
       <div class="composer__input flex align-center flex-item-grow gap full-width input input--actor min-width">
         <img aria-hidden="true" class="composer__input-hint colorize--black" style="view-transition-name: input-btn;" src="{{ ctx.asset("search.svg") }}" width="20" height="20" />
 
-        <input{% if let Some(q) = index.q %} value="{{ q }}"{% endif %} class="searches__input input flex-item-grow" role="searchbox" aria-label="search" autofocus="autofocus" required="required" type="text" name="q" id="q" />
+        <input{% if let Some(q) = index.q %} value="{{ q }}"{% endif %} class="searches__input input flex-item-grow" role="searchbox" aria-label="search" placeholder="Search messages…" autofocus="autofocus" required="required" type="text" name="q" id="q" />
 
         <a data-form-target="cancel" role="button" class="searches__reset" href="{{ h::routes::searches() }}">
           <img aria-hidden="true" class="colorize--black" src="{{ ctx.asset("remove.svg") }}" width="14" height="14" />

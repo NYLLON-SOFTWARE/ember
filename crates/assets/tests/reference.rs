@@ -30,6 +30,7 @@ fn override_files() -> Vec<String> {
             !logical.starts_with("public/")
                 && (!logical.starts_with("basecoat/")
                     || matches!(logical.as_str(), "basecoat/app.css" | "basecoat/app.js" | "basecoat/theme-init.js"))
+                && (!logical.starts_with("lucide/") || matches!(logical.as_str(), "lucide/catalog.json" | "lucide/LICENSE.txt"))
         })
         .collect()
 }
@@ -131,9 +132,12 @@ fn compiled_files_are_byte_identical_to_the_reference_precompile() {
 }
 
 #[test]
-fn stylesheet_link_tag_all_matches_the_reference() {
+fn workspace_styles_follow_the_reference_stylesheets_and_preloads() {
     let tags = matchbox_assets::stylesheet_link_tag_all(&[("data-turbo-track", "reload")]);
-    assert_eq!(tags.html, fixture("stylesheet_link_tag_all.html"));
+    let workspace = matchbox_assets::stylesheet_link_tag(&["zz-matchbox.css"], &[("data-turbo-track", "reload")]);
+    assert_eq!(tags.html, format!("{}\n{}", fixture("stylesheet_link_tag_all.html"), workspace.html));
+    assert_eq!(tags.preload_links.last(), workspace.preload_links.first());
+    // The existing Rails-sized header budget is already full before the final override.
     assert_eq!(matchbox_assets::append_preload_links("", &tags.preload_links), fixture("link_header.txt"));
 }
 
@@ -146,21 +150,57 @@ fn basecoat_build_inputs_are_not_published() {
 }
 
 #[test]
+fn lucide_catalog_matches_the_embedded_icons() {
+    let published: Vec<_> = matchbox_assets::manifest().iter().map(|(logical, _)| *logical).filter(|p| p.starts_with("lucide/")).collect();
+    assert_eq!(published, ["lucide/LICENSE.txt", "lucide/catalog.json"]);
+    let catalog = get(&matchbox_assets::asset_path("lucide/catalog.json"));
+    assert_eq!(catalog.header("content-type"), Some("application/json"));
+    let catalog: Value = serde_json::from_slice(&catalog.body).unwrap();
+    let icons = matchbox_assets::lucide_icons();
+    let catalog = catalog.as_array().unwrap();
+    assert_eq!(catalog.len(), icons.len());
+    for (entry, icon) in catalog.iter().zip(icons) {
+        assert_eq!(entry["name"], icon.name);
+        assert_eq!(entry["label"], icon.label);
+        assert_eq!(entry["svg"], icon.svg);
+    }
+}
+
+#[test]
 fn style_profiles_keep_stylesheets_and_preloads_separate() {
     use matchbox_assets::{StyleProfile, stylesheet_link_tag_for};
     let legacy = stylesheet_link_tag_for(StyleProfile::Legacy, &[("data-turbo-track", "reload")]);
-    assert_eq!(legacy.html, fixture("stylesheet_link_tag_all.html"));
+    assert!(legacy.html.starts_with(&fixture("stylesheet_link_tag_all.html")));
+    assert_eq!(matchbox_assets::stylesheet_paths_for(StyleProfile::Legacy).last(), Some(&"zz-matchbox.css"));
     assert!(legacy.preload_links.iter().all(|link| !link.contains("basecoat/")));
     let basecoat = stylesheet_link_tag_for(StyleProfile::Basecoat, &[("data-turbo-track", "reload")]);
     assert_eq!(basecoat.preload_links.len(), 1);
     assert!(basecoat.preload_links[0].contains(&matchbox_assets::asset_path("basecoat/app.css")));
     assert_eq!(basecoat.html.matches("<link").count(), 1);
     assert!(basecoat.html.contains("data-turbo-track=\"reload\""));
+    assert!(!basecoat.html.contains("zz-matchbox"));
 }
 
 #[test]
 fn javascript_importmap_tags_match_the_reference() {
-    assert_eq!(as_reference(matchbox_assets::javascript_importmap_tags()), fixture("javascript_importmap_tags.html"));
+    let ours = as_reference(matchbox_assets::javascript_importmap_tags());
+    let reference = fixture("javascript_importmap_tags.html");
+    let imports = |tags: &str| {
+        let json = tags.split_once('>').unwrap().1.split_once("</script>").unwrap().0;
+        serde_json::from_str::<Value>(json).unwrap()
+    };
+    let mut our_imports = imports(&ours);
+    let mut inherited_tags = ours.clone();
+    for path in added().iter().filter(|path| path.starts_with("controllers/") && path.ends_with(".js")) {
+        let name = path.strip_suffix(".js").unwrap();
+        let url = matchbox_assets::asset_path(path);
+        assert_eq!(our_imports["imports"][name], url, "owned controller must be discoverable by Stimulus");
+        our_imports["imports"].as_object_mut().unwrap().remove(name);
+        inherited_tags = inherited_tags.replace(&format!("<link rel=\"modulepreload\" href=\"{url}\">\n"), "");
+        inherited_tags = inherited_tags.replace(&format!("\n<link rel=\"modulepreload\" href=\"{url}\">"), "");
+    }
+    assert_eq!(our_imports, imports(&reference));
+    assert_eq!(inherited_tags.split_once("</script>").unwrap().1, reference.split_once("</script>").unwrap().1);
 }
 
 #[test]

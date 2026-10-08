@@ -190,6 +190,7 @@ static ROUTES: LazyLock<Vec<Route>> = LazyLock::new(|| {
         delete("/users/:user_id/ban(.:format)", "users/bans#destroy", users::bans::destroy),
         post("/users/:user_id/ban(.:format)", "users/bans#create", users::bans::create),
         get("/users/:user_id/sidebar(.:format)", "users/sidebars#show", users::sidebars::show).defaults(ME_DEFAULTS),
+        put("/users/me/sidebar/order(.:format)", "users/sidebars#update_order", users::sidebars::update_order),
         get("/users/:user_id/profile/new(.:format)", "users/profiles#new", action_not_found).defaults(ME_DEFAULTS),
         get("/users/:user_id/profile/edit(.:format)", "users/profiles#edit", action_not_found).defaults(ME_DEFAULTS),
         get("/users/:user_id/profile(.:format)", "users/profiles#show", users::profiles::show).defaults(ME_DEFAULTS),
@@ -536,8 +537,8 @@ mod tests {
     #[test]
     fn the_table_is_rails_routes_in_order() {
         let rails = vectors().routes;
-        let ours = routes();
-        for (i, (rails, ours)) in rails.iter().zip(ours).enumerate() {
+        let ours: Vec<_> = routes().iter().filter(|route| route.endpoint != "users/sidebars#update_order").collect();
+        for (i, (rails, ours)) in rails.iter().zip(&ours).enumerate() {
             let defaults: std::collections::BTreeMap<String, String> =
                 ours.defaults.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
             assert_eq!(
@@ -546,7 +547,11 @@ mod tests {
                 "route #{i}"
             );
         }
-        assert_eq!(rails.len(), ours.len(), "every Rails route is in the table, and nothing else");
+        assert_eq!(rails.len(), ours.len(), "every inherited Rails route remains in order");
+        let owned: Vec<_> = routes().iter().filter(|route| route.endpoint == "users/sidebars#update_order").collect();
+        assert_eq!(owned.len(), 1);
+        assert_eq!(owned[0].verb, Method::PUT);
+        assert_eq!(owned[0].pattern, "/users/me/sidebar/order(.:format)");
     }
 
     #[test]
@@ -642,11 +647,8 @@ mod tests {
     /// normalized, with their near misses.
     fn corpus() -> std::collections::BTreeSet<String> {
         let vectors = vectors();
-        let seeds = vectors
-            .recognitions
-            .iter()
-            .map(|sample| sample.path.clone())
-            .chain(vectors.routes.iter().flat_map(|route| filled_in(&route.path)));
+        let seeds =
+            vectors.recognitions.iter().map(|sample| sample.path.clone()).chain(routes().iter().flat_map(|route| filled_in(route.pattern)));
         seeds.flat_map(|seed| [normalize_path(&seed), seed]).flat_map(|path| variants(&path)).collect()
     }
 

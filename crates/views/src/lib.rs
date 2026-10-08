@@ -49,7 +49,7 @@ pub struct ViewContext<'a> {
     /// Id of `last_room_visited` (`TrackedRoomVisit`): the `last_room` cookie's room if the user
     /// is a member, else `Current.user.rooms.original`. `None` links back to the root.
     pub last_room_visited_id: Option<i64>,
-    /// `Rails.application.config.app_version` (APP_VERSION, GIT_REVISION or "0").
+    /// The running release: APP_VERSION, GIT_REVISION, or the compiled Cargo package version.
     pub app_version: String,
 }
 

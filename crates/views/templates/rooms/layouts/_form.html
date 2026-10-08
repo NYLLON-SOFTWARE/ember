@@ -3,18 +3,23 @@
 {%- if room.id.is_some() %}<input type="hidden" name="_method" value="patch" />{% else %}{% endif %}
   <div class="flex align-center gap">
     {%- if can_administer %}
-      {{ h::translation_button(ctx, "room_name") }}
-
-      <label class="flex-item-grow txt-large">
+      <div class="mb-field full-width">
+        <div class="mb-field-label">
+          <label for="room_name">Room name</label>
+          {{ h::translation_button(ctx, "room_name") }}
+        </div>
         <input name="room[name]" id="room_name" class="input full-width" required="required" autofocus="autofocus" placeholder="Name the room" data-turbo-permanent="true" data-action="keydown.enter-&gt;form#submit:prevent" type="text"{% if let Some(name) = room.name %} value="{{ name }}"{% endif %} />
-        <span class="for-screen-reader">Name this room</span>
-      </label>
+      </div>
     {%- else %}
-      <h1 class="flex-item-grow txt-x-large">
+      <h2 class="flex-item-grow txt-x-large">
         {{ room.display_name() }}
-      </h1>
+      </h2>
     {%- endif %}
   </div>
+
+  {%- if can_administer %}
+    {% include "rooms/layouts/_icon_picker.html" %}
+  {%- endif %}
 
   <hr class="margin-block borderless">
 
@@ -23,6 +28,6 @@
   </section>
 
   {%- if can_administer %}
-  <button name="button" type="submit" class="btn btn--reversed txt-large center"><img aria-hidden="true" src="{{ ctx.asset("check.svg") }}" width="20" height="20" /><span class="for-screen-reader">Save</span></button>
+  <button name="button" type="submit" class="btn btn--reversed mb-primary-button">Save</button>
   {%- endif %}
 </form>

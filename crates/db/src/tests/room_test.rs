@@ -57,6 +57,89 @@ fn type_predicates() {
 }
 
 #[test]
+fn channel_icons_persist_through_conversion_and_touch_only_the_changed_room() {
+    let t = TestDb::new();
+    let account_before = t.read(|conn| Ok(crate::Account::first(conn)?.unwrap()));
+    let original = room(&t, "watercooler");
+    let room_id = original.id;
+    assert_eq!(account_before.settings().channel_icon(room_id), None);
+    t.travel(10);
+    let changed = t.write(move |tx| {
+        let mut room = Room::find(tx.conn(), room_id)?;
+        room.set_icon(tx, Some("rocket"))?;
+        Ok(room)
+    });
+    assert!(changed.updated_at > original.updated_at);
+    let account = t.read(|conn| Ok(crate::Account::first(conn)?.unwrap()));
+    assert_eq!(account.settings().channel_icon(room_id), Some("rocket"));
+    assert_eq!(account.updated_at, account_before.updated_at, "icons do not invalidate unrelated account/logo caches");
+
+    t.travel(10);
+    let unchanged = t.write(move |tx| {
+        let mut room = Room::find(tx.conn(), room_id)?;
+        room.set_icon(tx, Some("rocket"))?;
+        Ok(room)
+    });
+    assert_eq!(unchanged.updated_at, changed.updated_at, "saving the same icon does not invalidate the room");
+    t.write(move |tx| {
+        let mut room = Room::find(tx.conn(), room_id)?;
+        room.update(tx, Some(Some("Renamed channel")), Some(RoomType::Open))
+    });
+    assert_eq!(
+        t.read(|conn| Ok(crate::Account::first(conn)?.unwrap().settings().channel_icon(room_id).map(str::to_owned))),
+        Some("rocket".into())
+    );
+    t.travel(10);
+    t.write(move |tx| Room::find(tx.conn(), room_id)?.set_icon(tx, None));
+    assert_eq!(t.read(|conn| Ok(crate::Account::first(conn)?.unwrap().settings().channel_icon(room_id).map(str::to_owned))), None);
+    assert!(room(&t, "watercooler").updated_at > changed.updated_at);
+}
+
+#[test]
+fn channel_icons_merge_with_preferences_and_deleted_rooms_leave_no_icon() {
+    let t = TestDb::new();
+    let mut stale_account = t.read(|conn| Ok(crate::Account::first(conn)?.unwrap()));
+    t.write(|tx| {
+        Room::find(tx.conn(), id("hq"))?.set_icon(tx, Some("coffee"))?;
+        Room::find(tx.conn(), id("pets"))?.set_icon(tx, Some("star"))?;
+        assert!(crate::Account::set_channel_order(tx, id("david"), &[id("pets"), id("hq")])?);
+        Ok(())
+    });
+    t.write(move |tx| stale_account.update(tx, None, None, Some(&[("hide_translation_buttons", "false")])));
+    let before = t.read(|conn| Ok(crate::Account::first(conn)?.unwrap()));
+    assert_eq!(before.settings().channel_icons().len(), 2);
+    assert_eq!(before.settings().channel_icon(id("hq")), Some("coffee"));
+    assert_eq!(before.settings().channel_order(id("david")), vec![id("pets"), id("hq")]);
+    assert!(!before.settings().hide_translation_buttons());
+
+    t.write(|tx| Room::find(tx.conn(), id("hq"))?.destroy(tx));
+    let after = t.read(|conn| Ok(crate::Account::first(conn)?.unwrap()));
+    assert_eq!(after.settings().channel_icon(id("hq")), None);
+    assert_eq!(after.settings().channel_icon(id("pets")), Some("star"));
+    assert_eq!(after.updated_at, before.updated_at);
+    assert!(!after.settings().hide_translation_buttons());
+}
+
+#[test]
+fn channel_icon_writes_roll_back_with_room_changes_and_exclude_directs() {
+    let t = TestDb::new();
+    let original = room(&t, "hq");
+    assert!(
+        t.try_write(|tx| {
+            let mut room = Room::find(tx.conn(), id("hq"))?;
+            room.update(tx, Some(Some("Should not stick")), None)?;
+            room.set_icon(tx, Some("coffee"))?;
+            Err::<(), _>(crate::Error::other("abort transaction"))
+        })
+        .is_err()
+    );
+    assert_eq!(room(&t, "hq"), original);
+    assert!(t.read(|conn| Ok(crate::Account::first(conn)?.unwrap().settings().channel_icons())).is_empty());
+    assert!(t.try_write(|tx| Room::find(tx.conn(), id("david_and_jason"))?.set_icon(tx, Some("coffee"))).is_err());
+    assert!(t.read(|conn| Ok(crate::Account::first(conn)?.unwrap().settings().channel_icons())).is_empty());
+}
+
+#[test]
 fn default_involvement_for_new_users() {
     let t = TestDb::new();
     let room = t.write(|tx| Room::create_for(tx, RoomType::Closed, Some("Hello!"), id("david"), &[id("kevin"), id("david")]));

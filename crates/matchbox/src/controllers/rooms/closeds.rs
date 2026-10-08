@@ -7,8 +7,8 @@ use matchbox_kit::{Ctx, Result, StatusCode};
 use matchbox_views::rooms::{ClosedFormView, ClosedsEdit, ClosedsNew, FormRoom};
 
 use super::{
-    Scope, ensure_can_administer, ensure_permission_to_create_rooms, existing_user_ids, redirect_to_room, render_shared_room,
-    room_name_param, set_room, user_ids_param,
+    Scope, ensure_can_administer, ensure_permission_to_create_rooms, existing_user_ids, redirect_to_room, render_shared_room, room_icon,
+    room_icon_param, room_name_param, set_room, user_ids_param,
 };
 use crate::app::AppCtx;
 use crate::concerns::{self, Before, before_actions, require_current_user};
@@ -31,7 +31,7 @@ pub async fn new(c: &mut Ctx) -> Result {
     let current_user_id = require_current_user(c)?.id;
     // `@users = User.active.ordered`; the form shows them all as unselected.
     let form = ClosedFormView {
-        room: FormRoom { id: None, name: Some(DEFAULT_ROOM_NAME.into()) },
+        room: FormRoom { id: None, name: Some(DEFAULT_ROOM_NAME.into()), icon: None },
         can_administer: true,
         current_user_id,
         selected_users: Vec::new(),
@@ -44,6 +44,7 @@ pub async fn create(c: &mut Ctx) -> Result {
     before_actions(c, Before::default()).await?;
     ensure_permission_to_create_rooms(c).await?;
     let name = room_name_param(c)?.flatten();
+    let icon = room_icon_param(c)?;
     let user_id = require_current_user(c)?.id;
     let grantee_ids = user_ids_param(c);
     // Rooms::Closed.create_for(room_params, users: grantees)
@@ -51,7 +52,11 @@ pub async fn create(c: &mut Ctx) -> Result {
         .app()
         .write(move |tx| {
             let grantees = existing_user_ids(tx.conn(), &grantee_ids)?;
-            Room::create_for(tx, RoomType::Closed, name.as_deref(), user_id, &grantees)
+            let mut room = Room::create_for(tx, RoomType::Closed, name.as_deref(), user_id, &grantees)?;
+            if let Some(icon) = icon {
+                room.set_icon(tx, icon.as_deref())?;
+            }
+            Ok(room)
         })
         .await?;
     broadcast_to_members(c, &room, false).await?;
@@ -76,7 +81,7 @@ pub async fn edit(c: &mut Ctx) -> Result {
         })
         .await?;
     let form = ClosedFormView {
-        room: FormRoom { id: Some(room.id), name: room.name.clone() },
+        room: FormRoom { id: Some(room.id), name: room.name.clone(), icon: room_icon(c, room.id).await? },
         can_administer: current_user.can_administer(Some(room.creator_id), false),
         current_user_id: current_user.id,
         selected_users,
@@ -90,6 +95,7 @@ pub async fn update(c: &mut Ctx) -> Result {
     let room = set_room(c, Scope::WithoutDirects).await?;
     ensure_can_administer(c, &room)?;
     let name = room_name_param(c)?;
+    let icon = room_icon_param(c)?;
     let grantee_ids = user_ids_param(c);
     // force_room_type, then `@room.update! room_params`
     let room = c
@@ -97,6 +103,9 @@ pub async fn update(c: &mut Ctx) -> Result {
         .write(move |tx| {
             let mut room = room;
             room.update(tx, name.as_ref().map(|name| name.as_deref()), Some(RoomType::Closed))?;
+            if let Some(icon) = icon {
+                room.set_icon(tx, icon.as_deref())?;
+            }
             Ok(room)
         })
         .await?;

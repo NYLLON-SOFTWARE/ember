@@ -1,9 +1,10 @@
 import { build } from "esbuild";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildLucideCatalog } from "./build-lucide.mjs";
 
 const root = fileURLToPath(new URL(".", import.meta.url));
 const checking = process.argv.includes("--check");
@@ -34,12 +35,18 @@ try {
     generated.set(`${entry}.js`, output.outputFiles[0].text);
   }
 
+  const lucide = join(root, "node_modules/lucide-static");
+  const nodes = JSON.parse(await readFile(join(lucide, "icon-nodes.json"), "utf8"));
+  generated.set("../lucide/catalog.json", JSON.stringify(buildLucideCatalog(nodes)) + "\n");
+  generated.set("../lucide/LICENSE.txt", await readFile(join(lucide, "LICENSE"), "utf8"));
+
   for (const [name, output] of generated) {
     const path = join(root, name);
     if (checking) {
       const current = await readFile(path, "utf8").catch(() => "");
       if (current !== output) throw new Error(`${name} is stale; run npm run build in ${root}`);
     } else {
+      await mkdir(dirname(path), { recursive: true });
       await writeFile(path, output);
     }
     console.log(`${name}: ${Buffer.byteLength(output)} bytes${checking ? " (verified)" : ""}`);

@@ -115,6 +115,56 @@ fn accounts_can_reset_join_code() {
     assert_ne!(signal(&t).join_code, before);
 }
 
+#[test]
+fn channel_orders_are_personal_and_reset_without_touching_account_caches() {
+    let t = TestDb::new();
+    let before = signal(&t);
+    assert!(before.settings().channel_order(id("david")).is_empty());
+    assert!(t.write(|tx| Account::set_channel_order(tx, id("david"), &[id("hq"), id("pets")])));
+    assert!(t.write(|tx| Account::set_channel_order(tx, id("jason"), &[id("pets"), id("hq")])));
+
+    let settings = signal(&t).settings();
+    assert_eq!(settings.channel_order(id("david")), vec![id("hq"), id("pets")]);
+    assert_eq!(settings.channel_order(id("jason")), vec![id("pets"), id("hq")]);
+    assert!(settings.channel_order(id("kevin")).is_empty());
+    assert_eq!(signal(&t).updated_at, before.updated_at, "personal ordering does not invalidate account/asset caches");
+
+    assert!(t.write(|tx| Account::set_channel_order(tx, id("david"), &[])));
+    assert!(signal(&t).settings().channel_order(id("david")).is_empty());
+    assert_eq!(signal(&t).settings().channel_order(id("jason")), vec![id("pets"), id("hq")]);
+}
+
+#[test]
+fn channel_orders_reject_duplicates_direct_rooms_and_inaccessible_channels() {
+    let t = TestDb::new();
+    assert!(t.write(|tx| Account::set_channel_order(tx, id("kevin"), &[id("hq")])));
+    let before = signal(&t).settings_json;
+    for ids in [vec![id("pets")], vec![id("david_and_kevin")], vec![id("hq"), id("hq")], vec![0], vec![-1]] {
+        assert!(!t.write(move |tx| Account::set_channel_order(tx, id("kevin"), &ids)));
+        assert_eq!(signal(&t).settings_json, before);
+    }
+    t.write(|tx| {
+        let mut membership = crate::Membership::find_by_room_and_user(tx.conn(), id("hq"), id("kevin"))?.unwrap();
+        membership.update_involvement(tx, crate::Involvement::Invisible)
+    });
+    assert!(!t.write(|tx| Account::set_channel_order(tx, id("kevin"), &[id("hq")])));
+    assert_eq!(signal(&t).settings_json, before);
+}
+
+#[test]
+fn personal_channel_order_survives_an_admin_update_from_an_older_account_snapshot() {
+    let t = TestDb::new();
+    let mut stale_account = signal(&t);
+    assert!(t.write(|tx| Account::set_channel_order(tx, id("david"), &[id("hq"), id("pets")])));
+    t.write(move |tx| stale_account.update(tx, None, None, Some(&[("hide_translation_buttons", "false")])));
+    let settings = signal(&t).settings();
+    assert!(!settings.hide_translation_buttons());
+    assert_eq!(settings.channel_order(id("david")), vec![id("hq"), id("pets")]);
+
+    assert!(t.write(|tx| Account::set_channel_order(tx, id("david"), &[])));
+    assert!(!signal(&t).settings().hide_translation_buttons(), "reset does not affect workspace settings");
+}
+
 impl Account {
     fn reload_from(&mut self, t: &TestDb) {
         let id = self.id;

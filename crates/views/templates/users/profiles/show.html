@@ -11,11 +11,15 @@
 
       <button class="btn" data-action="sessions#logout:prevent">
         {{ h::image_tag(ctx, "logout.svg", h::attrs().aria_hidden()) }}
-        <span class="for-screen-reader">Log out</span>
+        <span>Log out</span>
       </button>
 {% endfilter %}  </div>
 {% endblock %}
-{% block content %}<section class="panel flex flex-column gap" style="view-transition-name: avatar-{{ user.id }}">
+{% block content %}<section class="panel mb-settings-panel flex flex-column gap" style="view-transition-name: avatar-{{ user.id }}">
+  <header class="mb-page-heading">
+    <h1>Your profile</h1>
+    <p>Manage how you appear to the people in your workspace.</p>
+  </header>
   {% include "pwa/_install_instructions.html" %}
 
   <div class="align-center center avatar__form gap" data-controller="upload-preview">
@@ -38,48 +42,40 @@
         <span class="for-screen-reader">Delete avatar</span>
 {% endfilter %}{% endif %}  </div>
 
-{% let form = self.profile_form() %}  {% filter form_with(form) %}
-    <div class="flex flex-column gap">
-      <div class="flex align-center gap">
+{% let form = self.profile_form().class("mb-auth-form") %}{% filter form_with(form) %}
+    <div class="mb-field">
+      <div class="mb-field-label">
+        <label for="{{ form.field_id("name") }}">Name</label>
         {{ h::translation_button(ctx, "user_name") }}
-
-        <label class="flex align-center gap flex-item-grow input input--actor">
-          {{ form.text_field("name", Some(user.name.as_str()), h::attrs().class("input txt-large ").autocomplete("name").placeholder("Enter your name").autofocus().required(true).data("1p-ignore", true)) }}
-          {{ h::image_tag(ctx, "person.svg", h::attrs().aria_hidden().size(24).class("colorize--black")) }}
-        </label>
       </div>
-
-      <div class="flex align-center gap">
-        {{ h::translation_button(ctx, "email_address") }}
-
-        <label class="flex align-center gap flex-item-grow input input--actor">
-          {{ form.email_field("email_address", None, h::attrs().class("input txt-large").attr_opt("value", user.email_address.as_deref()).autocomplete("username").placeholder("Enter your email address").required(false)) }}
-          {{ h::image_tag(ctx, "email.svg", h::attrs().aria_hidden().size(24).class("colorize--black")) }}
-        </label>
-      </div>
-
-      <div class="flex align-center gap">
-        {{ h::translation_button(ctx, "update_password") }}
-
-        <label class="flex align-center gap flex-item-grow input input--actor">
-          {{ form.password_field("password", h::attrs().class("input txt-large").autocomplete("new-password").placeholder("Change password").required(false).maxlength(72)) }}
-          {{ h::image_tag(ctx, "password.svg", h::attrs().aria_hidden().size(24).class("colorize--black")) }}
-        </label>
-      </div>
-
-      <div class="flex align-start gap">
-        {{ h::translation_button(ctx, "bio") }}
-
-        <label class="flex align--center gap flex-item--grow input input--actor">
-          {{ form.text_area("bio", user.bio.as_deref(), h::attrs().class("input txt-large").placeholder("A few words about yourself…").maxlength(200).rows(3).required(false)) }}
-          {{ h::image_tag(ctx, "bio.svg", h::attrs().aria_hidden().size(24).class("colorize--black")) }}
-        </label>
-      </div>
-
-      {{ h::profile_form_submit_button(ctx) }}
+      {{ form.text_field("name", Some(user.name.as_str()), h::attrs().class("input").autocomplete("name").placeholder("Enter your name").autofocus().required(true).data("1p-ignore", true)) }}
     </div>
+    <div class="mb-field">
+      <div class="mb-field-label">
+        <label for="{{ form.field_id("email_address") }}">Email address</label>
+        {{ h::translation_button(ctx, "email_address") }}
+      </div>
+      {{ form.email_field("email_address", None, h::attrs().class("input").attr_opt("value", user.email_address.as_deref()).autocomplete("username").placeholder("Enter your email address").required(false)) }}
+    </div>
+    <div class="mb-field">
+      <div class="mb-field-label">
+        <label for="{{ form.field_id("password") }}">New password</label>
+        {{ h::translation_button(ctx, "update_password") }}
+      </div>
+      {{ form.password_field("password", h::attrs().class("input").autocomplete("new-password").placeholder("Change password").required(false).maxlength(72).aria("describedby", "profile-password-help")) }}
+      <p id="profile-password-help" class="txt-small txt-subtle margin-none">Leave blank to keep your current password.</p>
+    </div>
+    <div class="mb-field">
+      <div class="mb-field-label">
+        <label for="{{ form.field_id("bio") }}">Bio</label>
+        {{ h::translation_button(ctx, "bio") }}
+      </div>
+      {{ form.text_area("bio", user.bio.as_deref(), h::attrs().class("input").placeholder("A few words about yourself…").maxlength(200).rows(3).required(false)) }}
+    </div>
+    <button type="submit" class="btn btn--reversed mb-primary-button">Save changes</button>
 {% endfilter %}
   <div class="margin-block pad-inline pad-block fill-shade border-radius">
+    <h2 class="mb-section-title">Conversation notifications</h2>
     <menu class="flex flex-column gap margin-none pad">
       {% for membership in shared_memberships %}{% include "users/profiles/_membership.html" %}{% endfor %}
 {% if !direct_memberships.is_empty() && !shared_memberships.is_empty() %}        <hr class="separator full-width" style="--border-style: solid">

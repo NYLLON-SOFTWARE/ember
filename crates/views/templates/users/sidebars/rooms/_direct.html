@@ -1,20 +1,16 @@
-{#- The reference wraps this in `cache membership do` and assigns `members` on lines Erubi drops,
-    leaving the blank line and indentation below. #}
-  {% filter link_to_room(membership.room_id, h::attrs().class(membership.class_names()).id(h::dom_id("rooms_direct", membership.room_id, Some("list"))).data("sorted_list_number", membership.updated_at_epoch.as_str())) %}
-{% if membership.members.len() > 1 %}      <div class="avatar__group">
-{% for member in membership.members.iter().take(4) %}          <span class="avatar">
-            {{ h::image_tag(ctx, member.avatar_path.as_str(), h::attrs().size(20).aria_hidden()) }}
-          </span>
-{% endfor %}      </div>
-{% else %}      <span class="avatar">
-        {{ h::image_tag(ctx, membership.members[0].avatar_path.as_str(), h::attrs().size(48).aria_hidden()) }}
-      </span>
+{% filter link_to_room(membership.room_id, h::attrs().class(membership.class_names()).id(h::dom_id("rooms_direct", membership.room_id, Some("list"))).data("sorted_list_number", membership.updated_at_epoch.as_str()).data("matchbox_room_row", "")) %}
+{% if membership.members.len() > 1 %}
+  <span class="avatar__group">
+{% for member in membership.members.iter().take(4) %}
+    <span class="avatar">{{ h::image_tag(ctx, member.avatar_path.as_str(), h::attrs().size(28).aria_hidden()) }}</span>
+{% endfor %}
+  </span>
+{% else %}
+  <span class="avatar">{{ h::image_tag(ctx, membership.members[0].avatar_path.as_str(), h::attrs().size(28).aria_hidden()) }}</span>
 {% endif %}
-    <span class="direct__author flex align-center gap max-width min-width border-radius txt-small">
-      <span class="txt-nowrap overflow-ellipsis">
-        <span class="for-screen-reader">Ping with</span>
-{% if membership.members.len() > 1 %}          {{ membership.member_initials() }}
-{% else %}          {{ membership.members[0].first_name() }}
-{% endif %}      </span>
-    </span>
+  <span class="direct__author mb-room-name overflow-ellipsis">
+    <span class="for-screen-reader">Direct message with </span>
+{% for member in membership.members %}{{ member.name }}{% if ctx.is_current_user(member.id) %} (you){% endif %}{% if !loop.last %}, {% endif %}{% endfor %}
+  </span>
+  <span class="mb-room-status" aria-hidden="true"></span>
 {% endfilter %}

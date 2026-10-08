@@ -1,68 +1,56 @@
 {% extends "layouts/application.html" %}
-{%- block head %}{% endblock %}
+{% import "components/icons.html" as icons %}
+{% block head %}{% endblock %}
+{% block nav %}{% endblock %}
 
-{% block nav %}  <div class="flex-item-justify-end">
-    {% filter link_to(h::routes::new_session(), h::attrs().class("btn flex-item-justify-end")) %}
-      {{ h::image_tag(ctx, "login-keys.svg", h::attrs().aria_hidden()) }}
-      <span class="for-screen-reader">Sign in</span>
-{% endfilter %}  </div>
-{% endblock %}
-{% block content %}{% let form = h::form_with(h::routes::join(join_code)).model("user").class("center") %}{% filter form_with(form) %}
-  <section class="nametag u-relative">
-    <div class="flex justify-center align-center pad-block">
-      {{ h::image_tag(ctx, "lanyard.svg", h::attrs().class("nametag__lanyard").aria_hidden()) }}
-    </div>
-
-    <div class="nametag__inner flex flex-column gap">
-      <fieldset class="flex flex-column center-block">
-        <legend class="txt-align-center flex gap">
-          {{ h::account_logo_tag(ctx, None) }}
-          <strong class="txt-large">{{ ctx.account.name }}</strong>
-        </legend>
-
-        <label class="align-center center avatar__form gap" data-controller="upload-preview">
-          <div class="btn input--file">
-            {{ h::image_tag(ctx, "camera.svg", h::attrs().aria_hidden()) }}
-            {{ form.file_field("avatar", h::attrs().class("input").accept("image/*").data("upload_preview_target", "input").data("action", "upload-preview#previewImage")) }}
-            <span class="for-screen-reader">Upload avatar</span>
-          </div>
-
-          <div class="btn avatar input--file txt-xx-large">
-            {{ h::image_tag(ctx, "default-avatar.svg", h::attrs().aria_hidden().data("upload_preview_target", "image")) }}
-            <span class="for-screen-reader">Avatar</span>
-          </div>
+{% block content %}
+<section class="mb-auth-page">
+  <div class="panel mb-auth-card">
+    <header class="mb-auth-heading">
+{% if ctx.account.has_logo %}{{ h::account_logo_tag(ctx, Some("mb-auth-logo")) }}{% else %}
+      <span class="mb-brand-mark">{% call icons::icon("flame") %}</span>
+{% endif %}
+      <h1>Join {{ ctx.account.name }}</h1>
+      <p>Create your account and join the conversation.</p>
+    </header>
+{% let form = h::form_with(h::routes::join(join_code)).model("user").class("mb-auth-form") %}
+    {% filter form_with(form) %}
+      <div class="mb-auth-avatar" data-controller="upload-preview">
+        <span class="avatar">
+          {{ h::image_tag(ctx, "kro/avatar-placeholder.svg", h::attrs().alt("Your profile photo").size(80).data("upload_preview_target", "image")) }}
+        </span>
+        <label class="btn input--file">
+          {{ h::image_tag(ctx, "camera.svg", h::attrs().aria_hidden().size(20).class("colorize--black")) }}
+          {{ form.file_field("avatar", h::attrs().class("input").accept("image/*").data("upload_preview_target", "input").data("action", "upload-preview#previewImage")) }}
+          <span>Upload photo</span>
         </label>
-      </fieldset>
-
-      <div class="flex align-center gap">
-        {{ h::translation_button(ctx, "user_name") }}
-        <label class="flex align-center gap flex-item-grow txt-large input input--actor">
-          {{ form.text_field("name", None, h::attrs().class("input").autocomplete("name").placeholder("Name").autofocus().required(true).data("1p-ignore", true)) }}
-          {{ h::image_tag(ctx, "person.svg", h::attrs().aria_hidden().size(24).class("colorize--black")) }}
-        </label>
+        <span class="txt-small txt-subtle">Optional</span>
       </div>
-
-      <div class="flex align-center gap">
-        {{ h::translation_button(ctx, "email_address") }}
-        <label class="flex align-center gap flex-item-grow txt-large input input--actor">
-          {{ form.email_field("email_address", None, h::attrs().class("input").autocomplete("username").placeholder("Email address").required(true)) }}
-          {{ h::image_tag(ctx, "email.svg", h::attrs().aria_hidden().size(24).class("colorize--black")) }}
-        </label>
+      <div class="mb-field">
+        <div class="mb-field-label">
+          <label for="{{ form.field_id("name") }}">Name</label>
+          {{ h::translation_button(ctx, "user_name") }}
+        </div>
+        {{ form.text_field("name", None, h::attrs().class("input").autocomplete("name").placeholder("Name").autofocus().required(true).data("1p-ignore", true)) }}
       </div>
-
-      <div class="flex align-center gap">
-        {{ h::translation_button(ctx, "password") }}
-        <label class="flex align-center gap flex-item-grow txt-large input input--actor">
-          {{ form.password_field("password", h::attrs().class("input").autocomplete("new-password").placeholder("Password").required(true).maxlength(72)) }}
-          {{ h::image_tag(ctx, "password.svg", h::attrs().aria_hidden().size(24).class("colorize--black")) }}
-        </label>
+      <div class="mb-field">
+        <div class="mb-field-label">
+          <label for="{{ form.field_id("email_address") }}">Email address</label>
+          {{ h::translation_button(ctx, "email_address") }}
+        </div>
+        {{ form.email_field("email_address", None, h::attrs().class("input").autocomplete("username").placeholder("Email address").required(true)) }}
       </div>
-
-      {% filter button(h::attrs().class("btn btn--reversed center txt-large").type_("submit")) %}
-        {{ h::image_tag(ctx, "check.svg", h::attrs().aria_hidden()) }}
-        <span class="for-screen-reader">Save</span>
-{% endfilter %}    </div>
-  </section>
-{% endfilter %}
-{% include "accounts/_help_contact.html" %}
+      <div class="mb-field">
+        <div class="mb-field-label">
+          <label for="{{ form.field_id("password") }}">Password</label>
+          {{ h::translation_button(ctx, "password") }}
+        </div>
+        {{ form.password_field("password", h::attrs().class("input").autocomplete("new-password").placeholder("Password").required(true).maxlength(72)) }}
+      </div>
+      <button type="submit" class="btn btn--reversed mb-primary-button">Create account</button>
+    {% endfilter %}
+    <p class="mb-auth-alternative">Already have an account? <a href="{{ h::routes::new_session() }}">Sign in</a></p>
+  </div>
+  {% include "accounts/_help_contact.html" %}
+</section>
 {% endblock %}

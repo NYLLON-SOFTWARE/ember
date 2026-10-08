@@ -11,6 +11,7 @@
 //! - [`serve`]: ActionDispatch::Static over the embedded public/ directory.
 
 mod helpers;
+mod lucide;
 mod serve;
 mod tags;
 
@@ -22,6 +23,7 @@ pub use helpers::{
     MissingAssetError, asset_path, asset_url, audio_path, digested_path, image_path, image_url, javascript_path, stylesheet_path,
     try_asset_path,
 };
+pub use lucide::{LucideIcon, lucide_icon, lucide_icons};
 pub use serve::{Body, StaticRequest, StaticResponse, serve};
 pub use tags::{
     StyleProfile, StylesheetTags, all_stylesheet_paths, append_preload_links, javascript_importmap_tags, stylesheet_link_tag,

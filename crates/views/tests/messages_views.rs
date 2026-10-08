@@ -34,6 +34,22 @@ fn show_image_message() {
 }
 
 #[test]
+fn svg_preview_keeps_download_fallback_and_escapes_metadata() {
+    let g = golden("messages_show_image");
+    let mut message: MessageView = g.input();
+    let messages::MessageContent::Attachment(attachment) = &mut message.content else { panic!("expected attachment fixture") };
+    attachment.preview = messages::AttachmentPreview::Svg;
+    attachment.filename = "drawing\"<script>.svg".into();
+    let rendered = g.render(|ctx| messages::MessagePartial { ctx, message: &message }.render().unwrap());
+    assert!(rendered.contains("data-controller=\"svg-preview\""));
+    assert!(rendered.contains("data-svg-preview-target=\"image\""));
+    assert!(rendered.contains("drawing&quot;&lt;script&gt;.svg"));
+    assert!(rendered.contains("Download drawing&quot;&lt;script&gt;.svg"));
+    assert!(!rendered.contains("<script>"));
+    assert!(!rendered.contains("<object"));
+}
+
+#[test]
 fn index() {
     let g = golden("messages_index");
     let messages: Vec<messages::MessageItem> = g.input_at("messages");

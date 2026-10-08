@@ -2,6 +2,7 @@
 
 use rusqlite::{Connection, params};
 use serde_json::{Map, Value};
+use std::collections::{HashMap, HashSet};
 
 use crate::database::Tx;
 use crate::error::{Error, OptionalExt, Result};
@@ -30,6 +31,10 @@ pub struct AccountSettings {
 
 const RESTRICT_ROOM_CREATION: &str = "restrict_room_creation_to_administrators";
 const HIDE_TRANSLATION_BUTTONS: &str = "hide_translation_buttons";
+const CHANNEL_ORDER: &str = "matchbox_channel_order";
+const CHANNEL_ICONS: &str = "matchbox_channel_icons";
+
+pub const MAX_CHANNEL_ORDER: usize = 4096;
 
 impl AccountSettings {
     fn from_column(raw: Option<&str>) -> Self {
@@ -53,6 +58,36 @@ impl AccountSettings {
     /// Keep the default virtual so reading old settings does not rewrite their JSON.
     pub fn hide_translation_buttons(&self) -> bool {
         self.data.get(HIDE_TRANSLATION_BUTTONS).is_none_or(|value| present(Some(value)))
+    }
+
+    /// Personal preferences live under user IDs in the existing JSON column, without changing
+    /// the Rails schema. Missing preferences leave channels in their normal alphabetical order.
+    pub fn channel_order(&self, user_id: i64) -> Vec<i64> {
+        self.data
+            .get(CHANNEL_ORDER)
+            .and_then(|orders| orders.get(user_id.to_string()))
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_i64)
+            .filter(|id| *id > 0)
+            .take(MAX_CHANNEL_ORDER)
+            .collect()
+    }
+
+    pub fn channel_icon(&self, room_id: i64) -> Option<&str> {
+        self.data.get(CHANNEL_ICONS)?.get(room_id.to_string())?.as_str().filter(|icon| !icon.is_empty())
+    }
+
+    /// Load this once when presenting several channels, rather than querying each room.
+    pub fn channel_icons(&self) -> HashMap<i64, String> {
+        self.data
+            .get(CHANNEL_ICONS)
+            .and_then(Value::as_object)
+            .into_iter()
+            .flatten()
+            .filter_map(|(id, icon)| Some((id.parse().ok()?, icon.as_str().filter(|icon| !icon.is_empty())?.to_string())))
+            .collect()
     }
 
     /// `assign_data_with_type_casting`: every key must be in the schema.
@@ -189,6 +224,9 @@ impl Account {
             sets.push(("custom_styles", Box::new(styles)));
         }
         if let Some(values) = settings {
+            // Account changes may have been read before this write transaction was queued.
+            // Merge into the latest settings so a concurrent personal preference is preserved.
+            self.settings_json = Self::find(tx.conn(), self.id)?.settings_json;
             let original = self.settings();
             let mut updated = original.clone();
             updated.assign(values)?;
@@ -215,6 +253,73 @@ impl Account {
     pub fn reload(&mut self, conn: &Connection) -> Result<()> {
         *self = Self::find(conn, self.id)?;
         Ok(())
+    }
+
+    /// Set only this user's visible shared-channel order. Empty resets it to alphabetical.
+    /// Returns false for invalid IDs or inaccessible rooms, without changing any preferences.
+    pub fn set_channel_order(tx: &mut Tx<'_>, user_id: i64, room_ids: &[i64]) -> Result<bool> {
+        if room_ids.len() > MAX_CHANNEL_ORDER {
+            return Ok(false);
+        }
+        let accessible: HashSet<i64> = crate::Membership::visible_with_ordered_room(tx.conn(), user_id)?
+            .into_iter()
+            .filter(|(_, room)| !room.direct())
+            .map(|(_, room)| room.id)
+            .collect();
+        let mut seen = HashSet::new();
+        if room_ids.iter().any(|id| !accessible.contains(id) || !seen.insert(*id)) {
+            return Ok(false);
+        }
+
+        let account = Self::first(tx.conn())?.or_not_found("Account")?;
+        let mut settings = account.settings();
+        let orders = settings.data.entry(CHANNEL_ORDER).or_insert_with(|| Value::Object(Map::new()));
+        if !orders.is_object() {
+            *orders = Value::Object(Map::new());
+        }
+        let orders = orders.as_object_mut().expect("channel orders are an object");
+        if room_ids.is_empty() {
+            orders.remove(&user_id.to_string());
+        } else {
+            orders.insert(user_id.to_string(), Value::Array(room_ids.iter().copied().map(Value::from).collect()));
+        }
+        if orders.is_empty() {
+            settings.data.remove(CHANNEL_ORDER);
+        }
+        // This is a personal display preference, not an account/logo change: leave updated_at
+        // and therefore account image URLs and shared message fragment keys untouched.
+        tx.conn().execute_cached(r#"UPDATE "accounts" SET "settings" = ? WHERE "id" = ?"#, params![settings.to_json(), account.id])?;
+        Ok(true)
+    }
+
+    /// The room controller validates canonical icon names against the compiled Lucide catalog.
+    /// Merge into current settings inside the write transaction and leave account caches alone.
+    pub(crate) fn set_channel_icon(tx: &mut Tx<'_>, room_id: i64, icon: Option<&str>) -> Result<bool> {
+        let Some(account) = Self::first(tx.conn())? else {
+            return if icon.is_none() { Ok(false) } else { Err(Error::RecordNotFound("Account")) };
+        };
+        let mut settings = account.settings();
+        if settings.channel_icon(room_id) == icon {
+            return Ok(false);
+        }
+        let icons = settings.data.entry(CHANNEL_ICONS).or_insert_with(|| Value::Object(Map::new()));
+        if !icons.is_object() {
+            *icons = Value::Object(Map::new());
+        }
+        let icons = icons.as_object_mut().expect("channel icons are an object");
+        match icon {
+            Some(icon) => {
+                icons.insert(room_id.to_string(), Value::String(icon.into()));
+            }
+            None => {
+                icons.remove(&room_id.to_string());
+            }
+        }
+        if icons.is_empty() {
+            settings.data.remove(CHANNEL_ICONS);
+        }
+        tx.conn().execute_cached(r#"UPDATE "accounts" SET "settings" = ? WHERE "id" = ?"#, params![settings.to_json(), account.id])?;
+        Ok(true)
     }
 }
 

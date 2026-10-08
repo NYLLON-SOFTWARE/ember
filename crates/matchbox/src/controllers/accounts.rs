@@ -59,6 +59,8 @@ pub async fn update(c: &mut Ctx) -> Result {
         .get("settings")
         .and_then(Param::as_hash)
         .map(|settings| settings.iter().map(|(key, value)| (key.clone(), value.to_s().unwrap_or_default())).collect());
+    // Immediate settings switches confirm their state in place, without a success toast.
+    let settings_only = settings.is_some() && name.is_none() && params.get("logo").is_none();
     let logo = Assignment::from_params(&params, "logo")?.stage(c.app()).await?;
 
     let pending = c
@@ -72,7 +74,8 @@ pub async fn update(c: &mut Ctx) -> Result {
     attachments::analyze_later(c.app(), pending);
 
     let location = c.url_for(&matchbox_routes::edit_account());
-    c.redirect_to_with(&location, Redirect { notice: Some("✓".into()), ..Redirect::default() })
+    let notice = (!settings_only).then(|| "Changes saved.".into());
+    c.redirect_to_with(&location, Redirect { notice, ..Redirect::default() })
 }
 
 /// `Current.account` where the reference dereferences it (a nil account raises NoMethodError).

@@ -8,46 +8,42 @@
 {% if ctx.can_administer() %}    <div class="flex align-center gap flex-item-justify-end">
       {% filter link_to(h::routes::account_bots(), h::attrs().class("btn").style("view-transition-name: chat-bots")) %}
         {{ h::image_tag(ctx, "bot.svg", h::attrs().aria_hidden().size(20)) }}
-        <span class="for-screen-reader">Set up chat bots</span>
+        <span>Chat bots</span>
 {% endfilter %}
       {% filter link_to(h::routes::edit_account_custom_styles(), h::attrs().class("btn").style("view-transition-name: custom-styles")) %}
         {{ h::image_tag(ctx, "art.svg", h::attrs().size(20).aria_hidden()) }}
-        <span class="for-screen-reader">Custom styles</span>
+        <span>Custom styles</span>
 {% endfilter %}    </div>
 {% endif %}{% endblock %}
-{% block content %}<section class="panel txt-align-center flex flex-column gap" style="view-transition-name: account-settings">
-{% if ctx.can_administer() %}    <div class="align-center center avatar__form gap" data-controller="upload-preview">
-{% let form = h::form_with(self.account_action()).model("account").method("patch").class("txt--medium").data("controller", "form") %}      {% filter form_with(form) %}
-        <label class="btn input--file">
-          {{ h::image_tag(ctx, "camera.svg", h::attrs().aria_hidden().size(20)) }}
-          {{ form.file_field("logo", h::attrs().class("input").accept("image/*").data("action", "upload-preview#previewImage change->form#submit")) }}
-          <span class="for-screen-reader">Upload logo</span>
-        </label>
-{% endfilter %}
+{% block content %}<section class="panel mb-settings-panel flex flex-column gap" style="view-transition-name: account-settings">
+  <header class="mb-page-heading">
+    <h1>Workspace settings</h1>
+    <p>Manage your workspace, invitations, and people.</p>
+  </header>
+{% if ctx.can_administer() %}    <div class="mb-logo-upload" data-controller="upload-preview">
 {% let form = h::form_with(self.account_action()).model("account").method("patch").data("controller", "form") %}      {% filter form_with(form) %}
-        <label class="btn avatar input--file account-logo txt-xx-large">
-          {{ h::image_tag(ctx, ctx.account.logo_url.as_str(), h::attrs().role("presentation").size(48).data("upload_preview_target", "image")) }}
-          {{ form.file_field("logo", h::attrs().class("input").accept("image/*").data("action", "upload-preview#previewImage change->form#submit")) }}
+        <label class="mb-logo-picker" for="{{ form.field_id("logo") }}">
+          {{ h::image_tag(ctx, ctx.account.logo_url.as_str(), h::attrs().class("mb-logo-preview").alt("Workspace logo").size(96).data("upload_preview_target", "image")) }}
+          <span class="mb-logo-camera">{{ h::image_tag(ctx, "camera.svg", h::attrs().class("colorize--black").aria_hidden().size(20)) }}</span>
+          {{ form.file_field("logo", h::attrs().class("mb-logo-input").accept("image/*").data("upload_preview_target", "input").data("action", "upload-preview#previewImage change->form#submit").aria("describedby", "workspace-logo-description")) }}
           <span class="for-screen-reader">Upload logo</span>
         </label>
+        <noscript><button class="btn" type="submit">Save logo</button></noscript>
 {% endfilter %}
-{% if ctx.account.has_logo %}        {% filter button_to(ctx.account.logo_url.as_str(), h::attrs().method("delete").class("btn btn--negative txt-small avatar__delete-btn")) %}
-          {{ h::image_tag(ctx, "minus.svg", h::attrs().aria_hidden().size(20)) }}
-          <span class="for-screen-reader">Delete logo</span>
+      <p id="workspace-logo-description" class="txt-small txt-subtle margin-none">Choose a workspace logo</p>
+{% if ctx.account.has_logo %}        {% filter button_to(ctx.account.logo_url.as_str(), h::attrs().method("delete").class("btn txt-small mb-logo-remove")) %}
+          Remove logo
 {% endfilter %}{% endif %}    </div>
 
 {% let form = h::form_with(self.account_action()).model("account").method("patch").data("controller", "form").class("flex flex-column gap") %}    {% filter form_with(form) %}
-      <div class="flex align-center gap">
-        {{ h::translation_button(ctx, "account_name") }}
-
-        <label class="flex align-center gap flex-item-grow">
-          {{ form.text_field("name", Some(ctx.account.name.as_str()), h::attrs().class("input txt-large").autocomplete("off").placeholder("Name this account").autofocus().data("action", "keydown.enter->form#submit")) }}
-        </label>
-
-        {% filter button(h::attrs().class("btn btn--reversed center").type_("submit")) %}
-          {{ h::image_tag(ctx, "check.svg", h::attrs().aria_hidden().size(20)) }}
-          <span class="for-screen-reader">Save changes</span>
-{% endfilter %}      </div>
+      <div class="mb-field">
+        <div class="mb-field-label">
+          <label for="{{ form.field_id("name") }}">Workspace name</label>
+          {{ h::translation_button(ctx, "account_name") }}
+        </div>
+        {{ form.text_field("name", Some(ctx.account.name.as_str()), h::attrs().class("input").autocomplete("off").placeholder("Name this account").autofocus().data("action", "keydown.enter->form#submit")) }}
+      </div>
+      <button type="submit" class="btn btn--reversed mb-primary-button">Save changes</button>
 {% endfilter %}
     <div class="margin-block-start pad-block pad-inline-double fill-shade border-radius">
 {% let form = h::form_with(self.account_action()).model("account").method("put").data("controller", "form").class("flex align-center gap center") %}      {% filter form_with(form) %}
@@ -86,13 +82,14 @@
     </div>
     <!-- /Matchbox localization setting -->
 {% else %}    {{ h::account_logo_tag(ctx, Some("txt-xx-large center")) }}
-    <h1 class="flex-item-grow txt-x-large">{{ ctx.account.name }}</h1>
+    <h2 class="flex-item-grow txt-x-large">{{ ctx.account.name }}</h2>
 {% endif %}
   <div class="margin-block pad-inline pad-block-start fill-shade border-radius">
     {% include "accounts/_invite.html" %}
 
     <hr class="margin-block separator full-width" style="--border-style: solid">
 
+    <h2 class="mb-section-title">People</h2>
     <menu class="flex flex-column gap margin-none pad">
       <turbo-frame id="account_users">
         {% for user in administrators %}{% include "accounts/users/_user.html" %}{% endfor %}

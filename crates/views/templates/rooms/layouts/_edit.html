@@ -9,12 +9,16 @@
 {%- endblock %}
 
 {%- block content %}
-<section class="panel txt-align-center" style="view-transition-name: edit-room-{{ self.room_id() }}">
+<section class="panel mb-settings-panel" style="view-transition-name: edit-room-{{ self.room_id() }}">
+  <header class="mb-page-heading">
+    <h1>Channel settings</h1>
+    <p>Manage the channel name, access, and members.</p>
+  </header>
   {% block room_form %}{% endblock %}
 </section>
 
 {%- if form.can_administer %}
-  <section class="panel txt-align-center">
+  <section class="panel mb-settings-panel">
     {{ crate::rooms::button_to_delete_room(ctx, self.room_id(), form.room.display_name()) }}
   </section>
 {%- endif %}

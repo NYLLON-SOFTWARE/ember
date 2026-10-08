@@ -1,21 +1,17 @@
-{#- reference/app/views/rooms/show/_nav.html.erb (content_for :nav) -#}
-  {%- if ctx.account.has_logo %}
-  {{ h::account_logo_tag(ctx, None) }}
-  {%- endif %}
-
-  <span class="btn btn--reversed btn--faux room--current">
-    <h1 class="room__contents txt-medium overflow-ellipsis">
-      {%- if room.is_direct() %}
-        <span class="for-screen-reader">Ping with</span>
-      {%- endif %}
-
-      {{ room.display_name }}
+  <div class="mb-room-heading">
+    <span class="mb-room-symbol" aria-hidden="true"{% if !room.is_direct() %} data-channel-icon="{{ h::channel_icon_name(room.icon.as_deref()) }}" data-channel-icon-room-id="{{ room.id }}"{% endif %}>{% if room.is_direct() %}{{ h::image_tag(ctx, "messages-outlined.svg", h::attrs().size(20).aria_hidden().class("colorize--black")) }}{% else %}{{ h::channel_icon(room.icon.as_deref()) }}{% endif %}</span>
+    <h1 class="room__contents overflow-ellipsis">
+      {% if room.is_direct() %}<span class="for-screen-reader">Direct message with </span>{% endif %}{{ room.display_name }}
     </h1>
-</span>
-
-  <a class="btn" style="view-transition-name: edit-room-{{ room.id }}" data-room-id="{{ room.id }}" href="{{ room.edit_path() }}">
-    <img aria-hidden="true" src="{{ ctx.asset("menu-dots-horizontal.svg") }}" width="20" height="20" />
-    <span class="for-screen-reader">Settings for this {{ room.noun() }}</span>
-</a>
-
-  {% include "rooms/involvements/_bell.html" %}
+  </div>
+  <div class="mb-room-actions">
+    <a class="btn" href="{{ h::routes::searches() }}" title="Search messages">
+      <img aria-hidden="true" class="colorize--black" src="{{ ctx.asset("search.svg") }}" width="20" height="20" />
+      <span class="for-screen-reader">Search messages</span>
+    </a>
+    {% include "rooms/involvements/_bell.html" %}
+    <a class="btn" style="view-transition-name: edit-room-{{ room.id }}" data-room-id="{{ room.id }}" href="{{ room.edit_path() }}" title="Conversation settings">
+      <img aria-hidden="true" class="colorize--black" src="{{ ctx.asset("menu-dots-horizontal.svg") }}" width="20" height="20" />
+      <span class="for-screen-reader">Settings for this {{ room.noun() }}</span>
+    </a>
+  </div>

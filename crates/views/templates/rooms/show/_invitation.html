@@ -1,18 +1,37 @@
-{#- reference/app/views/rooms/show/_invitation.html.erb, shown when the caller decided it applies -#}
-  <div id="system_welcome" class="message message--formatted txt-align-center center">
-    <div class="message__body center">
-      <div class="message__body-content position-relative">
-        {{ h::account_logo_tag(ctx, Some("center margin-block-end txt-large")) }}
-        <div class="flex align-center gap">
-          <div class="system-welcome--translation">
-            {{ h::translation_button(ctx, "invite_message") }}
-          </div>
-          <p>
-            <strong>Welcome to Matchbox</strong><br>
-            To invite people to chat, share the join link below.
-          </p>
-        </div>
-        {% include "accounts/_invite.html" %}
+{% import "components/icons.html" as icons %}
+  <div id="system_welcome" class="mb-welcome-card">
+    <div class="mb-welcome-heading">
+{% if ctx.account.has_logo %}
+      {{ h::account_logo_tag(ctx, Some("mb-welcome-logo")) }}
+{% else %}
+      <span class="mb-welcome-logo mb-brand-mark">{% call icons::icon("flame") %}</span>
+{% endif %}
+      <div>
+        <h2>Welcome to Matchbox</h2>
+        <p>To invite people to chat, share the join link below.</p>
+      </div>
+      {{ h::translation_button(ctx, "invite_message") }}
+    </div>
+    <div class="mb-invite-controls">
+{% let url = ctx.url(h::routes::join(join_code).as_str()) %}
+      <label class="mb-invite-url">
+        <span id="invite_label" class="for-screen-reader">Share to invite more people</span>
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 .5l3-3a5 5 0 0 0-7-7l-2 2M14 11a5 5 0 0 0-7-.5l-3 3a5 5 0 0 0 7 7l2-2"/></svg>
+        <input type="text" id="invite_url" value="{{ url }}" aria-labelledby="invite_label" readonly>
+      </label>
+      <div class="mb-invite-actions">
+        {% filter link_to_zoom_qr_code(url) %}
+          <span class="for-screen-reader">Show join link QR code</span>
+          {{ h::image_tag(ctx, "qr-code.svg", h::attrs().aria_hidden().size(20).class("colorize--black")) }}
+        {% endfilter %}
+        {% filter button_to_copy_to_clipboard(url) %}
+          <span class="for-screen-reader">Copy join link</span>
+          {{ h::image_tag(ctx, "copy-paste.svg", h::attrs().aria_hidden().size(20).class("colorize--black")) }}
+        {% endfilter %}
+        {% filter web_share_session_button(url, "Link to join Matchbox", "Hit this link to join me in Matchbox and start chatting.") %}
+          <span class="for-screen-reader">Share join link</span>
+          {{ h::image_tag(ctx, "share.svg", h::attrs().aria_hidden().size(20).class("colorize--black")) }}
+        {% endfilter %}
       </div>
     </div>
   </div>

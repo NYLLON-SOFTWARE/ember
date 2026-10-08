@@ -5,8 +5,8 @@
     {{ h::link_back_to(ctx, h::routes::account_bots()) }}
   </div>
 {% endblock %}
-{% block content %}<section class="panel">
-{% let form = h::form_with(h::routes::account_bots()).model("user").class("flex flex-column gap") %}  {% filter form_with(form) %}
+{% block content %}<section class="panel mb-settings-panel">
+{% let form = h::form_with(h::routes::account_bots()).model("user").class("mb-auth-form") %}  {% filter form_with(form) %}
     {% include "accounts/bots/_form.html" %}
 {% endfilter %}</section>
 {% endblock %}

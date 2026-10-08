@@ -42,8 +42,24 @@ pub fn attachment_presentation(ctx: &ViewContext, attachment: &AttachmentView) -
     match &attachment.preview {
         AttachmentPreview::Video { poster_url } => video_preview(attachment, poster_url),
         AttachmentPreview::Image { thumb_url } => lightboxed_image_preview(attachment, thumb_url),
+        AttachmentPreview::Svg => svg_preview(ctx, attachment),
         AttachmentPreview::File => file_link(ctx, attachment),
     }
+}
+
+fn svg_preview(ctx: &ViewContext, attachment: &AttachmentView) -> String {
+    // Keep the original download link usable without JavaScript or if image decoding fails.
+    // Uploaded SVG markup is never interpolated into the application document.
+    format!(
+        concat!(
+            r#"<div class="mb-svg-attachment" data-controller="svg-preview" data-svg-preview-url-value="{}">"#,
+            r#"<img class="message__attachment" data-svg-preview-target="image" alt="{}" hidden />"#,
+            r#"{}</div>"#
+        ),
+        escape(&attachment.download_path),
+        escape(&attachment.filename),
+        file_link(ctx, attachment),
+    )
 }
 
 fn video_preview(attachment: &AttachmentView, poster_url: &str) -> String {
