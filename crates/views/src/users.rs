@@ -241,25 +241,17 @@ impl SidebarDirect {
     fn class_names(&self) -> &'static str {
         if self.unread { "direct unread" } else { "direct" }
     }
-
-    /// `members.map { |m| m.name.split(' ')[0, 3].map { |s| s[0].capitalize }.join }.to_sentence(two_words_connector: '+')`.
-    fn member_initials(&self) -> String {
-        let initials: Vec<String> = self
-            .members
-            .iter()
-            .map(|member| member.name_parts().take(3).map(|part| h::capitalize(&part.chars().take(1).collect::<String>())).collect())
-            .collect();
-        h::to_sentence(&initials, "+")
-    }
 }
 
 /// A shared room in the sidebar (`users/sidebars/rooms/_shared`).
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Deserialize)]
 pub struct SidebarRoom {
     pub id: i64,
     /// "rooms_open" or "rooms_closed".
     pub param_key: String,
     pub name: String,
+    #[serde(default)]
+    pub icon: Option<String>,
     pub unread: bool,
 }
 
@@ -284,6 +276,8 @@ pub struct SidebarShow<'a> {
     pub other_memberships: Vec<SidebarRoom>,
     /// `Current.user.administrator? || !Current.account.settings.restrict_room_creation_to_administrators?`.
     pub can_create_rooms: bool,
+    /// JSON array of shared room IDs in the current user's custom ordering (empty: alphabetic).
+    pub channel_order: String,
 }
 
 impl Page for SidebarShow<'_> {}

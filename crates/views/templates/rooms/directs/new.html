@@ -4,11 +4,14 @@
 {%- block content %}
 <turbo-frame id="direct_rooms_control" target="_top">
   <div class="directs directs--new flex flex-column gap">
-    <form class="flex gap flex-item-grow" data-controller="form" data-action="keydown.esc-&gt;form#cancel" action="{{ h::routes::rooms_directs() }}" accept-charset="UTF-8" method="post">
+    <header class="mb-page-heading"><h1>New direct message</h1></header>
+    <form class="mb-auth-form" data-controller="form" data-action="keydown.esc-&gt;form#cancel" action="{{ h::routes::rooms_directs() }}" accept-charset="UTF-8" method="post">
       <a class="btn flex-item-no-shrink" data-turbo-frame="user_sidebar" data-form-target="cancel" href="{{ h::routes::user_sidebar() }}">
         <img aria-hidden="true" src="{{ ctx.asset("arrow-left.svg") }}" />
         <span class="for-screen-reader">Cancel changes</span>
 </a>
+      <div class="mb-field">
+        <label class="mb-field-label" for="rooms_direct_user_ids_input">To</label>
       <section class="autocomplete__container unpad input input--actor">
         <div class="autocomplete__input input flex flex-wrap position-relative flex-item-grow"
             data-controller="autocomplete" data-autocomplete-url-value="{{ h::routes::autocompletable_users() }}">
@@ -19,12 +22,11 @@
           <input autocomplete="off" autocorrect="off" data-1p-ignore="true" class="autocomplete__input input flex flex-wrap position-relative" data-autocomplete-target="input" data-action="input-&gt;autocomplete#search keydown-&gt;autocomplete#didPressKey" type="text" name="rooms_direct[user_ids_input]" id="rooms_direct_user_ids_input" />
         </div>
       </section>
+      </div>
 
-      <button name="button" type="submit" class="btn btn--reversed flex-item-no-shrink">
-        <img aria-hidden="true" src="{{ ctx.asset("check.svg") }}" />
-        <span class="for-screen-reader">Start Ping</span>
+      <button name="button" type="submit" class="btn btn--reversed mb-primary-button">Start Ping
 </button></form>
-    <span class="txt-small translucent pad-inline-half center">Type names to ping someone…</span>
+    <span class="txt-small translucent pad-inline-half center">Search for people to start a conversation.</span>
   </div>
 </turbo-frame>
 {%- endblock %}

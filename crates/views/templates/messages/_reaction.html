@@ -1,0 +1,7 @@
+<form data-turbo-frame="{{ message.dom_id("boosting") }}" data-action="submit->message-actions#close" action="{{ message.boosts_path() }}" accept-charset="UTF-8" method="post">
+  <input type="hidden" name="boost[content]" value="{{ character }}" />
+  <button name="button" type="submit" title="{{ title }}" class="btn message__action-btn" data-emoji="{{ character }}">
+    <span class="boost-character" aria-hidden="true">{{ character }}</span>
+    <span class="for-screen-reader">{{ title }}</span>
+  </button>
+</form>

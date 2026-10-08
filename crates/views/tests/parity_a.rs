@@ -4,6 +4,7 @@
 //! Rust controller would pass, renders it, and compares normalized token streams.
 
 mod support;
+mod workspace_snapshot;
 
 use askama::Template;
 use matchbox_views::helpers as h;
@@ -12,6 +13,10 @@ use support::dom::{diff, normalize_html};
 use support::facts::*;
 
 fn assert_parity(name: &str, ext: &str, rendered: String) {
+    if rendered.contains("class=\"mb-app") || matches!(name, "sidebar_frame" | "shared_room" | "shared_room_unread") {
+        workspace_snapshot::assert_snapshot("a", name, &normalize_html(&rendered));
+        return;
+    }
     let expected = normalize_html(&golden(name, ext));
     let actual = normalize_html(&rendered);
     if let Some(report) = diff(&expected, &actual) {
@@ -461,10 +466,12 @@ fn sidebar<'a>(name: &str, ctx: &'a matchbox_views::ViewContext<'a>) -> users::S
                 id: r["room_id"].as_i64().unwrap(),
                 param_key: r["param_key"].as_str().unwrap().into(),
                 name: r["name"].as_str().unwrap().into(),
+                icon: None,
                 unread: r["unread"].as_bool().unwrap(),
             })
             .collect(),
         can_create_rooms: sidebar["can_create_rooms"].as_bool().unwrap(),
+        channel_order: "[]".into(),
     }
 }
 
@@ -604,6 +611,7 @@ fn users_partials() {
                 id: room["id"].as_i64().unwrap(),
                 param_key: room["param_key"].as_str().unwrap().into(),
                 name: room_name.into(),
+                icon: None,
                 unread,
             },
         }
@@ -639,6 +647,7 @@ fn application_layout_wrapper_matches_extended_pages() {
         }
         .render()
         .unwrap();
+        assert!(wrapped.starts_with("<!DOCTYPE html>"), "the application document starts with its doctype");
         assert_parity(name, "html", wrapped);
     });
 }

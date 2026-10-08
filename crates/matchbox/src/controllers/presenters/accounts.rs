@@ -8,7 +8,9 @@
 #[cfg(test)]
 mod tests;
 
-use matchbox_db::{Account, CachedStatements, Connection, Membership, PushSubscription, Room, RoomType, User, placeholders, query_all};
+use matchbox_db::{
+    Account, AccountSettings, CachedStatements, Connection, Membership, PushSubscription, Room, RoomType, User, placeholders, query_all,
+};
 use matchbox_kit::Ctx;
 use matchbox_views::Platform;
 use matchbox_views::accounts::{Bot, BotForm, BotRoom, HelpContact};
@@ -136,7 +138,7 @@ pub struct Sidebar {
 }
 
 /// Users::SidebarsController#show.
-pub fn sidebar(conn: &Connection, secrets: &Secrets, user: &User) -> matchbox_db::Result<Sidebar> {
+pub fn sidebar(conn: &Connection, secrets: &Secrets, user: &User, settings: Option<&AccountSettings>) -> matchbox_db::Result<Sidebar> {
     let all_memberships = Membership::visible_with_ordered_room(conn, user.id)?;
 
     // `select { direct }.sort_by { |m| m.room.updated_at }.reverse`
@@ -161,6 +163,7 @@ pub fn sidebar(conn: &Connection, secrets: &Secrets, user: &User) -> matchbox_db
             id: room.id,
             param_key: room_param_key(room.room_type).to_string(),
             name: room.name.clone().unwrap_or_default(),
+            icon: settings.and_then(|settings| settings.channel_icon(room.id)).map(str::to_owned),
             unread: membership.unread(),
         })
         .collect();

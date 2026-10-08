@@ -1,37 +1,37 @@
 {% extends "layouts/application.html" %}
+{% import "components/icons.html" as icons %}
 
 {% block head %}{{ h::turbo_page_requires_reload_tag() }}{% endblock %}
 
-{% block content %}<section class="txt-align-center">
-  <div class="panel {% if ctx.flash_alert.is_some() %}shake{% endif %}">
-    {{ h::account_logo_tag(ctx, Some("center margin-block-end txt-xx-large")) }}
-
-{% let form = h::form_with(ctx.url(h::routes::session().as_str())).class("flex flex-column gap") %}    {% filter form_with(form) %}
-      <fieldset class="flex flex-column gap center-block upad">
-        <legend class="txt-large txt-align-center"><strong>{{ ctx.account.name }}</strong></legend>
-
-        <div class="flex align-center gap">
+{% block content %}
+<section class="mb-auth-page">
+  <div class="panel mb-auth-card {% if ctx.flash_alert.is_some() %}shake{% endif %}">
+    <header class="mb-auth-heading">
+{% if ctx.account.has_logo %}{{ h::account_logo_tag(ctx, Some("mb-auth-logo")) }}{% else %}
+      <span class="mb-brand-mark">{% call icons::icon("flame") %}</span>
+{% endif %}
+      <h1>Sign in to {{ ctx.account.name }}</h1>
+      <p>Welcome back. Pick up the conversation.</p>
+    </header>
+{% let form = h::form_with(ctx.url(h::routes::session().as_str())).class("mb-auth-form") %}
+    {% filter form_with(form) %}
+      <div class="mb-field">
+        <div class="mb-field-label">
+          <label for="{{ form.field_id("email_address") }}">Email address</label>
           {{ h::translation_button(ctx, "email_address") }}
-          <label class="flex align-center gap input input--actor txt-large">
-            {{ form.email_field("email_address", None, h::attrs().required(true).class("input").autofocus().autocomplete("username").placeholder("Enter your email address").attr_opt("value", email_address.as_deref())) }}
-            {{ h::image_tag(ctx, "email.svg", h::attrs().aria_hidden().size(24).class("colorize--black")) }}
-          </label>
         </div>
-
-        <div class="flex align-center gap">
+        {{ form.email_field("email_address", None, h::attrs().required(true).class("input").autofocus().autocomplete("username").placeholder("Enter your email address").attr_opt("value", email_address.as_deref())) }}
+      </div>
+      <div class="mb-field">
+        <div class="mb-field-label">
+          <label for="{{ form.field_id("password") }}">Password</label>
           {{ h::translation_button(ctx, "password") }}
-          <label class="flex align-center gap input input--actor txt-large">
-            {{ form.password_field("password", h::attrs().required(true).class("input").autocomplete("current-password").placeholder("Enter your password").maxlength(72)) }}
-            {{ h::image_tag(ctx, "password.svg", h::attrs().aria_hidden().size(24).class("colorize--black")) }}
-          </label>
         </div>
-
-        {% filter button(h::attrs().class("btn btn--reversed center txt-large").type_("submit").name("log_in")) %}
-          {{ h::image_tag(ctx, "arrow-right.svg", h::attrs().aria_hidden()) }}
-          <span class="for-screen-reader">Go</span>
-{% endfilter %}      </fieldset>
-{% endfilter %}  </div>
-
+        {{ form.password_field("password", h::attrs().required(true).class("input").autocomplete("current-password").placeholder("Enter your password").maxlength(72)) }}
+      </div>
+      <button type="submit" name="log_in" class="btn btn--reversed mb-primary-button">Sign in</button>
+    {% endfilter %}
+  </div>
   {% include "accounts/_help_contact.html" %}
 </section>
 {% endblock %}

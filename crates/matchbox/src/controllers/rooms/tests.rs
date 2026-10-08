@@ -5,6 +5,30 @@ use matchbox_db::{Membership, Room, RoomType};
 
 use crate::controllers::presenters::test_support::*;
 
+#[test]
+fn channel_icon_parameters_accept_only_canonical_catalog_names() {
+    use super::parse_room_icon;
+    use matchbox_kit::Param;
+
+    assert_eq!(parse_room_icon(None).unwrap(), None, "omitting the icon preserves it");
+    assert_eq!(parse_room_icon(Some(&Param::from(""))).unwrap(), Some(None), "blank restores the default");
+    for name in ["coffee", "rocket", "star", "hash"] {
+        assert_eq!(parse_room_icon(Some(&Param::from(name))).unwrap(), Some(Some(name.into())));
+    }
+    for value in [
+        Param::from("not-a-lucide-icon"),
+        Param::from("../coffee"),
+        Param::from("<svg></svg>"),
+        Param::from(" coffee "),
+        Param::from("Coffee"),
+        Param::Null,
+        Param::Bool(true),
+        Param::Array(vec![]),
+    ] {
+        assert_eq!(parse_room_icon(Some(&value)).unwrap_err().status(), StatusCode::UNPROCESSABLE_ENTITY);
+    }
+}
+
 #[tokio::test]
 async fn show_renders_the_room_and_remembers_it() {
     let Some(app) = TestApp::boot().await else { return };

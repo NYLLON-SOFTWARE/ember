@@ -27,10 +27,45 @@ fn message_partial_is_the_same_on_every_host() {
 }
 
 #[test]
+fn compact_actions_keep_all_reactions_and_existing_message_endpoints() {
+    for name in ["messages_show_text", "messages_show_image"] {
+        let g = golden(name);
+        let message: MessageView = g.input();
+        let html = g.render(|ctx| messages::MessagePartial { ctx, message: &message }.render().unwrap());
+        assert_eq!(html.matches("name=\"boost[content]\"").count(), messages::REACTIONS.len());
+        for (character, _) in messages::REACTIONS {
+            assert!(html.contains(&format!("value=\"{character}\"")));
+        }
+        assert_eq!(html.matches(&format!("action=\"{}\"", message.boosts_path())).count(), messages::REACTIONS.len());
+        assert!(html.contains(&format!("data-turbo-frame=\"{}\"", message.dom_id("new_boost"))));
+        assert!(html.contains(&format!("href=\"{}\"", message.edit_path())));
+        assert!(html.contains(&format!("data-turbo-frame=\"{}\"", message.dom_id("edit"))));
+        assert!(html.contains("lucide-face-slightly-smiling-plus"));
+        assert_eq!(html.contains("data-action=\"reply#reply message-actions#close\""), message.attachment().is_none());
+    }
+}
+
+#[test]
 fn show_image_message() {
     let g = golden("messages_show_image");
     let message: MessageView = g.input();
     g.assert_content(&g.render(|ctx| messages::Show { ctx, message: &message }.render().unwrap()));
+}
+
+#[test]
+fn svg_preview_keeps_download_fallback_and_escapes_metadata() {
+    let g = golden("messages_show_image");
+    let mut message: MessageView = g.input();
+    let messages::MessageContent::Attachment(attachment) = &mut message.content else { panic!("expected attachment fixture") };
+    attachment.preview = messages::AttachmentPreview::Svg;
+    attachment.filename = "drawing\"<script>.svg".into();
+    let rendered = g.render(|ctx| messages::MessagePartial { ctx, message: &message }.render().unwrap());
+    assert!(rendered.contains("data-controller=\"svg-preview\""));
+    assert!(rendered.contains("data-svg-preview-target=\"image\""));
+    assert!(rendered.contains("drawing&quot;&lt;script&gt;.svg"));
+    assert!(rendered.contains("Download drawing&quot;&lt;script&gt;.svg"));
+    assert!(!rendered.contains("<script>"));
+    assert!(!rendered.contains("<object"));
 }
 
 #[test]

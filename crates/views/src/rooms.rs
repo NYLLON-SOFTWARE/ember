@@ -34,6 +34,8 @@ pub struct RoomView {
     pub id: i64,
     pub kind: RoomKind,
     pub name: Option<String>,
+    #[serde(default)]
+    pub icon: Option<String>,
     /// `room_display_name(room)` for `Current.user`.
     pub display_name: String,
 }
@@ -155,6 +157,8 @@ pub struct RefreshShow<'a> {
 pub struct FormRoom {
     pub id: Option<i64>,
     pub name: Option<String>,
+    #[serde(default)]
+    pub icon: Option<String>,
 }
 
 /// `rooms/opens/{new,edit}`.

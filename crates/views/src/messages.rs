@@ -133,6 +133,8 @@ pub enum AttachmentPreview {
     Video { poster_url: String },
     /// Otherwise previewable or variable: `polymorphic_url(attachment.representation(:thumb), only_path: true)`.
     Image { thumb_url: String },
+    /// Matchbox: preview in an isolated image context; the original stays download-only.
+    Svg,
     /// Neither previewable nor variable: a download link.
     File,
 }
@@ -332,7 +334,9 @@ fn message_digest() -> &'static str {
         fragment_cache::digest(&[
             include_str!("../templates/messages/_message.html"),
             include_str!("../templates/messages/_actions.html"),
+            include_str!("../templates/messages/_reaction.html"),
             include_str!("../templates/messages/_presentation.html"),
+            include_str!("messages/presentation.rs"),
             include_str!("../templates/messages/_unrenderable.html"),
             include_str!("../templates/messages/boosts/_boosts.html"),
             include_str!("../templates/messages/boosts/_boost.html"),

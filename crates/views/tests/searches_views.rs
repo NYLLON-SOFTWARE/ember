@@ -10,7 +10,15 @@ use messages_support::golden;
 fn index_with_results() {
     let g = golden("searches_index");
     let index: IndexView = g.input();
-    g.assert_dom(&g.render(|ctx| searches::Index { ctx, index: &index }.render().unwrap()));
+    let html = g.render(|ctx| searches::Index { ctx, index: &index }.render().unwrap());
+    assert!(!index.recent_searches.is_empty());
+    let recents = html.split(r#"aria-label="Recent searches">"#).nth(1).unwrap().split("</div>").next().unwrap();
+    for query in &index.recent_searches {
+        let link = format!("href=\"{}\"", searches::search_path(query));
+        assert_eq!(html.matches(&link).count(), 1);
+        assert!(recents.contains(&link));
+    }
+    g.assert_dom(&html);
 }
 
 #[test]

@@ -11,6 +11,7 @@
 //!   `https://` and the first `TLS_DOMAIN`, or the project's URL without one.
 //! - `DISABLE_SSL`: `config/environments/production.rb` (`assume_ssl`/`force_ssl` unless present).
 //! - `APP_VERSION`, `GIT_REVISION`: `config/initializers/version.rb` (`X-Version`, `X-Rev`).
+//!   Matchbox falls back to the compiled Cargo package version when neither is set.
 //! - `RAILS_ENV`: names the database file (`storage/db/<env>.sqlite3`, `config/database.yml`).
 //! - `RAILS_MAX_THREADS`: `config/database.yml` pool size, used for the number of reader threads,
 //!   each with a reader connection of its own (`matchbox_db::Database`).
@@ -127,7 +128,7 @@ impl Config {
             vapid_private_key: present("VAPID_PRIVATE_KEY"),
             vapid_subject: present("VAPID_SUBJECT").unwrap_or_else(|| default_vapid_subject(present("TLS_DOMAIN"))),
             disable_ssl: present("DISABLE_SSL").is_some(),
-            app_version: present("APP_VERSION").or_else(|| present("GIT_REVISION")).unwrap_or_else(|| "0".into()),
+            app_version: present("APP_VERSION").or_else(|| present("GIT_REVISION")).unwrap_or_else(|| package_version().into()),
             git_revision: get("GIT_REVISION"),
             environment,
             storage,
@@ -138,6 +139,12 @@ impl Config {
                 .saturating_mul(1 << 20),
         })
     }
+}
+
+/// Keep the displayed release in sync with the executable; an editable database value goes stale
+/// after an upgrade. A zero patch version is displayed as `1.0`, while `1.0.1` stays complete.
+fn package_version() -> &'static str {
+    env!("CARGO_PKG_VERSION").strip_suffix(".0").unwrap_or(env!("CARGO_PKG_VERSION"))
 }
 
 /// The install's own HTTPS URL when it has a TLS domain; the project's otherwise.
@@ -173,7 +180,7 @@ mod tests {
     fn production_defaults() {
         let config = config(&[("SECRET_KEY_BASE", "abc")]).unwrap();
         assert!(!config.disable_ssl);
-        assert_eq!(config.app_version, "0");
+        assert_eq!(config.app_version, "1.0");
         assert_eq!(config.git_revision, None);
         assert_eq!(config.storage.database, PathBuf::from("storage/db/production.sqlite3"));
         assert_eq!(config.storage.files, PathBuf::from("storage/files"));
@@ -193,6 +200,14 @@ mod tests {
         let config = config(&[("SECRET_KEY_BASE", "abc"), ("APP_VERSION", ""), ("GIT_REVISION", "abc123")]).unwrap();
         assert_eq!(config.app_version, "abc123");
         assert_eq!(config.git_revision.as_deref(), Some("abc123"));
+    }
+
+    #[test]
+    fn deployment_version_takes_priority_and_preserves_build_identity() {
+        let configured = config(&[("SECRET_KEY_BASE", "abc"), ("APP_VERSION", "1.2.3"), ("GIT_REVISION", "abc123")]).unwrap();
+        assert_eq!(configured.app_version, "1.2.3");
+        assert_eq!(configured.git_revision.as_deref(), Some("abc123"));
+        assert_eq!(config(&[("SECRET_KEY_BASE", "abc"), ("APP_VERSION", " "), ("GIT_REVISION", " ")]).unwrap().app_version, "1.0");
     }
 
     #[test]

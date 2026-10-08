@@ -32,7 +32,21 @@ export default class extends Controller {
   }
 
   loaded() {
-    this.read({ detail: { roomId: Current.room.id } })
+    // Matchbox keeps the conversation list on settings and profile pages too.
+    if (Current.room) this.read({ detail: { roomId: Current.room.id } })
+    for (const room of this.roomTargets) this.#syncChannelIcon(room)
+  }
+
+  roomTargetConnected(room) {
+    this.#syncChannelIcon(room)
+  }
+
+  #syncChannelIcon(room) {
+    const header = document.querySelector("[data-channel-icon-room-id]")
+    const icon = room.querySelector("[data-channel-icon]")
+    if (!icon || header?.dataset.channelIconRoomId !== room.dataset.roomId || header.dataset.channelIcon === icon.dataset.channelIcon) return
+    header.dataset.channelIcon = icon.dataset.channelIcon
+    header.replaceChildren(...[...icon.childNodes].map(node => node.cloneNode(true)))
   }
 
   read({ detail: { roomId } }) {
@@ -94,7 +108,7 @@ export default class extends Controller {
     const unreadRoom = this.#findRoomTarget(roomId)
 
     if (unreadRoom) {
-      if (Current.room.id != roomId) {
+      if (Current.room?.id != roomId) {
         unreadRoom.classList.add(this.unreadClass)
       }
 

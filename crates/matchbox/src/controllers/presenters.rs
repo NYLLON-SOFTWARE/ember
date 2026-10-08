@@ -15,7 +15,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
-use matchbox_db::{Boost, Connection, Membership, Message, RichText, Room, RoomType, User};
+use matchbox_db::{Account, Boost, Connection, Membership, Message, RichText, Room, RoomType, User};
 use matchbox_richtext::Presentation;
 use matchbox_storage::{Storage, Variation};
 use matchbox_views::fragment_cache;
@@ -123,6 +123,7 @@ pub struct Presenter<'a> {
     pub request_host: Option<String>,
     users: RefCell<HashMap<i64, User>>,
     room_names: RefCell<HashMap<i64, (Room, String)>>,
+    channel_icons: RefCell<Option<HashMap<i64, String>>>,
 }
 
 impl<'a> Presenter<'a> {
@@ -136,6 +137,7 @@ impl<'a> Presenter<'a> {
             request_host,
             users: RefCell::default(),
             room_names: RefCell::default(),
+            channel_icons: RefCell::default(),
         }
     }
 
@@ -175,8 +177,17 @@ impl<'a> Presenter<'a> {
             id: room.id,
             kind: room_kind(room.room_type),
             name: room.name.clone(),
+            icon: if room.direct() { None } else { self.channel_icon(room.id)? },
             display_name: self.room_display_name(room, Some(for_user))?,
         })
+    }
+
+    fn channel_icon(&self, room_id: i64) -> Result<Option<String>> {
+        if self.channel_icons.borrow().is_none() {
+            let icons = Account::first(self.conn)?.map(|account| account.settings().channel_icons()).unwrap_or_default();
+            *self.channel_icons.borrow_mut() = Some(icons);
+        }
+        Ok(self.channel_icons.borrow().as_ref().and_then(|icons| icons.get(&room_id)).cloned())
     }
 
     /// `message.room` with `room_display_name(message.room, for_user: nil)`.
@@ -303,7 +314,9 @@ impl<'a> Presenter<'a> {
         let blob = matchbox_storage::Blob::attached(self.conn, "Message", message.id, "attachment").map_err(storage_error)?;
         let Some(blob) = blob else { return Ok(None) };
         let verifier = &self.storage.verifier;
-        let preview = if blob.is_previewable() || blob.is_variable() {
+        let preview = if blob.content_type() == "image/svg+xml" && blob.byte_size <= 5 * 1024 * 1024 {
+            AttachmentPreview::Svg
+        } else if blob.is_previewable() || blob.is_variable() {
             if blob.is_video() {
                 // `attachment.preview(format: :webp, resize_to_limit: [...])`
                 let poster = Variation::new(vec![
@@ -398,13 +411,14 @@ impl<'a> Presenter<'a> {
     }
 
     /// `users/sidebars/rooms/_shared` locals.
-    pub fn sidebar_room(&self, room: &Room) -> matchbox_views::users::SidebarRoom {
-        matchbox_views::users::SidebarRoom {
+    pub fn sidebar_room(&self, room: &Room) -> Result<matchbox_views::users::SidebarRoom> {
+        Ok(matchbox_views::users::SidebarRoom {
             id: room.id,
             param_key: room_kind(room.room_type).param_key().to_string(),
             name: room.name.clone().unwrap_or_default(),
+            icon: self.channel_icon(room.id)?,
             unread: false,
-        }
+        })
     }
 
     /// `users/sidebars/rooms/_direct` locals for `membership`.

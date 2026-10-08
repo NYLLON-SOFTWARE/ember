@@ -1,46 +1,53 @@
-{#- reference/app/views/messages/_actions.html.erb -#}
+{# Matchbox compact actions; retain the reference's boost, reply, file, and edit contracts. #}
 <div class="message__actions" data-controller="soft-keyboard">
-  <details class="position-relative" data-controller="popup" data-action="keydown.esc-&gt;popup#close toggle-&gt;popup#toggle click@document-&gt;popup#closeOnClickOutside" data-popup-orientation-top-class="popup-orientation-top">
-    <summary class="btn message__action-btn message__options-btn">
-      <img class="colorize--black" aria-hidden="true" src="{{ ctx.asset("menu-dots-horizontal.svg") }}" width="20" height="20" />
+  <details class="position-relative mb-message-actions" data-controller="message-actions" data-action="toggle->message-actions#toggle">
+    <summary class="btn message__action-btn message__options-btn" data-message-actions-target="trigger" aria-controls="{{ message.dom_id("actions") }}">
+      {{ crate::helpers::lucide_icon("ellipsis") }}
       <span class="for-screen-reader">Message options</span>
     </summary>
 
-    <div class="message__actions-menu border shadow" data-popup-target="menu">
-      <div class="quick-boosts">
-        {%- for (character, title) in crate::messages::REACTIONS %}
-          <form data-turbo-frame="{{ message.dom_id("boosting") }}" data-action="popup#close" action="{{ message.boosts_path() }}" accept-charset="UTF-8" method="post">
-            <input type="hidden" name="boost[content]" id="boost_content" value="{{ character }}" />
-            <button name="button" type="submit" title="{{ title }}" class="btn message__action-btn" data-emoji="{{ character }}">
-              <figure class="margin-none boost-character">{{ character }}</figure>
-              <span class="for-screen-reader">{{ title }}</span>
-</button></form>
-        {%- endfor %}
-
-        <a class="btn message__action-btn message__boost-btn" data-turbo-frame="{{ message.dom_id("new_boost") }}" data-action="soft-keyboard#open popup#close" href="{{ message.new_boost_path() }}">
-          <img class="colorize--black" aria-hidden="true" src="{{ ctx.asset("boost.svg") }}" width="20" height="20" />
-          <span class="for-screen-reader">New boost</span>
-</a>      </div>
-
-      <div class="flex flex-wrap border-top margin-block-start-half pad-block-start-half message__actions-grid">
-        {%- if let Some(attachment) = message.attachment() %}
-          <a class="btn message__action-btn center full-width hide-in-ios-pwa" title="Download" aria-label="Download" href="{{ attachment.download_path }}">
-            <img class="colorize--black" aria-hidden="true" src="{{ ctx.asset("download.svg") }}" width="20" height="20" />
-</a>
-          <button class="btn message__action-btn center full-width" data-controller="web-share" data-action="web-share#share" data-web-share-files-value="{{ attachment.blob_path }}" data-web-share-title-value="{{ attachment.filename }}" title="Share" aria-label="Share">
-            <img class="colorize--black" aria-hidden="true" src="{{ ctx.asset("share.svg") }}" width="20" height="20" />
-</button>
-        {%- else %}
-          <button class="btn message__action-btn center full-width" data-action="reply#reply" title="Reply" aria-label="Reply">
-            <img class="colorize--black" aria-hidden="true" src="{{ ctx.asset("reply.svg") }}" width="20" height="20" />
-</button>
-        {%- endif %}
-
-        <button class="btn message__action-btn center full-width" title="Copy link" aria-label="Copy link" data-controller="copy-to-clipboard" data-action="copy-to-clipboard#copy" data-copy-to-clipboard-success-class="btn--success" data-copy-to-clipboard-url-value="{{ message.at_path() }}">
-          <img class="colorize--black" aria-hidden="true" src="{{ ctx.asset("link.svg") }}" width="20" height="20" />
-</button>
-        <a class="btn message__action-btn center full-width message__edit-btn" data-turbo-frame="{{ message.dom_id("edit") }}" title="Edit" aria-label="Edit" href="{{ message.edit_path() }}">
-          <img class="colorize--black" aria-hidden="true" src="{{ ctx.asset("pencil.svg") }}" width="20" height="20" />
-</a>      </div>
+    <div id="{{ message.dom_id("actions") }}" class="message__actions-menu mb-message-actions-menu" data-message-actions-target="menu" role="group" aria-label="Message actions">
+      <div class="mb-message-action-bar">
+        <div class="quick-boosts" role="group" aria-label="Quick reactions">
+          {% for (character, title) in crate::messages::REACTIONS %}
+            {% if loop.index0 < 3 %}{% include "messages/_reaction.html" %}{% endif %}
+          {% endfor %}
+        </div>
+        <span class="mb-message-action-divider" aria-hidden="true"></span>
+        {% if let Some(attachment) = message.attachment() %}
+          <a class="btn message__action-btn hide-in-ios-pwa" title="Download" aria-label="Download" href="{{ attachment.download_path }}">
+            {{ crate::helpers::lucide_icon("download") }}
+          </a>
+          <button type="button" class="btn message__action-btn" data-controller="web-share" data-action="web-share#share" data-web-share-files-value="{{ attachment.blob_path }}" data-web-share-title-value="{{ attachment.filename }}" title="Share" aria-label="Share">
+            {{ crate::helpers::lucide_icon("share") }}
+          </button>
+        {% else %}
+          <button type="button" class="btn message__action-btn" data-action="reply#reply message-actions#close" title="Reply" aria-label="Reply">
+            {{ crate::helpers::lucide_icon("reply") }}
+          </button>
+        {% endif %}
+        <button type="button" class="btn message__action-btn" title="Copy link" aria-label="Copy link" data-controller="copy-to-clipboard" data-action="copy-to-clipboard#copy" data-copy-to-clipboard-success-class="btn--success" data-copy-to-clipboard-url-value="{{ message.at_path() }}">
+          {{ crate::helpers::lucide_icon("link") }}
+        </button>
+        <a class="btn message__action-btn message__edit-btn" data-turbo-frame="{{ message.dom_id("edit") }}" data-action="message-actions#close" title="Edit" aria-label="Edit" href="{{ message.edit_path() }}">
+          {{ crate::helpers::lucide_icon("pencil") }}
+        </a>
+        <button type="button" class="btn message__action-btn mb-message-more" data-message-actions-target="more" data-action="message-actions#more" title="More reactions" aria-label="More reactions" aria-expanded="false" aria-controls="{{ message.dom_id("reaction_choices") }}" hidden>
+          {{ crate::helpers::lucide_icon("face-slightly-smiling-plus") }}
+        </button>
+      </div>
+      <div id="{{ message.dom_id("reaction_choices") }}" class="mb-message-reaction-tray" data-message-actions-target="tray" role="group" aria-label="More reactions">
+        <span class="mb-message-reaction-label">More reactions</span>
+        <div class="quick-boosts">
+          {% for (character, title) in crate::messages::REACTIONS %}
+            {% if loop.index0 >= 3 %}{% include "messages/_reaction.html" %}{% endif %}
+          {% endfor %}
+          <a class="btn message__action-btn message__boost-btn" data-turbo-frame="{{ message.dom_id("new_boost") }}" data-action="soft-keyboard#open message-actions#close" title="New boost" href="{{ message.new_boost_path() }}">
+            {{ crate::helpers::lucide_icon("message-circle-plus") }}
+            <span class="for-screen-reader">New boost</span>
+          </a>
+        </div>
+      </div>
     </div>
-</details></div>
+  </details>
+</div>

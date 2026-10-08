@@ -4,51 +4,61 @@
   {{ h::turbo_stream_from(rooms_stream.as_str()) }}
   {{ h::turbo_stream_from(user_rooms_stream.as_str()) }}
 
-  <div class="sidebar__container overflow-y overflow-hide-scrollbar"
+  <div class="sidebar__container mb-conversations"
       data-controller="badge-dot"
       data-badge-dot-unread-class="unread"
       data-action="rooms-list:unread@window->badge-dot#update rooms-list:read@window->badge-dot#update turbo:submit-start->turbo-frame#unpermanize">
-    <turbo-frame id="direct_rooms_control" target="_top">
-      <div class="directs gap overflow-x overflow-hide-scrollbar">
-        {% filter link_to(h::routes::new_rooms_direct(), h::attrs().class("direct direct__new").data("turbo_frame", "_self")) %}
-          <span class="avatar avatar--icon">
-            {{ h::image_tag(ctx, "messages-add.svg", h::attrs().size(20).aria_hidden().class("colorize--black")) }}
-          </span>
+    <h2 class="mb-workspace-title">{{ ctx.account.name }}</h2>
 
-          <span class="direct__author flex max-width min-width border-radius pad-inline-half">
-            <span class="for-screen-reader">New</span>
-            <span class="txt-small overflow-clip">Ping</span>
-          </span>
-{% endfilter %}
-        <div id="direct_rooms" contents data-controller="sorted-list" data-action="rooms-list:unread@window->sorted-list#updateItem">
-          {% for membership in direct_memberships %}{{ crate::users::cached_direct_room(ctx, membership) }}{% endfor %}        </div>
+    <label class="mb-conversation-search">
+      {{ h::image_tag(ctx, "search.svg", h::attrs().size(18).aria_hidden().class("colorize--black")) }}
+      <span class="for-screen-reader">Find a conversation</span>
+      <input type="search" placeholder="Find a conversation" autocomplete="off" data-matchbox-room-filter>
+    </label>
 
-        <div contents>
-          {% for user in direct_placeholder_users %}{% include "users/sidebars/rooms/_direct_placeholder.html" %}{% endfor %}        </div>
+    <section id="sidebar_channels" class="mb-sidebar-section" aria-labelledby="channels-heading"
+        data-controller="channel-order" data-channel-order-order-value="{{ channel_order }}"
+        data-channel-order-url-value="{{ h::routes::user_sidebar_order() }}">
+      <div class="mb-sidebar-section-heading">
+        <h3 id="channels-heading">Channels</h3>
+        <button type="button" class="btn mb-sidebar-action mb-channel-order-reset" hidden
+            data-channel-order-target="reset" data-action="channel-order#reset"
+            aria-label="Reset channels to alphabetical order" title="Reset to alphabetical order">A–Z</button>
+{% if can_create_rooms %}
+        {% filter link_to(h::routes::new_rooms_open(), h::attrs().class("btn mb-sidebar-action").aria("label", "New Chat Room").title("New channel")) %}
+          {{ h::image_tag(ctx, "add.svg", h::attrs().size(18).aria_hidden().class("colorize--black")) }}
+        {% endfilter %}
+{% endif %}
       </div>
-    </turbo-frame>
+      <p id="channel-order-help" class="for-screen-reader">Hold a channel to drag it, or press Alt and the up or down arrow to reorder it.</p>
+      <div id="shared_rooms" class="rooms mb-room-list" data-channel-order-target="list">
+{% for room in other_memberships %}
+        {% include "users/sidebars/rooms/_shared.html" %}
+{% endfor %}
+      </div>
+      <p class="mb-channel-order-status" data-channel-order-target="status" role="status" aria-live="polite" hidden></p>
+    </section>
 
-    <div class="rooms position-relative flex flex-column gap">
-      <div id="shared_rooms" contents data-controller="sorted-list">
-{% for room in other_memberships %}          {% include "users/sidebars/rooms/_shared.html" %}{% endfor %}      </div>
-
-{% if can_create_rooms %}        {% filter link_to(h::routes::new_rooms_open(), h::attrs().class("rooms__new-btn btn room align-center gap txt-reversed").aria("label", "New Chat Room")) %}
-          {{ h::image_tag(ctx, "add.svg", h::attrs().size(20).aria_hidden().style("view-transition-name: new-room")) }}
-{% endfilter %}{% endif %}    </div>
-
-    <button class="btn sidebar__toggle" data-action="toggle-class#toggle">
-      {{ h::image_tag(ctx, "menu.svg", h::attrs().size(20).aria_hidden()) }}
-      <span class="for-screen-reader">Open menu</span>
-    </button>
+    <section class="mb-sidebar-section" aria-labelledby="directs-heading">
+      <div class="mb-sidebar-section-heading">
+        <h3 id="directs-heading">Direct messages</h3>
+        {% filter link_to(h::routes::new_rooms_direct(), h::attrs().class("btn mb-sidebar-action").data("turbo_frame", "direct_rooms_control").aria("label", "New direct message").title("New direct message")) %}
+          {{ h::image_tag(ctx, "messages-add.svg", h::attrs().size(18).aria_hidden().class("colorize--black")) }}
+        {% endfilter %}
+      </div>
+      <turbo-frame id="direct_rooms_control" target="_top">
+        <div class="directs mb-direct-list">
+          <div id="direct_rooms" contents data-controller="sorted-list" data-action="rooms-list:unread@window->sorted-list#updateItem">
+{% for membership in direct_memberships %}{{ crate::users::cached_direct_room(ctx, membership) }}{% endfor %}
+          </div>
+          <div contents>
+{% for user in direct_placeholder_users %}
+            {% include "users/sidebars/rooms/_direct_placeholder.html" %}
+{% endfor %}
+          </div>
+        </div>
+      </turbo-frame>
+    </section>
+    <p class="mb-sidebar-empty" data-matchbox-room-empty hidden>No conversations found.</p>
   </div>
-
-  <div class="flex align-end sidebar__tools gap justify-end">
-    {% filter link_to(h::routes::user_profile(), h::attrs().class("btn avatar flex-item-no-shrink sidebar__tool")) %}
-      {{ h::image_tag(ctx, current_user.avatar_path.as_str(), h::attrs().size(48).aria_hidden().style("view-transition-name: avatar-" ~ current_user.id)) }}
-      <span class="for-screen-reader">My Settings</span>
-{% endfilter %}
-    {% filter link_to(h::routes::edit_account(), h::attrs().class("btn align-center gap txt-reversed sidebar__tool")) %}
-      {{ h::image_tag(ctx, "settings.svg", h::attrs().size(20).aria_hidden().style("view-transition-name: account-settings")) }}
-      <span class="for-screen-reader">Account Settings</span>
-{% endfilter %}  </div>
 {% endfilter %}{% endblock %}

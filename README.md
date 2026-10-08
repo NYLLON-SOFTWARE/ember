@@ -47,7 +47,14 @@ own registry. The executable is `matchbox` and the application crate lives in `c
 - `/rails/storage` holds the database, uploads, backups and certificates. Existing installs must
   keep their storage and secrets.
 - Web Push needs a valid P-256 VAPID key pair in URL-safe Base64. `VAPID_SUBJECT` sets the contact
-  URL; its default is `https://` plus the first `TLS_DOMAIN`, or the project's URL.
+  URL; its default is `https://` plus the first `TLS_DOMAIN`, or the project's URL. Keep this pair
+  stable across restarts. The room-header bell requests browser permission and saves the subscription
+  before showing per-room settings. Embedded browsers without Push support show instructions to
+  use a supported browser; iOS/iPadOS users must install the Home Screen app.
+- The release version comes from the binary's Cargo package metadata (currently `1.0.0`, displayed
+  as `1.0`). `APP_VERSION`, then `GIT_REVISION`, retain their deployment-override precedence.
+  The footer and `X-Version` header use the same value; `X-Rev` carries an explicitly configured
+  Git revision. Version information is build configuration, not an editable database preference.
 - The app listener on `TARGET_PORT` (3000) binds loopback. `TARGET_BIND` overrides this; that listener
   trusts `X-Forwarded-*` from whoever reaches it. Other settings are in
   [`config.rs`](crates/matchbox/src/config.rs).
@@ -95,18 +102,47 @@ Seed generation and parity checks need Docker. Tests without the seed skip app i
 For local development, run `cargo run -p matchbox -- server` with `SECRET_KEY_BASE` set
 (or `SECRET_KEY_BASE_DUMMY=1`). Build an image with `docker build -t matchbox .`.
 
-The parity harness compares HTML, DOM, accessibility trees, assets, Cable frames and screenshots
-against Rails. See [`parity/SCREENS.md`](parity/SCREENS.md) for coverage and masks,
+The reference harness compares HTML, DOM, accessibility trees, assets, Cable frames and screenshots
+against Rails. Matchbox now owns application-page presentation: reviewed Matchbox DOM snapshots and
+native browser checks cover its redesign. Presentation exceptions do not exempt HTTP status,
+network, or Cable checks. The full Rails browser comparison requires a separate review of changed
+asset requests, HTML body hashes, and sidebar broadcasts; it is not a claim of visual parity.
+See [`parity/SCREENS.md`](parity/SCREENS.md) for the historical coverage and masks,
 [`AGENTS.md`](AGENTS.md) for repository layout and working rules,
 [`CONTRIBUTING.md`](CONTRIBUTING.md) for contributions, and [`SECURITY.md`](SECURITY.md) for security reports.
 
 ### Matchbox frontend
 
-The setup screen uses Basecoat's Vega components with compiled Askama templates. Shared controls
-live in `crates/views/templates/components/ui.html`; colors, fonts, radii and component overrides
-live in `crates/assets/overrides/basecoat/src/theme.css`. The form helpers retain the existing field
-names, escaping and multipart handling. Other pages keep their original stylesheet profile until
-they are migrated.
+All pages use compiled Askama templates and the existing form helpers for field names, escaping,
+and multipart handling. The workspace interface is styled in
+[`zz-matchbox.css`](crates/assets/overrides/zz-matchbox.css), loaded after the original stylesheets
+so rich-text editor and interaction styles remain available. Shared navigation, conversation filtering,
+unread activity, and the mobile drawer live in
+[`matchbox/shell.js`](crates/assets/overrides/matchbox/shell.js). Edit these two files for shared
+workspace behavior and appearance; page markup remains in `crates/views/templates/`.
+
+The workspace bundle contains 49,575 bytes of CSS (9,055 gzip) and 7,400 bytes of shell JavaScript
+(2,330 gzip), measured with gzip level 9. Channel ordering, icon selection, and SVG previews use separate Stimulus
+controllers, discovered through the digested importmap alongside the inherited controllers.
+The compact message-actions controller adds 3,992 bytes (1,198 gzip).
+Assets use the existing digested URLs and compression pipeline. Message fragment recording and
+content-addressed response caches retain their existing mechanisms; the message presentation digest
+and index ETag version change when introducing SVG markup and compact actions so old HTML is not reused.
+
+Channel icons use [Lucide](https://lucide.dev/icons/), pinned to `lucide-static` 1.53.0. The committed
+`crates/assets/overrides/lucide/catalog.json` contains 1,869 canonical icons; the build emits a
+sorted Rust lookup table. Chat pages embed only their selected icons, with no icon-library request.
+The picker fetches the digested catalog on first opening (990,964 bytes; 111,212 gzip), shows 72
+results at a time, and shares that cached catalog across Turbo visits. The icon picker controller
+is 7,851 bytes (2,656 gzip). Geometric SVG elements and attributes are validated during generation;
+uploads and user-provided markup cannot become channel icons. ISC and Feather MIT attribution is
+included in `crates/assets/overrides/lucide/LICENSE.txt`.
+
+The setup screen keeps its separate Basecoat Vega profile. Its shared controls live in
+`crates/views/templates/components/ui.html`; colors, fonts, radii and component overrides live in
+`crates/assets/overrides/basecoat/src/theme.css`. The internal `Legacy` asset profile now includes the
+Matchbox workspace override; it does not mean those pages retain the original appearance. Basecoat's
+bundle and the workspace styles are never loaded together.
 
 Frontend dependencies are pinned. After editing the frontend sources or adding Tailwind classes,
 regenerate the assets and rebuild the Rust app:
@@ -118,9 +154,9 @@ npm test --prefix crates/assets/overrides/basecoat
 cargo build -p matchbox
 ```
 
-Generated CSS and JavaScript are checked in and embedded with digested URLs, so ordinary Cargo and
+Generated CSS, JavaScript, and the Lucide catalog are checked in and embedded with digested URLs, so ordinary Cargo and
 Docker builds do not require Node.js. CI runs the frontend build in check mode to detect stale output.
-Source files, build tools and npm dependencies are excluded from the served asset inventory.
+Basecoat build inputs and npm dependencies are excluded from the served asset inventory.
 Stylesheets still require rebuilding the executable; they are not loaded from disk at runtime.
 
 The Matchbox browser checks start temporary app instances and never use the normal storage directory:
@@ -131,12 +167,22 @@ npm exec --prefix parity -- playwright install chromium
 npm run test:kro --prefix parity
 ```
 
-Set `MATCHBOX_BIN` to test a different binary. The native browser checks cover setup and appearance
-without Docker; they do not replace the reference-seeded integration and parity suites.
+Set `MATCHBOX_BIN` to test a different binary. Native browser checks cover setup, authentication,
+workspace navigation, conversations, settings, and responsive layouts without Docker. They create
+real disposable accounts and messages rather than using the development database. They do not
+replace the reference-seeded integration suite.
 
-Future page batches are sign-in/invitation signup, account/profile/admin, room management/search,
-then chat/sidebar/composer. Keep each batch on the shared controls and explicitly choose its asset
-profile; do not mix the legacy and Basecoat component styles in the same document.
+Reviewed page DOM snapshots live under `crates/views/tests/golden/matchbox/{a,b}` and render the
+frozen Rails fixture inputs. To intentionally update them after reviewing a UI change:
+
+```sh
+MATCHBOX_UPDATE_VIEWS=1 cargo test -p matchbox_views
+cargo test -p matchbox_views
+```
+
+Inspect the resulting snapshot diff. Historical Rails goldens remain unchanged; unchanged message,
+rich-text, and protocol fragments still compare against them. See the
+[snapshot notes](crates/views/tests/golden/matchbox/README.md).
 
 ## Known differences
 
@@ -155,16 +201,68 @@ behavior changes and compatibility limits are listed below.
   The `_campfire_session` cookie, GlobalID namespace, mention MIME type, and upstream asset module
   paths remain compatible so existing sessions, links, and messages work. Upstream source, URLs,
   copyright notices, recorded benchmarks, and Rails golden fixtures retain their original names.
+- **Workspace redesign:** application pages use a neutral interface with a left navigation rail,
+  a conversation sidebar, a compact room header, left-aligned message threads, an invitation card,
+  and a full-width composer. Small screens use a dismissible sidebar drawer and touch-sized controls.
+  Home and direct-message navigation use actual room memberships; Activity shows actual unread
+  conversations and counts. Conversation search filters the existing sidebar rows.
+  Follow-up message timestamps appear to the right of the message body on hover or keyboard focus,
+  with their space reserved to avoid moving the text; the first message keeps its header timestamp.
+  Message options use a compact bar with three quick reactions, reply or attachment actions, copy
+  link, and edit. More reactions opens a small tray with the other reactions and custom boost.
+  The bar stays within the conversation on mobile and near scroll boundaries, supports keyboard
+  focus and Escape, and closes before Turbo caches the page. Without JavaScript, the disclosure
+  includes the full reaction tray. Message show/index/create DOM snapshots and the three
+  message-rendering fragment parity exceptions cover this deliberate presentation change.
+  The design does not fabricate channels, people, or an Apps section. Sign-in and invitation signup
+  use form cards; account/profile screens have persistent labels and visible actions.
+  Search shows recent searches once above the results instead of duplicating the links in navigation.
+  First-run retains its separate Basecoat card. All other pages inherit the shared workspace styles, including
+  room management, search, bots, and user settings. Account custom CSS remains supported.
+  The redesign changes templates, shared CSS, and shell JavaScript; the database, sessions, message
+  submission, rich-text editor, uploads, notifications, and fragment/cache mechanisms retain their
+  existing contracts. Matchbox DOM snapshots and browser checks replace Rails pixel/DOM equality
+  for owned pages. HTTP outcomes and network/Cable behavior are not blanket-allowlisted.
 - **Translation controls:** administrators can toggle **Hide translation buttons** in Account
   settings. Hiding is enabled by default for new and existing installs, including sign-in,
   invitations, room forms, profiles, and the welcome card. The choice is stored in the account's
   existing settings JSON and applies to everyone. Changing it reloads the document to clear Turbo's
   snapshots; other open browsers pick up the choice on their next page load.
+- **Workspace controls:** entering an editable single-line field selects its existing value so
+  typing replaces it. A subsequent click can place the caret normally; multiline editors retain
+  their usual editing behavior. Workspace logos use a single preview with an overlaid camera picker
+  and a separate removal action. Immediate account switches save without success flashes; name/logo
+  saves have a readable confirmation. Search focus and membership badges use the shared control styling.
+- **Personal channel order:** hold a channel for 400 ms and drag to reorder it, or focus it and use
+  Alt + Up/Down. The A–Z action restores alphabetical order. Preferences are saved for the signed-in
+  user in `accounts.settings.matchbox_channel_order`, without a schema migration or changing account
+  cache timestamps. Newly joined channels follow the saved entries alphabetically. Inaccessible,
+  invisible, and direct rooms cannot be submitted to this preference endpoint.
+- **Channel icons:** channel creators and administrators can choose a Lucide icon when creating or
+  editing open or restricted channels. A searchable, keyboard-accessible picker stages the choice;
+  **Use icon** applies it to the form and **Save** persists it for everyone. Cancel keeps the prior
+  choice; the default hashtag can be restored. Without JavaScript, the complete catalog is available
+  in a native select. Icons appear in the sidebar and channel header, including live sidebar updates.
+  Canonical names are validated before any other submitted channel changes; unknown names return
+  422. Choices live in `accounts.settings.matchbox_channel_icons`, requiring no schema migration.
+  Type changes retain the icon and channel deletion removes it. Only the changed channel's timestamp
+  is updated; account timestamps and message fragment caches retain their existing behavior.
+- **SVG attachments:** SVGs up to 5 MiB gain a lazy image preview. The browser loads the original
+  download into an isolated `<img>` data URL; uploaded markup is never inserted into the page DOM.
+  Scripts and external resources do not run in the image context. The original remains served as
+  `application/octet-stream` with attachment disposition. Oversized or undecodable files retain
+  the file card. This is a vector preview, without server-side SVG parsing or a new rendering service.
+- **Notification setup:** the bell requests permission within the original click and waits for
+  service-worker activation and successful subscription saving before exposing room preferences.
+  Denied permission, missing server configuration, unsupported browsers, and retryable failures
+  have distinct feedback. A failed new subscription is rolled back and can be retried.
+- **Release display:** the former default version `0` is replaced by the actual Cargo release version,
+  with the existing deployment overrides retained as described above.
 - **Matchbox setup screen:** `/first_run` uses a responsive Basecoat form card with visible labels and an
   optional camera-style avatar picker, input icons, a password visibility toggle, and a Continue
   button. The setup screen omits the field translation popups and appearance selector. It follows
-  system colors by default and honors an existing saved appearance preference. Legacy pages retain
-  their existing system-driven colors. Setup now requires a password of at least eight characters
+  system colors by default and honors an existing saved appearance preference. Workspace pages use
+  system-driven light and dark colors. Setup now requires a password of at least eight characters
   in both the browser and server; rejected submissions create no account and retain the name and
   email for correction. Existing accounts and sign-in behavior are unaffected. Multipart setup
   submissions and signed sessions retain their existing contracts. Crossing stylesheet
@@ -173,6 +271,9 @@ behavior changes and compatibility limits are listed below.
 - Session-transfer auto-submit forms explicitly close their form tag; the pinned Rails
   reference omitted it.
 - Background sidebar refreshes preserve an open New Ping form and selected recipients.
+- Rapid message sends recheck author grouping and day separators around replaced optimistic messages.
+  A confirmed message no longer keeps its author hidden after the preceding pending message disappears;
+  it displays correctly without reloading the conversation.
 
 - Sidebar connection refresh waits for the current Turbo frame to finish loading,
   preventing an aborted response on startup or reconnect. Obsolete connections and removed frames do not reload.

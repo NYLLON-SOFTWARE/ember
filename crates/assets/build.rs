@@ -34,6 +34,10 @@ fn main() {
                 Ok(relative) => matches!(relative.to_str(), Some("" | "app.css" | "app.js" | "theme-init.js")),
                 Err(_) => true,
             }
+            && match path.strip_prefix(overrides.join("lucide")) {
+                Ok(relative) => matches!(relative.to_str(), Some("" | "catalog.json" | "LICENSE.txt")),
+                Err(_) => true,
+            }
     };
     println!("cargo:rerun-if-changed={}", overrides.display());
     println!("cargo:rerun-if-changed=build");
@@ -118,6 +122,24 @@ fn main() {
     writeln!(code, "pub(crate) static BUILT_AT: &str = {:?};", httpdate(build_time())).unwrap();
 
     fs::write(out_dir.join("embedded.rs"), code).unwrap();
+    embed_lucide(&overrides, &out_dir);
+}
+
+fn embed_lucide(overrides: &Path, out_dir: &Path) {
+    let catalog = fs::read_to_string(overrides.join("lucide/catalog.json")).expect("Lucide catalog is missing; regenerate frontend assets");
+    let icons: serde_json::Value = serde_json::from_str(&catalog).expect("invalid Lucide catalog");
+    let mut output = String::from("static LUCIDE_ICONS: &[LucideIcon] = &[\n");
+    let mut previous = "";
+    for icon in icons.as_array().expect("Lucide catalog must be an array") {
+        let name = icon["name"].as_str().expect("Lucide icon name");
+        let label = icon["label"].as_str().expect("Lucide icon label");
+        let svg = icon["svg"].as_str().expect("Lucide icon SVG");
+        assert!(name > previous, "Lucide catalog must contain unique, sorted names");
+        previous = name;
+        writeln!(output, "    LucideIcon {{ name: {name:?}, label: {label:?}, svg: {svg:?} }},").unwrap();
+    }
+    output.push_str("];\n");
+    fs::write(out_dir.join("lucide.rs"), output).unwrap();
 }
 
 /// `overrides/` first, so the app's own changes to the frontend shadow the reference's files of
@@ -153,7 +175,18 @@ fn assets_version(rails_root: &Path) -> String {
 /// with no CSP nonce (the reference configures no content security policy).
 fn importmap_tags(load_path: &propshaft::LoadPath, entries: &[(String, String, String)], rails_root: &Path) -> String {
     let resolve = |path: &str| load_path.find(path).map(|index| format!("{PREFIX}/{}", entries[index].1));
-    let pins = importmap::expand(&rails_root.join("config/importmap.rb"), rails_root);
+    let mut pins = importmap::expand(&rails_root.join("config/importmap.rb"), rails_root);
+    // Matchbox controllers have no counterpart in reference/app/javascript, but must still
+    // participate in Stimulus discovery and the same digested importmap as inherited ones.
+    let mut controllers: Vec<_> =
+        entries.iter().filter(|(path, _, _)| path.starts_with("controllers/") && path.ends_with("_controller.js")).collect();
+    controllers.sort_by(|a, b| a.0.cmp(&b.0));
+    for (path, _, _) in controllers {
+        let name = path.strip_suffix(".js").unwrap();
+        if !pins.iter().any(|pin| pin.name == name) {
+            pins.push(importmap::Pin { name: name.to_string(), path: path.clone(), preload: true });
+        }
+    }
 
     // Missing assets are skipped (Propshaft::MissingAssetError is a rescuable asset error).
     let imports: Vec<(String, String)> = pins.iter().filter_map(|pin| Some((pin.name.clone(), resolve(&pin.path)?))).collect();

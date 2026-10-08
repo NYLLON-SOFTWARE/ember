@@ -1,0 +1,35 @@
+<div class="mb-icon-picker mb-field" id="room_icon_picker_{% if let Some(id) = room.id %}{{ id }}{% else %}new{% endif %}" data-turbo-permanent="true" data-controller="icon-picker" data-icon-picker-catalog-url-value="{{ ctx.asset("lucide/catalog.json") }}">
+  <div data-icon-picker-target="fallback">
+    <label class="mb-field-label" for="room_icon">Channel icon</label>
+    <select id="room_icon" name="room[icon]" class="input full-width" data-icon-picker-target="input">
+      {{ h::channel_icon_options(room.icon.as_deref()) }}
+    </select>
+  </div>
+  <div data-icon-picker-target="enhanced" hidden>
+    <span class="mb-field-label">Channel icon</span>
+    <button class="mb-icon-picker-trigger" type="button" data-action="icon-picker#open" data-icon-picker-target="trigger" aria-label="Choose channel icon" aria-haspopup="dialog">
+      <span class="mb-icon-picker-preview" aria-hidden="true" data-icon-picker-target="preview">{{ h::channel_icon(room.icon.as_deref()) }}</span>
+      <span class="mb-icon-picker-copy"><strong data-icon-picker-target="label">{{ h::channel_icon_label(room.icon.as_deref()) }}</strong><span>Choose from Lucide icons</span></span>
+      <svg class="mb-icon-picker-chevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg>
+    </button>
+  </div>
+  <p class="mb-field-description">Shown beside this channel for everyone in the workspace.</p>
+  <dialog class="mb-icon-dialog" aria-labelledby="channel_icon_title" data-icon-picker-target="dialog" data-action="cancel->icon-picker#cancel close->icon-picker#closed click->icon-picker#backdrop">
+    <header class="mb-icon-dialog-heading">
+      <div><h2 id="channel_icon_title">Choose a channel icon</h2><p>A little personality for your channel.</p></div>
+      <button class="btn mb-icon-dialog-close" type="button" aria-label="Close icon picker" data-action="icon-picker#cancel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+    </header>
+    <div class="mb-icon-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input type="search" placeholder="Search icons, e.g. coffee or rocket" aria-label="Search icons" autocomplete="off" data-matchbox-preserve-selection data-icon-picker-target="search" data-action="input->icon-picker#search keydown.enter->icon-picker#selectFirst:prevent"></div>
+    <div class="mb-icon-browse" data-icon-picker-target="browse">
+      <button class="mb-icon-default" type="button" aria-pressed="false" data-icon-picker-target="default" data-action="icon-picker#default"><span aria-hidden="true">#</span><span>Use default icon</span><span class="mb-icon-default-check" aria-hidden="true">✓</span></button>
+      <p class="mb-icon-results-label" data-icon-picker-target="results" role="status" aria-live="polite"></p>
+      <div class="mb-icon-grid" role="group" aria-label="Channel icons" data-icon-picker-target="grid" data-action="click->icon-picker#choose keydown->icon-picker#navigate"></div>
+      <button class="btn mb-icon-show-more" type="button" data-action="icon-picker#more" data-icon-picker-target="more" hidden>Show more icons</button>
+      <button class="btn mb-icon-show-more" type="button" data-action="icon-picker#retry" data-icon-picker-target="retry" hidden>Try again</button>
+    </div>
+    <footer class="mb-icon-dialog-footer">
+      <span class="mb-icon-selection"><span aria-hidden="true" data-icon-picker-target="selectionPreview">#</span><span data-icon-picker-target="selectionLabel">Default hashtag</span></span>
+      <div><button class="btn" type="button" data-action="icon-picker#cancel">Cancel</button><button class="btn btn--reversed" type="button" data-action="icon-picker#apply" data-icon-picker-target="apply">Use icon</button></div>
+    </footer>
+  </dialog>
+</div>

@@ -1,4 +1,7 @@
-<h1 class="for-screen-reader">Chat Bot Setup</h1>
+<header class="mb-page-heading">
+  <h1>Chat bot setup</h1>
+  <p>Connect a bot to your workspace and choose where updates are delivered.</p>
+</header>
 <label class="align-center center avatar__form gap" data-controller="upload-preview">
   <div class="btn input--file">
     {{ h::image_tag(ctx, "camera.svg", h::attrs().aria_hidden().size(20)) }}
@@ -11,21 +14,20 @@
   </div>
 </label>
 
-<div class="flex align-center gap">
-  {{ h::translation_button(ctx, "bot_name") }}
-  <label class="flex align-center gap flex-item-grow txt-large input input--actor">
-    {{ form.text_field("name", bot.name.as_deref(), h::attrs().class("input").autocomplete("name").placeholder("Name the bot").autofocus().required(true).data("1p-ignore", true)) }}
-    {{ h::image_tag(ctx, "bot.svg", h::attrs().aria_hidden().size(24).class("colorize--black")) }}
-  </label>
+<div class="mb-field">
+  <div class="mb-field-label">
+    <label for="{{ form.field_id("name") }}">Bot name</label>
+    {{ h::translation_button(ctx, "bot_name") }}
+  </div>
+  {{ form.text_field("name", bot.name.as_deref(), h::attrs().class("input").autocomplete("name").placeholder("Name the bot").autofocus().required(true).data("1p-ignore", true)) }}
 </div>
 
-<div class="flex align-center gap">
-  {{ h::translation_button(ctx, "webhook_url") }}
-  <label class="flex align-center gap flex-item-grow txt-large input input--actor">
-    {{ form.url_field("webhook_url", bot.webhook_url.as_deref(), h::attrs().class("input").placeholder("Webhook URL")) }}
-    {{ h::image_tag(ctx, "web.svg", h::attrs().aria_hidden().size(24).class("colorize--black")) }}
-  </label>
+<div class="mb-field">
+  <div class="mb-field-label">
+    <label for="{{ form.field_id("webhook_url") }}">Webhook URL</label>
+    {{ h::translation_button(ctx, "webhook_url") }}
+  </div>
+  {{ form.url_field("webhook_url", bot.webhook_url.as_deref(), h::attrs().class("input").placeholder("Webhook URL")) }}
 </div>
 
-{{ h::profile_form_submit_button(ctx) }}
-
+<button type="submit" class="btn btn--reversed mb-primary-button">Save changes</button>
