@@ -14,7 +14,7 @@ remain covered by native browser checks. Existing behavior assertions remain in 
 tests alongside these presentation snapshots.
 
 Workspace snapshots also cover the appearance selector, new-room return to settings, and the
-single-icon save confirmation. Native browser checks verify saved appearance choices, system
+single-icon save confirmation, admin room-order editor, and sidebar favorite handles. Native browser checks verify saved appearance choices, system
 changes, keyboard/mobile controls, profile focus, and confirmation alignment in the content pane.
 
 After making an intentional UI change, rebuild snapshots explicitly:

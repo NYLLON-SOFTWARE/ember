@@ -15,7 +15,7 @@ pub async fn show(c: &mut Ctx) -> Result {
     c.respond_to(&[&format::HTML])?;
     let user = concerns::require_current_user(c)?.clone();
     let secrets = c.app().secrets.clone();
-    let (mut sidebar, channel_order, default_room_order, custom_room_order, favorite_channels) = {
+    let (mut sidebar, channel_order, favorite_channels) = {
         let (user, secrets, fragments) = (user.clone(), secrets.clone(), c.app().fragment_cache.clone());
         c.app()
             .read(move |conn| {
@@ -32,24 +32,17 @@ pub async fn show(c: &mut Ctx) -> Result {
                     .into_iter()
                     .filter(|id| visible.contains(id))
                     .collect();
-                let personal: Vec<_> = settings
-                    .as_ref()
-                    .map(|settings| settings.channel_order(user.id))
-                    .unwrap_or_default()
-                    .into_iter()
-                    .filter(|id| visible.contains(id))
-                    .collect();
-                let custom = if user.is_administrator() { !defaults.is_empty() } else { !personal.is_empty() };
-                let order = if user.is_administrator() || personal.is_empty() { defaults.clone() } else { personal };
                 let favorites = settings.map(|settings| settings.favorite_channels(user.id)).unwrap_or_default();
-                Ok((sidebar, order, defaults, custom, favorites))
+                Ok((sidebar, defaults, favorites))
             })
             .await?
     };
-    // Unranked rooms stay alphabetic after the effective personal or workspace order.
+    // Personal favorites come first; every other room follows the shared workspace order.
     let positions: std::collections::HashMap<_, _> = channel_order.iter().enumerate().map(|(index, id)| (*id, index)).collect();
-    let favorites: std::collections::HashSet<_> = favorite_channels.iter().copied().collect();
-    sidebar.other_memberships.sort_by_key(|room| (!favorites.contains(&room.id), positions.get(&room.id).copied().unwrap_or(usize::MAX)));
+    let favorites: std::collections::HashMap<_, _> = favorite_channels.iter().enumerate().map(|(index, id)| (*id, index)).collect();
+    sidebar.other_memberships.sort_by_key(|room| {
+        (favorites.get(&room.id).copied().unwrap_or(usize::MAX), positions.get(&room.id).copied().unwrap_or(usize::MAX))
+    });
 
     let data = SidebarData {
         current_user: presenters::user_summary(&secrets, &user),
@@ -59,8 +52,6 @@ pub async fn show(c: &mut Ctx) -> Result {
         sidebar,
         favorite_channels: serde_json::to_string(&favorite_channels).expect("favorite channels are JSON"),
         channel_order: serde_json::to_string(&channel_order).expect("channel order is JSON"),
-        default_room_order: serde_json::to_string(&default_room_order).expect("room order is JSON"),
-        custom_room_order,
     };
     view_context::page_or_frame(
         c,
@@ -74,13 +65,13 @@ pub async fn show(c: &mut Ctx) -> Result {
     .await
 }
 
-/// An Ember personal preference; the URL and the authenticated user, never a submitted
+/// A personal starred-room preference; the URL and the authenticated user, never a submitted
 /// user ID, determine whose order changes. Normal before-actions retain authentication/CSRF.
 pub async fn update_order(c: &mut Ctx) -> Result {
     concerns::before_actions(c, Before::default()).await?;
     let user_id = concerns::require_current_user(c)?.id;
     let order = parse_order(c.params.get("room_ids"))?;
-    if !c.app().write(move |tx| Account::set_channel_order(tx, user_id, &order)).await? {
+    if !c.app().write(move |tx| Account::set_favorite_order(tx, user_id, &order)).await? {
         return Err(Error::Status(StatusCode::FORBIDDEN));
     }
     Ok(c.head(StatusCode::NO_CONTENT))
@@ -125,8 +116,6 @@ struct SidebarData {
     sidebar: presenters::accounts::Sidebar,
     favorite_channels: String,
     channel_order: String,
-    default_room_order: String,
-    custom_room_order: bool,
 }
 
 impl SidebarData {
@@ -141,8 +130,6 @@ impl SidebarData {
             other_memberships: self.sidebar.other_memberships.clone(),
             favorite_channels: self.favorite_channels.clone(),
             channel_order: self.channel_order.clone(),
-            default_room_order: self.default_room_order.clone(),
-            custom_room_order: self.custom_room_order,
         }
     }
 }

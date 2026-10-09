@@ -35,6 +35,31 @@ pub async fn edit(c: &mut Ctx) -> Result {
         users.iter().map(|user| presenters::user_summary(&secrets, user)).partition(|user| user.administrator());
     let next_page = (!page.is_last()).then(|| page.next_param().to_string());
     let restrict_room_creation_to_administrators = account.settings().restrict_room_creation_to_administrators();
+    let user_id = concerns::require_current_user(c)?.id;
+    let settings = account.settings();
+    let order = settings.default_room_order();
+    let mut rooms = if can_administer {
+        c.app()
+            .read(move |conn| {
+                Ok(matchbox_db::Membership::visible_with_ordered_room(conn, user_id)?
+                    .into_iter()
+                    .filter(|(_, room)| !room.direct())
+                    .map(|(_, room)| matchbox_views::users::SidebarRoom {
+                        id: room.id,
+                        param_key: String::new(),
+                        icon: settings.channel_icon(room.id).map(str::to_owned),
+                        name: room.name.unwrap_or_default(),
+                        unread: false,
+                    })
+                    .collect::<Vec<_>>())
+            })
+            .await?
+    } else {
+        Vec::new()
+    };
+    let positions: std::collections::HashMap<_, _> = order.iter().enumerate().map(|(index, id)| (*id, index)).collect();
+    rooms.sort_by_key(|room| positions.get(&room.id).copied().unwrap_or(usize::MAX));
+    let room_order = serde_json::to_string(&rooms.iter().map(|room| room.id).collect::<Vec<_>>()).expect("room IDs are JSON");
     framed_page!(c, StatusCode::OK, |ctx| accounts::Edit {
         ctx,
         account_id: account.id,
@@ -42,6 +67,8 @@ pub async fn edit(c: &mut Ctx) -> Result {
         restrict_room_creation_to_administrators,
         administrators: administrators.clone(),
         members: members.clone(),
+        rooms: rooms.clone(),
+        room_order: room_order.clone(),
         next_page: next_page.clone(),
     })
     .await

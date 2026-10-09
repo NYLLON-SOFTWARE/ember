@@ -102,14 +102,15 @@ fn channel_icons_merge_with_preferences_and_deleted_rooms_leave_no_icon() {
     t.write(|tx| {
         Room::find(tx.conn(), id("hq"))?.set_icon(tx, Some("coffee"))?;
         Room::find(tx.conn(), id("pets"))?.set_icon(tx, Some("star"))?;
-        assert!(crate::Account::set_channel_order(tx, id("david"), &[id("pets"), id("hq")])?);
+        assert!(crate::Account::set_channel_favorite(tx, id("david"), id("pets"), true)?.is_some());
+        assert!(crate::Account::set_channel_favorite(tx, id("david"), id("hq"), true)?.is_some());
         Ok(())
     });
     t.write(move |tx| stale_account.update(tx, None, None, Some(&[("hide_translation_buttons", "false")])));
     let before = t.read(|conn| Ok(crate::Account::first(conn)?.unwrap()));
     assert_eq!(before.settings().channel_icons().len(), 2);
     assert_eq!(before.settings().channel_icon(id("hq")), Some("coffee"));
-    assert_eq!(before.settings().channel_order(id("david")), vec![id("pets"), id("hq")]);
+    assert_eq!(before.settings().favorite_channels(id("david")), vec![id("pets"), id("hq")]);
     assert!(!before.settings().hide_translation_buttons());
 
     t.write(|tx| Room::find(tx.conn(), id("hq"))?.destroy(tx));

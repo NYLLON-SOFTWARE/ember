@@ -2,11 +2,11 @@ import { Controller } from "@hotwired/stimulus"
 import { put } from "@rails/request.js"
 import { ignoringBriefDisconnects } from "helpers/dom_helpers"
 
-// Admin drags set the workspace default; members can keep a personal room order. Touch scrolling remains
-// native until a deliberate hold starts a drag; ordinary clicks keep opening the channel.
+// Admin settings stage the shared room order; sidebar drags only reorder personal favorites.
+// Touch scrolling stays native until a deliberate hold starts a sidebar drag.
 export default class extends Controller {
-  static targets = [ "list", "room", "reset", "status" ]
-  static values = { order: Array, defaultOrder: Array, customized: Boolean, workspace: Boolean, favorites: Array, url: String }
+  static targets = [ "list", "room", "reset", "status", "save" ]
+  static values = { order: Array, staged: Boolean, favorites: Array, url: String }
 
   #candidate
   #dragging = false
@@ -17,6 +17,7 @@ export default class extends Controller {
   #events
   #refreshPending = false
   #refreshing = false
+  #savedOrder = []
 
   connect() {
     this.#events = new AbortController()
@@ -26,6 +27,7 @@ export default class extends Controller {
       this.#refresh()
     }, options)
     window.addEventListener("matchbox:favorites-changed", event => {
+      if (this.stagedValue) return
       this.#cancel()
       this.favoritesValue = event.detail.favorites
       this.sort()
@@ -52,6 +54,8 @@ export default class extends Controller {
     document.addEventListener("turbo:before-cache", this.#cancel, options)
     document.addEventListener("turbo:before-frame-render", this.#preserveInteraction, options)
     if (!this.#dragging) this.sort()
+    this.#savedOrder = this.#ids()
+    this.#updateButtons()
   }
 
   disconnect() {
@@ -105,52 +109,87 @@ export default class extends Controller {
 
   sort() {
     const positions = new Map(this.orderValue.map((id, index) => [ String(id), index ]))
-    const favorites = new Set(this.favoritesValue.map(String))
+    const favorites = new Map(this.favoritesValue.map((id, index) => [String(id), index]))
     const rows = this.roomTargets.slice().sort((a, b) => {
-      const favoriteRank = Number(favorites.has(b.dataset.roomId)) - Number(favorites.has(a.dataset.roomId))
+      const favoriteRank = this.stagedValue ? 0 : (favorites.get(a.dataset.roomId) ?? Infinity) - (favorites.get(b.dataset.roomId) ?? Infinity)
       const rank = (positions.get(a.dataset.roomId) ?? Infinity) - (positions.get(b.dataset.roomId) ?? Infinity)
-      return favoriteRank || (Number.isNaN(rank) ? 0 : rank) || a.dataset.sortedListName.toLowerCase().localeCompare(b.dataset.sortedListName.toLowerCase())
+      return (Number.isNaN(favoriteRank) ? 0 : favoriteRank) || (Number.isNaN(rank) ? 0 : rank) || a.dataset.sortedListName.toLowerCase().localeCompare(b.dataset.sortedListName.toLowerCase())
     })
     // Avoid a mutation loop when Stimulus reconnects a moved target.
     rows.forEach((row, index) => {
-      let marker = row.querySelector(".mb-room-favorite-marker")
-      if (!marker) {
-        marker = document.createElement("span")
-        marker.className = "mb-room-favorite-marker"
-        marker.textContent = "★"
-        marker.setAttribute("role", "img")
-        marker.setAttribute("aria-label", "Favorite")
-        row.append(marker)
+      if (!this.stagedValue) {
+        let marker = row.querySelector(".mb-room-favorite-marker")
+        if (!marker) {
+          marker = document.createElement("span")
+          marker.className = "mb-room-favorite-marker"
+          marker.textContent = "★"
+          marker.setAttribute("role", "img")
+          marker.setAttribute("aria-label", "Favorite")
+          row.append(marker)
+        }
+        const hidden = !favorites.has(row.dataset.roomId)
+        if (marker.hidden !== hidden) marker.hidden = hidden
+        const handle = row.querySelector(".mb-room-drag-handle")
+        if (handle) handle.hidden = hidden
+        row.classList.toggle("mb-room-reorderable", !hidden)
+        if (hidden) row.removeAttribute("aria-keyshortcuts")
+        else row.setAttribute("aria-keyshortcuts", "Alt+ArrowUp Alt+ArrowDown")
       }
-      const hidden = !favorites.has(row.dataset.roomId)
-      if (marker.hidden !== hidden) marker.hidden = hidden
       if (this.listTarget.children[index] !== row) this.listTarget.insertBefore(row, this.listTarget.children[index] || null)
     })
-    this.resetTarget.hidden = !this.customizedValue
+    this.#updateButtons()
   }
 
   reset() {
-    if (!this.#saving) this.#save([])
+    if (this.#saving || !this.stagedValue) return
+    this.orderValue = this.#savedOrder.slice()
+    this.sort()
+    this.statusTarget.hidden = true
+  }
+
+  save() {
+    if (!this.#saving && this.stagedValue) this.#save(this.#ids())
+  }
+
+  #updateButtons() {
+    if (!this.stagedValue) return
+    const unchanged = JSON.stringify(this.#ids()) === JSON.stringify(this.#savedOrder)
+    this.saveTarget.disabled = this.#saving || unchanged
+    this.resetTarget.disabled = this.#saving || unchanged
+  }
+
+  #movableRows() {
+    return this.roomTargets.filter(row => !row.hidden && (this.stagedValue || this.favoritesValue.includes(Number(row.dataset.roomId))))
+  }
+
+  #stageOrSave(order) {
+    if (!this.stagedValue) return this.#save(order)
+    this.orderValue = order
+    this.sort()
+    this.#announce("Unsaved room order. Save to apply it to everyone.")
   }
 
   #room(event) {
     const row = event.target.closest('[data-channel-order-target="room"]')
-    return row && this.listTarget.contains(row) && !row.hidden ? row : null
+    return row && this.#movableRows().includes(row) ? row : null
   }
 
   #start(event, point, kind) {
     const row = this.#room(event)
-    if (!row || this.#saving || this.roomTargets.filter(row => !row.hidden).length < 2) return
+    if (!row || this.#saving || this.#movableRows().length < 2) return
+    if (this.stagedValue && !event.target.closest("[data-room-order-handle]")) return
     this.#cancel()
     this.#candidate = { row, x: point.clientX, y: point.clientY, lastY: point.clientY, kind }
-    this.#hold = setTimeout(() => {
+    const begin = () => {
       if (!this.#candidate?.row.isConnected) return this.#cancel()
       this.#dragging = true
       this.#candidate.row.classList.add("mb-channel-dragging")
       this.listTarget.classList.add("mb-channel-order-active")
-      this.#announce(`Moving ${row.dataset.sortedListName}. Release to save, or press Escape to cancel.`)
+      this.#announce(`Moving ${row.dataset.sortedListName}. Release to ${this.stagedValue ? "place" : "save"}, or press Escape to cancel.`)
       this.#scroll()
-    }, 400)
+    }
+    if (this.stagedValue) begin()
+    else this.#hold = setTimeout(begin, 400)
   }
 
   #move(point) {
@@ -161,15 +200,18 @@ export default class extends Controller {
       return
     }
     candidate.lastY = point.clientY
-    const otherRows = this.roomTargets.filter(row => row !== candidate.row && !row.hidden)
+    const otherRows = this.#movableRows().filter(row => row !== candidate.row)
     const after = otherRows.find(row => point.clientY < row.getBoundingClientRect().top + row.getBoundingClientRect().height / 2)
     if (after) this.listTarget.insertBefore(candidate.row, after)
-    else this.listTarget.append(candidate.row)
+    else {
+      const firstFixed = this.roomTargets.find(row => !this.#movableRows().includes(row))
+      this.listTarget.insertBefore(candidate.row, firstFixed || null)
+    }
   }
 
   #scroll = () => {
     if (!this.#dragging || !this.#candidate) return
-    const conversations = this.element.closest(".mb-conversations")
+    const conversations = this.stagedValue ? this.listTarget : this.element.closest(".mb-conversations")
     if (conversations) {
       const box = conversations.getBoundingClientRect()
       const y = this.#candidate.lastY
@@ -191,7 +233,7 @@ export default class extends Controller {
     if (dragged) {
       this.#suppressClickUntil = Date.now() + 500
       row.focus({ preventScroll: true })
-      this.#save(order)
+      this.#stageOrSave(order)
     } else this.#refresh()
   }
 
@@ -255,52 +297,48 @@ export default class extends Controller {
     if (!row || !event.altKey || ![ "ArrowUp", "ArrowDown" ].includes(event.key)) return
     event.preventDefault()
     if (this.#saving) return
-    const rows = this.roomTargets.filter(row => !row.hidden)
+    const rows = this.#movableRows()
     const index = rows.indexOf(row)
     const next = rows[index + (event.key === "ArrowUp" ? -1 : 1)]
     if (!next) return
     if (event.key === "ArrowUp") this.listTarget.insertBefore(row, next)
     else this.listTarget.insertBefore(next, row)
     row.focus({ preventScroll: true })
-    this.#save(this.#ids())
+    this.#stageOrSave(this.#ids())
   }
 
   #ids() {
-    return Array.from(this.listTarget.children, row => Number(row.dataset.roomId))
+    const movable = new Set(this.#movableRows())
+    return Array.from(this.listTarget.children).filter(row => movable.has(row)).map(row => Number(row.dataset.roomId))
   }
 
   async #save(order) {
-    const previous = this.orderValue
-    const customized = this.customizedValue
+    const previous = this.favoritesValue.slice()
     this.#saving = true
-    this.resetTarget.disabled = true
-    this.orderValue = order.length || this.workspaceValue ? order : this.defaultOrderValue
-    this.customizedValue = order.length > 0
+    if (!this.stagedValue) this.favoritesValue = order
     this.sort()
     this.#announce("Saving room order…")
     try {
       const response = await put(this.urlValue, { body: { room_ids: order }, responseKind: "json" })
       if (!response.ok) throw new Error("Room order was not saved")
-      if (this.workspaceValue) this.defaultOrderValue = order
+      this.#savedOrder = order.slice()
       window.Turbo?.cache.clear()
-      this.#announce(this.workspaceValue
-        ? (order.length ? "Default room order saved for everyone." : "Default room order reset to alphabetical.")
-        : (order.length ? "Room order saved." : "Using the workspace default room order."))
+      this.#announce(this.stagedValue ? "Room order saved for everyone." : "Starred room order saved.")
     } catch {
-      this.orderValue = previous
-      this.customizedValue = customized
+      if (!this.stagedValue) this.favoritesValue = previous
       this.sort()
       this.#announce("Couldn’t save room order. Please try again.", true)
     } finally {
       this.#saving = false
-      this.resetTarget.disabled = false
+      this.#updateButtons()
       this.#refresh()
     }
   }
 
   #announce(message, error = false) {
     this.statusTarget.hidden = false
-    this.statusTarget.classList.toggle("for-screen-reader", !error)
+    this.statusTarget.classList.toggle("for-screen-reader", !error && !this.stagedValue)
+    this.statusTarget.classList.toggle("mb-order-error", error)
     this.statusTarget.textContent = message
   }
 }

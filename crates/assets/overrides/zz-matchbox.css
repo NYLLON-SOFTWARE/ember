@@ -902,3 +902,35 @@ html[data-appearance] .mb-app :is(.btn.btn--negative img:not(.avatar), .flash__i
   .mb-app .mb-dm-footer { padding: 16px; }
   .mb-app .mb-dm-footer .btn { min-block-size: 44px; }
 }
+
+/* Shared room ordering is staged in settings; sidebar handles only move favorites. */
+.mb-app .mb-admin-room-order { border-block-start: 1px solid var(--mb-border); margin-block-start: 16px; padding-block-start: 4px; }
+.mb-app .mb-admin-room-list { border: 1px solid var(--mb-border); border-radius: 10px; background: var(--mb-canvas); max-block-size: 360px; overflow-y: auto; overscroll-behavior: contain; }
+.mb-app .mb-admin-room-row { align-items: center; display: flex; gap: 10px; min-block-size: 52px; padding: 4px 12px 4px 4px; }
+.mb-app .mb-admin-room-row + .mb-admin-room-row { border-block-start: 1px solid var(--mb-border); }
+.mb-app .mb-admin-room-row:focus-visible { outline: 2px solid var(--mb-muted); outline-offset: -2px; }
+.mb-app .mb-room-order-handle { align-items: center; background: transparent; border: 0; border-radius: 6px; color: var(--mb-muted); cursor: grab; display: inline-flex; justify-content: center; min-block-size: 44px; min-inline-size: 36px; padding: 8px; touch-action: none; }
+.mb-app .mb-room-order-handle svg { width: 18px; height: 18px; }
+.mb-app .mb-room-order-handle:hover { background: var(--mb-hover); color: var(--mb-ink); }
+.mb-app .mb-admin-room-row.mb-channel-dragging { background: var(--mb-hover); box-shadow: inset 3px 0 var(--mb-ink); }
+.mb-app .mb-admin-room-order-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; margin-block-start: 14px; }
+.mb-app .mb-admin-room-order-actions .btn { min-block-size: 40px; padding: 8px 14px; }
+.mb-app .mb-admin-room-order-actions .mb-channel-order-status { color: var(--mb-muted); flex: 1 0 100%; margin: 0; }
+.mb-app .mb-admin-room-order-actions .mb-order-error { color: var(--color-negative); }
+.mb-app .mb-room-drag-handle { color: var(--mb-muted); display: inline-flex; margin-inline-start: auto; }
+.mb-app .mb-room-drag-handle svg { height: 14px; width: 14px; }
+.mb-app .mb-room-reorderable { cursor: grab; }
+
+/* Real transfer progress stays visible until the server replaces the pending message. */
+.mb-app .mb-upload { background: var(--mb-surface); border: 1px solid var(--mb-border); border-radius: 12px; display: grid; gap: 10px; inline-size: min(380px, 100%); margin-block: 6px; padding: 14px 16px; }
+.mb-app .mb-upload-heading { align-items: baseline; display: flex; gap: 12px; min-inline-size: 0; }
+.mb-app .mb-upload-name { flex: 1; font-size: 14px; font-weight: 600; min-inline-size: 0; overflow-wrap: anywhere; }
+.mb-app .mb-upload-size, .mb-app .mb-upload-status { color: var(--mb-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.mb-app .mb-upload-size { flex-shrink: 0; }
+.mb-app .mb-upload progress { appearance: none; background: var(--mb-border); border: 0; border-radius: 99px; block-size: 6px; color: var(--mb-ink); display: block; inline-size: 100%; overflow: hidden; }
+.mb-app .mb-upload progress::-webkit-progress-bar { background: var(--mb-border); border-radius: 99px; }
+.mb-app .mb-upload progress::-webkit-progress-value { background: var(--mb-ink); border-radius: 99px; }
+.mb-app .mb-upload progress::-moz-progress-bar { background: var(--mb-ink); border-radius: 99px; }
+.mb-app .mb-upload-error { color: var(--color-negative); font-size: 13px; inline-size: 100%; line-height: 1.5; margin: 0; overflow-wrap: anywhere; }
+.mb-app .composer__filelist > .mb-upload-error { padding: 10px 12px; }
+.mb-app .mb-upload--failed { border-color: var(--color-negative); }

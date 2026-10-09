@@ -16,6 +16,9 @@ pub const MULTIPART_PART_LIMIT: usize = 4096;
 /// Rack); more is a 413. Rails reads any size.
 pub const MAX_BUFFERED_BODY: usize = 16 * 1024 * 1024;
 pub const MULTIPART_FILE_LIMIT: usize = 128;
+/// Ember's per-file upload cap, in decimal bytes (250 MB). Enforced while spooling,
+/// so bypassing the browser cannot write an oversized attachment to temporary storage.
+pub const MAX_UPLOAD_BYTES: u64 = 250_000_000;
 /// The most a multipart body's text fields may hold together, since they're kept in memory
 /// (Rack's `BUFFERED_UPLOAD_BYTESIZE_LIMIT`). More is a 413. Files aren't counted.
 pub const MULTIPART_TEXT_LIMIT: usize = 16 * 1024 * 1024;
@@ -119,7 +122,7 @@ async fn parse_multipart(body: Body, boundary: String, limit: Option<usize>) -> 
                     if files > MULTIPART_FILE_LIMIT {
                         return Err(ParamError::Limit("too many files".into()).into());
                     }
-                    let (size, path) = spool(&mut field).await?;
+                    let (size, path) = spool(&mut field, MAX_UPLOAD_BYTES).await?;
                     let upload = UploadedFile::new(filename.to_string(), part.content_type.clone(), part.head.clone(), size, path);
                     pairs.push(RawPair::file(&part.name(), upload));
                 }
@@ -149,6 +152,7 @@ async fn parse_multipart(body: Body, boundary: String, limit: Option<usize>) -> 
 }
 
 /// Why reading a multipart body stopped early.
+#[derive(Debug)]
 enum Stop {
     TooLarge,
     Params(ParamError),
@@ -171,7 +175,7 @@ impl From<multer::Error> for Stop {
 
 /// Writes a file part to a temp file (`RackMultipart...`, as Rack names them) without blocking
 /// the runtime on a slow disk, and returns its size and path.
-async fn spool(field: &mut multer::Field<'_>) -> Result<(u64, tempfile::TempPath), Stop> {
+async fn spool(field: &mut multer::Field<'_>, limit: u64) -> Result<(u64, tempfile::TempPath), Stop> {
     let io_error = |e: std::io::Error| Stop::Params(ParamError::Invalid(e.to_string()));
     let temp = tokio::task::spawn_blocking(|| tempfile::Builder::new().prefix("RackMultipart").tempfile())
         .await
@@ -182,6 +186,9 @@ async fn spool(field: &mut multer::Field<'_>) -> Result<(u64, tempfile::TempPath
     let mut size = 0u64;
     while let Some(chunk) = field.chunk().await? {
         size += chunk.len() as u64;
+        if size > limit {
+            return Err(Stop::TooLarge);
+        }
         file.write_all(&chunk).await.map_err(io_error)?;
     }
     file.flush().await.map_err(io_error)?;
@@ -362,6 +369,25 @@ mod tests {
         headers.insert(header::CONTENT_TYPE, "multipart/form-data; boundary=B".parse().unwrap());
         let result = parse(&Method::POST, &headers, Body::from(body), Some(100)).await;
         assert!(matches!(result, Err(BodyError::TooLarge)));
+    }
+
+    #[tokio::test]
+    async fn file_spooling_accepts_the_limit_and_rejects_the_next_byte() {
+        assert_eq!(MAX_UPLOAD_BYTES, 250_000_000);
+        for size in [4, 5, 6] {
+            let body = multipart_body("B", &[(r#"Content-Disposition: form-data; name="f"; filename="x""#, &"x".repeat(size))]);
+            let stream = futures_util::stream::iter([Ok::<_, std::io::Error>(Bytes::from(body))]);
+            let mut multipart = multer::Multipart::new(stream, "B");
+            let mut field = multipart.next_field().await.unwrap().unwrap();
+            let result = spool(&mut field, 5).await;
+            if size <= 5 {
+                let (bytes, path) = result.unwrap();
+                assert_eq!(bytes, size as u64);
+                assert_eq!(tokio::fs::read(&path).await.unwrap(), vec![b'x'; size]);
+            } else {
+                assert!(matches!(result, Err(Stop::TooLarge)));
+            }
+        }
     }
 
     #[tokio::test]

@@ -94,6 +94,26 @@
         </label>
 
 {% endfilter %}    </div>
+    <div class="mb-admin-room-order" data-controller="channel-order" data-channel-order-staged-value="true"
+        data-channel-order-order-value="{{ room_order }}" data-channel-order-url-value="{{ h::routes::account_room_order() }}">
+      <p id="admin-room-order-help" class="txt-small txt-subtle">Drag rooms into order, then save to update everyone’s sidebar. Starred rooms keep their personal order.</p>
+      <div class="mb-admin-room-list" data-channel-order-target="list" role="list" aria-label="Room order">
+{% for room in rooms %}
+        <div class="mb-admin-room-row" role="listitem" tabindex="0" data-channel-order-target="room" data-room-id="{{ room.id }}"
+            data-sorted-list-name="{{ room.name }}" aria-describedby="admin-room-order-help" aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown">
+          <button type="button" class="mb-room-order-handle" data-room-order-handle aria-label="Move {{ room.name }}" title="Drag to reorder, or press Alt + Up / Down">{{ h::lucide_icon("grip-vertical") }}</button>
+          <span class="mb-room-kind" aria-hidden="true">{{ h::channel_icon(room.icon.as_deref()) }}</span>
+          <span class="mb-room-name overflow-ellipsis">{{ room.name }}</span>
+        </div>
+{% endfor %}
+      </div>
+{% if rooms.is_empty() %}<p class="txt-small txt-subtle">No rooms to arrange yet.</p>{% endif %}
+      <div class="mb-admin-room-order-actions">
+        <p class="mb-channel-order-status" role="status" aria-live="polite" data-channel-order-target="status" hidden></p>
+        <button type="button" class="btn" data-channel-order-target="reset" data-action="channel-order#reset" disabled>Cancel</button>
+        <button type="button" class="btn btn--reversed" data-channel-order-target="save" data-action="channel-order#save" disabled>Save order</button>
+      </div>
+    </div>
 {% endif %}
   </section>
 {% endif %}

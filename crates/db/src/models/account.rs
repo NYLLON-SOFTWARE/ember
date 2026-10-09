@@ -62,12 +62,6 @@ impl AccountSettings {
         self.data.get(HIDE_TRANSLATION_BUTTONS).is_none_or(|value| present(Some(value)))
     }
 
-    /// Personal preferences live under user IDs in the existing JSON column, without changing
-    /// the Rails schema. Missing preferences leave channels in their normal alphabetical order.
-    pub fn channel_order(&self, user_id: i64) -> Vec<i64> {
-        self.personal_channels(CHANNEL_ORDER, user_id)
-    }
-
     pub fn default_room_order(&self) -> Vec<i64> {
         self.data
             .get(DEFAULT_ROOM_ORDER)
@@ -277,9 +271,9 @@ impl Account {
         Ok(())
     }
 
-    /// Set only this user's visible shared-channel order. Empty resets it to alphabetical.
-    /// Returns false for invalid IDs or inaccessible rooms, without changing any preferences.
-    pub fn set_channel_order(tx: &mut Tx<'_>, user_id: i64, room_ids: &[i64]) -> Result<bool> {
+    /// Reorder the current user's visible favorites, never the shared room list.
+    /// Require the full current set so stale requests cannot star or unstar rooms.
+    pub fn set_favorite_order(tx: &mut Tx<'_>, user_id: i64, room_ids: &[i64]) -> Result<bool> {
         if room_ids.len() > MAX_CHANNEL_ORDER {
             return Ok(false);
         }
@@ -288,33 +282,23 @@ impl Account {
             .filter(|(_, room)| !room.direct())
             .map(|(_, room)| room.id)
             .collect();
-        let mut seen = HashSet::new();
-        if room_ids.iter().any(|id| !accessible.contains(id) || !seen.insert(*id)) {
-            return Ok(false);
-        }
-
         let account = Self::first(tx.conn())?.or_not_found("Account")?;
         let mut settings = account.settings();
-        let orders = settings.data.entry(CHANNEL_ORDER).or_insert_with(|| Value::Object(Map::new()));
-        if !orders.is_object() {
-            *orders = Value::Object(Map::new());
+        let favorites: HashSet<i64> = settings.favorite_channels(user_id).into_iter().filter(|id| accessible.contains(id)).collect();
+        let submitted: HashSet<i64> = room_ids.iter().copied().collect();
+        if submitted.len() != room_ids.len() || submitted != favorites {
+            return Ok(false);
         }
-        let orders = orders.as_object_mut().expect("channel orders are an object");
-        if room_ids.is_empty() {
-            orders.remove(&user_id.to_string());
-        } else {
-            orders.insert(user_id.to_string(), Value::Array(room_ids.iter().copied().map(Value::from).collect()));
+        let users = settings.data.entry(FAVORITE_CHANNELS).or_insert_with(|| Value::Object(Map::new()));
+        if !users.is_object() {
+            *users = Value::Object(Map::new());
         }
-        if orders.is_empty() {
-            settings.data.remove(CHANNEL_ORDER);
-        }
-        // This is a personal display preference, not an account/logo change: leave updated_at
-        // and therefore account image URLs and shared message fragment keys untouched.
+        users.as_object_mut().expect("favorite channels are an object").insert(user_id.to_string(), serde_json::json!(room_ids));
         tx.conn().execute_cached(r#"UPDATE "accounts" SET "settings" = ? WHERE "id" = ?"#, params![settings.to_json(), account.id])?;
         Ok(true)
     }
 
-    /// Administrators set the workspace fallback without replacing members' personal orders.
+    /// Administrators set the shared order for everyone, replacing legacy personal room orders.
     /// Recheck both the role and room visibility inside the write transaction.
     pub fn set_default_room_order(tx: &mut Tx<'_>, user_id: i64, room_ids: &[i64]) -> Result<bool> {
         if !crate::User::find_active(tx.conn(), user_id)?.is_administrator() || room_ids.len() > MAX_CHANNEL_ORDER {
@@ -353,6 +337,7 @@ impl Account {
             }
             settings.data.insert(DEFAULT_ROOM_ORDER.into(), serde_json::json!(merged));
         }
+        settings.data.remove(CHANNEL_ORDER);
         // Display ordering must not invalidate account logo URLs or message fragment caches.
         tx.conn().execute_cached(r#"UPDATE "accounts" SET "settings" = ? WHERE "id" = ?"#, params![settings.to_json(), account.id])?;
         Ok(true)
@@ -372,15 +357,15 @@ impl Account {
         let account = Self::first(tx.conn())?.or_not_found("Account")?;
         let mut settings = account.settings();
         let mut favorites = settings.favorite_channels(user_id);
-        favorites.retain(|id| accessible.contains(id) && *id != room_id);
-        if favorite {
+        favorites.retain(|id| accessible.contains(id) && (*id != room_id || favorite));
+        if favorite && !favorites.contains(&room_id) {
             if favorites.len() >= MAX_CHANNEL_ORDER {
                 return Ok(None);
             }
             favorites.push(room_id);
         }
-        favorites.sort_unstable();
-        favorites.dedup();
+        let mut seen = HashSet::new();
+        favorites.retain(|id| seen.insert(*id));
         let users = settings.data.entry(FAVORITE_CHANNELS).or_insert_with(|| Value::Object(Map::new()));
         if !users.is_object() {
             *users = Value::Object(Map::new());

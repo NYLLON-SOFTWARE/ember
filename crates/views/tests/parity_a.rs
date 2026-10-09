@@ -152,6 +152,8 @@ fn accounts_edit() {
                 restrict_room_creation_to_administrators: account_fact(name, "restrict_room_creation_to_administrators").as_bool().unwrap(),
                 administrators,
                 members,
+                rooms: Vec::new(),
+                room_order: "[]".into(),
                 next_page: (name == "account_edit_paginated").then(|| "2".to_string()),
             }
             .render()
@@ -472,8 +474,6 @@ fn sidebar<'a>(name: &str, ctx: &'a matchbox_views::ViewContext<'a>) -> users::S
             .collect(),
         favorite_channels: "[]".into(),
         channel_order: "[]".into(),
-        default_room_order: "[]".into(),
-        custom_room_order: false,
     }
 }
 
