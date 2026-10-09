@@ -22,25 +22,21 @@
   </header>
   {% include "pwa/_install_instructions.html" %}
 
-  <div class="align-center center avatar__form gap" data-controller="upload-preview">
-{% let form = self.profile_form().class("txt-medium") %}    {% filter form_with(form) %}
-      <label class="btn input--file">
-        {{ h::image_tag(ctx, "camera.svg", h::attrs().aria_hidden().size(20)) }}
-        {{ form.file_field("avatar", h::attrs().id("file").class("input").accept("image/*").data("upload_preview_target", "input").data("action", "upload-preview#previewImage change->form#submit")) }}
-        <span class="for-screen-reader">Upload avatar</span>
-      </label>
+  <div class="mb-logo-upload mb-profile-avatar" data-controller="upload-preview">
+{% let form = self.profile_form() %}{% filter form_with(form) %}
+    <label class="mb-logo-picker" for="{{ form.field_id("avatar") }}">
+      {{ h::image_tag(ctx, user.avatar_path.as_str(), h::attrs().class("mb-logo-preview").alt("Your avatar").size(96).data("upload_preview_target", "image")) }}
+      <span class="mb-logo-camera" aria-hidden="true">{{ h::image_tag(ctx, "camera.svg", h::attrs().aria_hidden().size(20)) }}</span>
+      {{ form.file_field("avatar", h::attrs().class("mb-logo-input").accept("image/*").data("upload_preview_target", "input").data("action", "upload-preview#previewImage change->form#submit").aria("describedby", "profile-avatar-description")) }}
+      <span class="for-screen-reader">Upload avatar</span>
+    </label>
+    <noscript><button class="btn" type="submit">Save avatar</button></noscript>
 {% endfilter %}
-{% let form = self.profile_form() %}    {% filter form_with(form) %}
-      <label class="btn avatar input--file txt-xx-large">
-        {{ h::image_tag(ctx, user.avatar_path.as_str(), h::attrs().aria_hidden().size(300).data("upload_preview_target", "image")) }}
-        {{ form.file_field("avatar", h::attrs().id("file").class("input").accept("image/*").data("upload_preview_target", "input").data("action", "upload-preview#previewImage change->form#submit")) }}
-        <span class="for-screen-reader">Avatar</span>
-      </label>
-{% endfilter %}
-{% if avatar_attached %}      {% filter button_to(h::routes::user_avatar(user.id), h::attrs().method("delete").class("btn btn--negative txt-small avatar__delete-btn")) %}
-        {{ h::image_tag(ctx, "minus.svg", h::attrs().aria_hidden().size(20)) }}
-        <span class="for-screen-reader">Delete avatar</span>
-{% endfilter %}{% endif %}  </div>
+    <p class="txt-small txt-subtle margin-none" id="profile-avatar-description">Choose a profile photo</p>
+{% if avatar_attached %}
+    {% filter button_to(h::routes::user_avatar(user.id), h::attrs().method("delete").class("btn txt-small mb-logo-remove")) %}Remove avatar{% endfilter %}
+{% endif %}
+  </div>
 
 {% let form = self.profile_form().class("mb-auth-form") %}{% filter form_with(form) %}
     <div class="mb-field">
@@ -48,7 +44,7 @@
         <label for="{{ form.field_id("name") }}">Name</label>
         {{ h::translation_button(ctx, "user_name") }}
       </div>
-      {{ form.text_field("name", Some(user.name.as_str()), h::attrs().class("input").autocomplete("name").placeholder("Enter your name").autofocus().required(true).data("1p-ignore", true)) }}
+      {{ form.text_field("name", Some(user.name.as_str()), h::attrs().class("input").autocomplete("name").placeholder("Enter your name").required(true).data("1p-ignore", true)) }}
     </div>
     <div class="mb-field">
       <div class="mb-field-label">

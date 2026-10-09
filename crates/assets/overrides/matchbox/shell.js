@@ -50,7 +50,6 @@
   }
 
   function filterRooms() {
-    const query = document.querySelector('[data-matchbox-room-filter]')?.value.trim().toLocaleLowerCase() || ''
     let visible = 0
     let unread = 0
     const rows = document.querySelectorAll('[data-matchbox-room-row]')
@@ -62,7 +61,7 @@
       }
       const isUnread = row.classList.contains('unread') || !!row.querySelector('.unread')
       if (isUnread) unread++
-      const show = (!unreadOnly || isUnread) && row.textContent.toLocaleLowerCase().includes(query)
+      const show = !unreadOnly || isUnread
       const container = row.closest('form') || row
       container.hidden = !show
       if (show) visible++
@@ -113,22 +112,16 @@
       unreadOnly = !unreadOnly
       filterRooms()
       if (mobile.matches) setDrawer(true)
-      document.querySelector('[data-matchbox-room-filter]')?.focus()
     } else if (target.closest('.mb-rail, .mb-sidebar') && target.matches('a[href]')) {
       unreadOnly = false
-      const filter = document.querySelector('[data-matchbox-room-filter]')
-      if (filter) filter.value = ''
       filterRooms()
       // Frame-contained actions (new DM) stay in the drawer until a conversation is chosen.
       if (target.hasAttribute('data-turbo-frame') && mobile.matches) setDrawer(true)
       else if (!target.hasAttribute('data-turbo-frame')) setDrawer(false)
     }
   })
-  document.addEventListener('input', event => {
-    if (event.target.matches('[data-matchbox-room-filter]')) filterRooms()
-  })
   document.addEventListener('keydown', event => {
-    if (!isOpen()) return
+    if (!isOpen() || event.target.closest('dialog[open]') || document.querySelector('#appearance-menu:popover-open')) return
     if (event.key === 'Escape') {
       event.preventDefault()
       setDrawer(false, true)
@@ -140,6 +133,12 @@
       const next = event.shiftKey ? (current <= 0 ? items.length - 1 : current - 1) : (current + 1) % items.length
       event.preventDefault()
       items[next].focus()
+    }
+  })
+  window.addEventListener('matchbox:close-sidebar', () => setDrawer(false))
+  document.addEventListener('turbo:before-stream-render', event => {
+    if (event.target.getAttribute('action') === 'matchbox_room_order_changed') {
+      event.detail.render = () => window.dispatchEvent(new Event('matchbox:room-order-changed'))
     }
   })
   document.addEventListener('turbo:before-cache', () => { setDrawer(false); observer?.disconnect() })

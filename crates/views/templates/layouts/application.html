@@ -25,11 +25,13 @@
     {{ h::builder_tag("link", h::attrs().attr("rel", "icon").attr("href", ctx.account.logo_url.as_str()).type_("image/png")) }}
     {{ h::builder_tag("link", h::attrs().attr("rel", "apple-touch-icon").attr("href", ctx.account.logo_url.as_str())) }}
 
+    <script src="{{ ctx.asset("matchbox/appearance.js") }}" data-turbo-track="reload"></script>
     {{ h::raw(ctx.stylesheet_tags) }}
     {{ h::custom_styles_tag(ctx) }}
 
     {{ h::raw(ctx.importmap_tags) }}
     <script src="{{ ctx.asset("matchbox/shell.js") }}" defer data-turbo-track="reload"></script>
+    <script src="{{ ctx.asset("matchbox/settings.js") }}" defer data-turbo-track="reload"></script>
 
 {% block head %}{% endblock %}  </head>
 
@@ -38,14 +40,16 @@
 
 {% if let Some(user) = ctx.current_user.as_ref() %}
     <nav class="mb-rail" aria-label="Workspace">
-      <a class="mb-rail__brand" href="{{ h::routes::root() }}" aria-label="Matchbox home" title="Matchbox">{% call icons::icon("flame") %}</a>
+      <a class="mb-rail__brand" href="{{ h::routes::root() }}" aria-label="Matchbox home" title="{{ ctx.account.name }}">{% if ctx.account.has_logo %}<img src="{{ ctx.account.logo_url }}" alt="" width="44" height="44">{% else %}{% call icons::icon("flame") %}{% endif %}</a>
       <a class="mb-rail__link" href="{{ h::routes::root() }}" data-matchbox-home>{% call icons::icon("home") %}<span>Home</span></a>
-      <a class="mb-rail__link" href="{{ h::routes::new_rooms_direct() }}" data-turbo-frame="direct_rooms_control">{% call icons::icon("messages") %}<span>DMs</span></a>
+      <a class="mb-rail__link" href="{{ h::routes::new_rooms_direct() }}" data-matchbox-new-direct>{% call icons::icon("messages") %}<span>DMs</span></a>
       <button type="button" class="mb-rail__link" data-matchbox-activity aria-pressed="false" title="Show unread conversations">{% call icons::icon("bell") %}<span>Activity</span><span class="mb-activity-count" data-matchbox-unread-count hidden></span></button>
+      <a class="mb-rail__link" href="{{ h::routes::searches() }}">{% call icons::icon("search") %}<span>Search</span></a>
       <hr class="mb-rail__divider">
 {% if ctx.can_administer() %}      <a class="mb-rail__link" href="{{ h::routes::edit_account() }}">{% call icons::icon("settings") %}<span>Admin</span></a>
 {% else %}      <a class="mb-rail__link" href="{{ h::routes::edit_account() }}">{% call icons::icon("settings") %}<span>Workspace</span></a>
 {% endif %}
+      {% include "components/appearance.html" %}
       <a class="mb-rail__profile avatar" href="{{ h::routes::user_profile() }}" aria-label="Your profile" title="{{ user.name }}">
         <img src="{{ user.avatar_url }}" alt="" width="36" height="36">
       </a>
@@ -57,10 +61,12 @@
 {% block nav %}{% endblock %}    </nav>
 
 {% let notice = ctx.flash_notice.as_ref().or(ctx.flash_alert.as_ref()) %}{% if let Some(notice) = notice %}      <div class="flash" data-controller="element-removal" data-action="animationend->element-removal#remove">
-        <div class="flash__inner shadow" style="{% if ctx.flash_alert.is_some() %}--flash-background: var(--color-negative){% endif %}">
+        <div class="flash__inner shadow" role="alert" aria-atomic="true" style="{% if ctx.flash_alert.is_some() %}--flash-background: var(--color-negative){% endif %}">
 {% if ctx.flash_alert.is_some() %}            {{ h::image_tag(ctx, "alert.svg", h::attrs().aria("hidden", true).size(24).class("colorize--white")) }}
 {% else %}            {{ h::image_tag(ctx, "check.svg", h::attrs().aria("hidden", true).size(24).class("colorize--white")) }}
-{% endif %}          <span role="alert" aria-atomic="true">{{ notice }}</span>
+{% endif %}{% if notice.as_str() == "✓" %}          <span class="for-screen-reader">Changes saved</span>
+{% else %}          <span>{{ notice }}</span>
+{% endif %}
         </div>
       </div>
 {% endif %}
@@ -78,6 +84,8 @@
     </aside>
 {% endif %}
 
+{% if ctx.current_user.is_some() %}    {% include "components/direct_message.html" %}
+{% endif %}
     {% include "layouts/_lightbox.html" %}
 
   </body>

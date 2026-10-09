@@ -8,7 +8,7 @@ use matchbox_views::rooms::{FormRoom, OpenFormView, OpensEdit, OpensNew};
 
 use super::{
     Scope, ensure_can_administer, ensure_permission_to_create_rooms, redirect_to_room, render_shared_room, room_icon, room_icon_param,
-    room_name_param, set_room,
+    room_name_param, room_saved, set_room,
 };
 use crate::app::AppCtx;
 use crate::concerns::{self, Before, before_actions, require_current_user};
@@ -55,7 +55,7 @@ pub async fn create(c: &mut Ctx) -> Result {
         .await?;
     let partials = render_shared_room(c, &room).await?;
     c.app().broadcasts.open_room_create(&room, &partials);
-    redirect_to_room(c, room.id)
+    room_saved(c, room.id)
 }
 
 pub async fn edit(c: &mut Ctx) -> Result {
@@ -90,7 +90,7 @@ pub async fn update(c: &mut Ctx) -> Result {
         .await?;
     let partials = render_shared_room(c, &room).await?;
     c.app().broadcasts.open_room_update(&room, &partials);
-    redirect_to_room(c, room.id)
+    room_saved(c, room.id)
 }
 
 /// `User.active.ordered`

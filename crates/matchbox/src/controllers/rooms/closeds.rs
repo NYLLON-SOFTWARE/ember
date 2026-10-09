@@ -8,7 +8,7 @@ use matchbox_views::rooms::{ClosedFormView, ClosedsEdit, ClosedsNew, FormRoom};
 
 use super::{
     Scope, ensure_can_administer, ensure_permission_to_create_rooms, existing_user_ids, redirect_to_room, render_shared_room, room_icon,
-    room_icon_param, room_name_param, set_room, user_ids_param,
+    room_icon_param, room_name_param, room_saved, set_room, user_ids_param,
 };
 use crate::app::AppCtx;
 use crate::concerns::{self, Before, before_actions, require_current_user};
@@ -60,7 +60,7 @@ pub async fn create(c: &mut Ctx) -> Result {
         })
         .await?;
     broadcast_to_members(c, &room, false).await?;
-    redirect_to_room(c, room.id)
+    room_saved(c, room.id)
 }
 
 pub async fn edit(c: &mut Ctx) -> Result {
@@ -119,7 +119,7 @@ pub async fn update(c: &mut Ctx) -> Result {
         })
         .await?;
     broadcast_to_members(c, &room, true).await?;
-    redirect_to_room(c, room.id)
+    room_saved(c, room.id)
 }
 
 /// `broadcast_create_room` / `broadcast_update_room`: the shared-room partial, rendered once, to

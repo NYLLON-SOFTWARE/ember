@@ -104,8 +104,8 @@
 - { state: interactions/actions_menu, layers: [pixels, server, live, aria], reason: Matchbox workspace presentation; README Known differences, owner: views }
 - { state: interactions/actions_menu/attachment, layers: [pixels, server, live, aria], reason: Matchbox workspace presentation; README Known differences, owner: views }
 - { state: interactions/actions_menu/hover_only, layers: [pixels, server, live, aria], reason: Matchbox workspace presentation; README Known differences, owner: views }
-- { state: interactions/boost_picker, layers: [pixels, server, live, aria], reason: Matchbox workspace presentation; README Known differences, owner: views }
-- { state: interactions/boost_picker/filled, layers: [pixels, server, live, aria], reason: Matchbox workspace presentation; README Known differences, owner: views }
+- { state: interactions/boost_picker, layers: [pixels, server, live, aria], reason: Matchbox custom-reaction form with labeled input and spaced actions; README Known differences, owner: views }
+- { state: interactions/boost_picker/filled, layers: [pixels, server, live, aria], reason: Matchbox custom-reaction form with labeled input and spaced actions; README Known differences, owner: views }
 - { state: interactions/boost_picker/cancelled, layers: [pixels, server, live, aria], reason: Matchbox workspace presentation; README Known differences, owner: views }
 - { state: interactions/boost_created, layers: [pixels, server, live, aria], reason: Matchbox workspace presentation; README Known differences, owner: views }
 - { state: interactions/quick_boost, layers: [pixels, server, live, aria], reason: Matchbox workspace presentation; README Known differences, owner: views }

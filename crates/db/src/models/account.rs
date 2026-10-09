@@ -31,7 +31,9 @@ pub struct AccountSettings {
 
 const RESTRICT_ROOM_CREATION: &str = "restrict_room_creation_to_administrators";
 const HIDE_TRANSLATION_BUTTONS: &str = "hide_translation_buttons";
+const DEFAULT_ROOM_ORDER: &str = "matchbox_default_room_order";
 const CHANNEL_ORDER: &str = "matchbox_channel_order";
+const FAVORITE_CHANNELS: &str = "matchbox_favorite_channels";
 const CHANNEL_ICONS: &str = "matchbox_channel_icons";
 
 pub const MAX_CHANNEL_ORDER: usize = 4096;
@@ -63,8 +65,28 @@ impl AccountSettings {
     /// Personal preferences live under user IDs in the existing JSON column, without changing
     /// the Rails schema. Missing preferences leave channels in their normal alphabetical order.
     pub fn channel_order(&self, user_id: i64) -> Vec<i64> {
+        self.personal_channels(CHANNEL_ORDER, user_id)
+    }
+
+    pub fn default_room_order(&self) -> Vec<i64> {
         self.data
-            .get(CHANNEL_ORDER)
+            .get(DEFAULT_ROOM_ORDER)
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_i64)
+            .filter(|id| *id > 0)
+            .take(MAX_CHANNEL_ORDER)
+            .collect()
+    }
+
+    pub fn favorite_channels(&self, user_id: i64) -> Vec<i64> {
+        self.personal_channels(FAVORITE_CHANNELS, user_id)
+    }
+
+    fn personal_channels(&self, key: &str, user_id: i64) -> Vec<i64> {
+        self.data
+            .get(key)
             .and_then(|orders| orders.get(user_id.to_string()))
             .and_then(Value::as_array)
             .into_iter()
@@ -290,6 +312,91 @@ impl Account {
         // and therefore account image URLs and shared message fragment keys untouched.
         tx.conn().execute_cached(r#"UPDATE "accounts" SET "settings" = ? WHERE "id" = ?"#, params![settings.to_json(), account.id])?;
         Ok(true)
+    }
+
+    /// Administrators set the workspace fallback without replacing members' personal orders.
+    /// Recheck both the role and room visibility inside the write transaction.
+    pub fn set_default_room_order(tx: &mut Tx<'_>, user_id: i64, room_ids: &[i64]) -> Result<bool> {
+        if !crate::User::find_active(tx.conn(), user_id)?.is_administrator() || room_ids.len() > MAX_CHANNEL_ORDER {
+            return Ok(false);
+        }
+        let accessible: HashSet<i64> = crate::Membership::visible_with_ordered_room(tx.conn(), user_id)?
+            .into_iter()
+            .filter(|(_, room)| !room.direct())
+            .map(|(_, room)| room.id)
+            .collect();
+        let mut seen = HashSet::new();
+        if room_ids.iter().any(|id| !accessible.contains(id) || !seen.insert(*id)) {
+            return Ok(false);
+        }
+        let account = Self::first(tx.conn())?.or_not_found("Account")?;
+        let mut settings = account.settings();
+        if room_ids.is_empty() {
+            settings.data.remove(DEFAULT_ROOM_ORDER);
+        } else {
+            // Another admin may have ordered private rooms this admin cannot see. Keep those
+            // slots, replacing only the visible subset and appending newly ordered rooms.
+            let mut incoming = room_ids.iter().copied();
+            let mut merged = Vec::new();
+            for id in settings.default_room_order() {
+                if accessible.contains(&id) {
+                    if let Some(next) = incoming.next() {
+                        merged.push(next);
+                    }
+                } else {
+                    merged.push(id);
+                }
+            }
+            merged.extend(incoming);
+            if merged.len() > MAX_CHANNEL_ORDER {
+                return Ok(false);
+            }
+            settings.data.insert(DEFAULT_ROOM_ORDER.into(), serde_json::json!(merged));
+        }
+        // Display ordering must not invalidate account logo URLs or message fragment caches.
+        tx.conn().execute_cached(r#"UPDATE "accounts" SET "settings" = ? WHERE "id" = ?"#, params![settings.to_json(), account.id])?;
+        Ok(true)
+    }
+
+    /// Favorites are private to the signed-in user. Validate membership inside the same write
+    /// transaction so losing access cannot race a preference update.
+    pub fn set_channel_favorite(tx: &mut Tx<'_>, user_id: i64, room_id: i64, favorite: bool) -> Result<Option<Vec<i64>>> {
+        let accessible: HashSet<i64> = crate::Membership::visible_with_ordered_room(tx.conn(), user_id)?
+            .into_iter()
+            .filter(|(_, room)| !room.direct())
+            .map(|(_, room)| room.id)
+            .collect();
+        if !accessible.contains(&room_id) {
+            return Ok(None);
+        }
+        let account = Self::first(tx.conn())?.or_not_found("Account")?;
+        let mut settings = account.settings();
+        let mut favorites = settings.favorite_channels(user_id);
+        favorites.retain(|id| accessible.contains(id) && *id != room_id);
+        if favorite {
+            if favorites.len() >= MAX_CHANNEL_ORDER {
+                return Ok(None);
+            }
+            favorites.push(room_id);
+        }
+        favorites.sort_unstable();
+        favorites.dedup();
+        let users = settings.data.entry(FAVORITE_CHANNELS).or_insert_with(|| Value::Object(Map::new()));
+        if !users.is_object() {
+            *users = Value::Object(Map::new());
+        }
+        let users = users.as_object_mut().expect("favorite channels are an object");
+        if favorites.is_empty() {
+            users.remove(&user_id.to_string());
+        } else {
+            users.insert(user_id.to_string(), Value::Array(favorites.iter().copied().map(Value::from).collect()));
+        }
+        if users.is_empty() {
+            settings.data.remove(FAVORITE_CHANNELS);
+        }
+        // Personal favorites must not invalidate shared account/logo or message caches.
+        tx.conn().execute_cached(r#"UPDATE "accounts" SET "settings" = ? WHERE "id" = ?"#, params![settings.to_json(), account.id])?;
+        Ok(Some(favorites))
     }
 
     /// The room controller validates canonical icon names against the compiled Lucide catalog.

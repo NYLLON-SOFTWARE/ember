@@ -18,7 +18,7 @@ try {
     "--input", "src/theme.css", "--output", join(temporary, "app.css"), "--minify",
   ], { cwd: root, stdio: "inherit" });
   generated.set("app.css", license + await readFile(join(temporary, "app.css"), "utf8"));
-  for (const entry of ["app", "theme-init"]) {
+  for (const entry of ["app", "theme-init", "workspace-appearance"]) {
     const output = await build({
       absWorkingDir: root,
       entryPoints: [`src/${entry}.js`],
@@ -32,7 +32,7 @@ try {
       banner: { js: entry === "app" ? `${license}(()=>{if(window.__matchboxBasecoatLoaded)return;window.__matchboxBasecoatLoaded=true;` : "" },
       footer: { js: entry === "app" ? "})();" : "" },
     });
-    generated.set(`${entry}.js`, output.outputFiles[0].text);
+    generated.set(entry === "workspace-appearance" ? "../matchbox/appearance.js" : `${entry}.js`, output.outputFiles[0].text);
   }
 
   const lucide = join(root, "node_modules/lucide-static");

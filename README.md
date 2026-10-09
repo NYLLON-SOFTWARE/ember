@@ -116,26 +116,28 @@ See [`parity/SCREENS.md`](parity/SCREENS.md) for the historical coverage and mas
 All pages use compiled Askama templates and the existing form helpers for field names, escaping,
 and multipart handling. The workspace interface is styled in
 [`zz-matchbox.css`](crates/assets/overrides/zz-matchbox.css), loaded after the original stylesheets
-so rich-text editor and interaction styles remain available. Shared navigation, conversation filtering,
+so rich-text editor and interaction styles remain available. Shared navigation,
 unread activity, and the mobile drawer live in
 [`matchbox/shell.js`](crates/assets/overrides/matchbox/shell.js). Edit these two files for shared
 workspace behavior and appearance; page markup remains in `crates/views/templates/`.
 
-The workspace bundle contains 49,575 bytes of CSS (9,055 gzip) and 7,400 bytes of shell JavaScript
-(2,330 gzip), measured with gzip level 9. Channel ordering, icon selection, and SVG previews use separate Stimulus
+The workspace bundle contains 64,090 bytes of CSS (11,778 gzip) and 7,356 bytes of shell JavaScript
+(2,357 gzip), measured with gzip level 9. Room ordering, icon selection, and SVG previews use separate Stimulus
 controllers, discovered through the digested importmap alongside the inherited controllers.
-The compact message-actions controller adds 3,992 bytes (1,198 gzip).
+The compact message-actions controller adds 7,474 bytes (2,041 gzip).
+The shared appearance adapter adds 1,981 bytes (824 gzip),
+built from `basecoat/src/workspace-appearance.js` with the shared preference helpers.
 Assets use the existing digested URLs and compression pipeline. Message fragment recording and
 content-addressed response caches retain their existing mechanisms; the message presentation digest
 and index ETag version change when introducing SVG markup and compact actions so old HTML is not reused.
 
-Channel icons use [Lucide](https://lucide.dev/icons/), pinned to `lucide-static` 1.53.0. The committed
+Room icons use [Lucide](https://lucide.dev/icons/), pinned to `lucide-static` 1.53.0. The committed
 `crates/assets/overrides/lucide/catalog.json` contains 1,869 canonical icons; the build emits a
 sorted Rust lookup table. Chat pages embed only their selected icons, with no icon-library request.
 The picker fetches the digested catalog on first opening (990,964 bytes; 111,212 gzip), shows 72
 results at a time, and shares that cached catalog across Turbo visits. The icon picker controller
 is 7,851 bytes (2,656 gzip). Geometric SVG elements and attributes are validated during generation;
-uploads and user-provided markup cannot become channel icons. ISC and Feather MIT attribution is
+uploads and user-provided markup cannot become room icons. ISC and Feather MIT attribution is
 included in `crates/assets/overrides/lucide/LICENSE.txt`.
 
 The setup screen keeps its separate Basecoat Vega profile. Its shared controls live in
@@ -205,16 +207,44 @@ behavior changes and compatibility limits are listed below.
   a conversation sidebar, a compact room header, left-aligned message threads, an invitation card,
   and a full-width composer. Small screens use a dismissible sidebar drawer and touch-sized controls.
   Home and direct-message navigation use actual room memberships; Activity shows actual unread
-  conversations and counts. Conversation search filters the existing sidebar rows.
+  conversations and counts. Search in the rail opens the existing full message search. Matchbox
+  uses “rooms” consistently in labels, settings, favorites, and search. The sidebar starts with
+  rooms directly beneath the workspace name. Room creation lives in workspace
+  settings, alongside the admin-only room-creation permission control; existing creation permissions
+  still apply. The new-room back button returns to workspace settings, including after switching
+  between open and private rooms. The appearance control above the profile avatar offers Light,
+  Dark, and System, shares onboarding's browser preference, and follows live system changes in
+  System mode. The selected palette applies before paint and persists across visits and tabs.
+  Opening a profile does not autofocus the name field. Save confirmations show a single checkmark
+  centered within the content pane; descriptive notices and errors keep their text.
+  Custom CSS saves submit with a full page navigation so the stylesheet reload does not consume
+  the confirmation before it is displayed.
+  The direct-message picker distinguishes an empty people list from an unsuccessful typed search;
+  opening or clearing the search never prompts the user to try another name.
+  The star beside a room name saves a per-user favorite; starred rooms
+  stay at the top of that user’s sidebar, preserving personal ordering within each group. Search
+  uses a subtle focus border and a vertically centered exit button.
   Follow-up message timestamps appear to the right of the message body on hover or keyboard focus,
   with their space reserved to avoid moving the text; the first message keeps its header timestamp.
+  Desktop messages use a 64px text inset, 36px avatars with 6px corners, and 15px text with a 22px
+  line height. One-line author/message rows are 52px high and continuation rows are 30px high.
+  Date pills use 14px bold text and a 28px height; mobile keeps compact gutters and larger tap targets.
   Message options use a compact bar with three quick reactions, reply or attachment actions, copy
   link, and edit. More reactions opens a small tray with the other reactions and custom boost.
-  The bar stays within the conversation on mobile and near scroll boundaries, supports keyboard
-  focus and Escape, and closes before Turbo caches the page. Without JavaScript, the disclosure
+  On desktop the native options disclosure sits inside the bar, giving ordinary editable text
+  messages a 266×42px toolbar, 16px from the pane edge and 17px above the row. Hovering opens the
+  bar across the row's top edge while keeping a continuous hover area.
+  Opening the additional reaction tray keeps the bar anchored in place; near the composer the tray
+  opens above it. The bar stays reachable while moving onto it and dismisses after leaving. Only one
+  bar opens at a time. Clicking Message options keeps it open for interaction, and keyboard and
+  touch users can still open it with that control.
+  Custom reactions use a spaced form card with a labeled input, the existing 16-character limit,
+  and explicit Add reaction / Cancel actions. The bar stays within the conversation on mobile and
+  near scroll boundaries, supports keyboard focus and Escape, and closes before Turbo caches the page.
+  Without JavaScript, the disclosure
   includes the full reaction tray. Message show/index/create DOM snapshots and the three
   message-rendering fragment parity exceptions cover this deliberate presentation change.
-  The design does not fabricate channels, people, or an Apps section. Sign-in and invitation signup
+  The design does not fabricate rooms, people, or an Apps section. Sign-in and invitation signup
   use form cards; account/profile screens have persistent labels and visible actions.
   Search shows recent searches once above the results instead of duplicating the links in navigation.
   First-run retains its separate Basecoat card. All other pages inherit the shared workspace styles, including
@@ -230,22 +260,45 @@ behavior changes and compatibility limits are listed below.
   snapshots; other open browsers pick up the choice on their next page load.
 - **Workspace controls:** entering an editable single-line field selects its existing value so
   typing replaces it. A subsequent click can place the caret normally; multiline editors retain
-  their usual editing behavior. Workspace logos use a single preview with an overlaid camera picker
-  and a separate removal action. Immediate account switches save without success flashes; name/logo
-  saves have a readable confirmation. Search focus and membership badges use the shared control styling.
-- **Personal channel order:** hold a channel for 400 ms and drag to reorder it, or focus it and use
-  Alt + Up/Down. The A–Z action restores alphabetical order. Preferences are saved for the signed-in
-  user in `accounts.settings.matchbox_channel_order`, without a schema migration or changing account
-  cache timestamps. Newly joined channels follow the saved entries alphabetically. Inaccessible,
-  invisible, and direct rooms cannot be submitted to this preference endpoint.
-- **Channel icons:** channel creators and administrators can choose a Lucide icon when creating or
-  editing open or restricted channels. A searchable, keyboard-accessible picker stages the choice;
+  their usual editing behavior. Workspace logos and profile avatars use a single large preview with
+  an overlaid camera picker and a separate removal action. Uploads still save immediately and offer
+  a submit button without JavaScript. The navigation rail shows the uploaded workspace logo, falling
+  back to the Matchbox mark when no logo is set. Immediate account switches save without success flashes; name/logo
+  saves have a readable confirmation. Membership badges use the shared control styling.
+- **Unsaved room edits:** new/edit room forms prompt with **Unsaved Changes**, **Discard**, and
+  **Save** before in-app navigation or same-document browser back/forward. Escape or the close action
+  returns to editing. Save validates and persists before continuing to the requested destination;
+  failed saves leave the draft intact. Room create/update requests with `Prefer: return=minimal`
+  receive a 204 acknowledgment after saving, so removing your own membership can still finish;
+  ordinary form submissions retain their redirects. Access-form switches preserve the name, icon, and membership
+  drafts. Reverting values removes the prompt. Room forms bypass Turbo snapshots so discarded
+  drafts do not return with Back. Tab close, reload, and cross-document history use the browser's
+  standard unsaved-changes warning; browsers do not allow styling that warning. Other forms retain
+  their existing save behavior.
+- **Room ordering:** hold a room for 400 ms and drag to reorder it, or focus it and use
+  Alt + Up/Down. Admins set the workspace default; other members can save a personal override.
+  **Reset** restores alphabetical defaults for admins, or returns a member to the workspace order.
+  Favorites remain personal and sort first. Default changes refresh connected sidebars without
+  replacing personal orders; new members inherit the default. The existing account settings JSON
+  stores `matchbox_default_room_order` and per-user `matchbox_channel_order`, with no schema migration
+  or changes to account cache timestamps. New/unranked rooms follow saved entries alphabetically.
+  Submitted rooms must be visible shared memberships. The admin endpoint rechecks the role in the
+  write transaction and preserves ranked private rooms the submitting admin cannot see. Broadcasts
+  carry no room IDs; each browser fetches only its authorized sidebar.
+- **New direct messages:** the sidebar action and rail DMs button open a shared people-search modal.
+  Search matches full names; a leading `@` is accepted as a convenience, not a unique username.
+  Select one or more people to start or reopen a conversation through the existing direct-room
+  endpoint. The modal supports keyboard selection, pagination, mobile layouts, retry after a failed
+  search, and retains recipients across background sidebar updates. The original direct-message
+  page remains the link destination when the modal enhancement is unavailable.
+- **Room icons:** room creators and administrators can choose a Lucide icon when creating or
+  editing open or restricted rooms. A searchable, keyboard-accessible picker stages the choice;
   **Use icon** applies it to the form and **Save** persists it for everyone. Cancel keeps the prior
   choice; the default hashtag can be restored. Without JavaScript, the complete catalog is available
-  in a native select. Icons appear in the sidebar and channel header, including live sidebar updates.
-  Canonical names are validated before any other submitted channel changes; unknown names return
+  in a native select. Icons appear in the sidebar and room header, including live sidebar updates.
+  Canonical names are validated before any other submitted room changes; unknown names return
   422. Choices live in `accounts.settings.matchbox_channel_icons`, requiring no schema migration.
-  Type changes retain the icon and channel deletion removes it. Only the changed channel's timestamp
+  Type changes retain the icon and room deletion removes it. Only the changed room's timestamp
   is updated; account timestamps and message fragment caches retain their existing behavior.
 - **SVG attachments:** SVGs up to 5 MiB gain a lazy image preview. The browser loads the original
   download into an isolated `<img>` data URL; uploaded markup is never inserted into the page DOM.
@@ -270,7 +323,7 @@ behavior changes and compatibility limits are listed below.
   a legacy page. The setup screen has separate KRO visual and behavior checks.
 - Session-transfer auto-submit forms explicitly close their form tag; the pinned Rails
   reference omitted it.
-- Background sidebar refreshes preserve an open New Ping form and selected recipients.
+- Background sidebar refreshes preserve the legacy New Ping form as well as the new DM picker.
 - Rapid message sends recheck author grouping and day separators around replaced optimistic messages.
   A confirmed message no longer keeps its author hidden after the preceding pending message disappears;
   it displays correctly without reloading the conversation.

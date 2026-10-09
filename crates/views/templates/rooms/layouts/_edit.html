@@ -1,6 +1,6 @@
 {#- reference/app/views/rooms/layouts/_edit.html.erb: page layout for editing a room; pages fill room_form -#}
 {% extends "layouts/application.html" %}
-{%- block head %}{% endblock %}
+{%- block head %}<meta name="turbo-cache-control" content="no-cache">{% endblock %}
 
 {%- block nav %}
   <div class="flex-item-justify-start">
@@ -11,8 +11,8 @@
 {%- block content %}
 <section class="panel mb-settings-panel" style="view-transition-name: edit-room-{{ self.room_id() }}">
   <header class="mb-page-heading">
-    <h1>Channel settings</h1>
-    <p>Manage the channel name, access, and members.</p>
+    <h1>Room settings</h1>
+    <p>Manage the room name, access, and members.</p>
   </header>
   {% block room_form %}{% endblock %}
 </section>

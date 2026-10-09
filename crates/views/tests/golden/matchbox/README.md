@@ -9,8 +9,13 @@ Historical Rails HTML, JSON facts, and assets remain unchanged.
 fragments. The view-B tests select them for page renders. Unchanged message, rich-text, and protocol
 fragments still compare with the original Rails goldens. Message show/index/create renders use
 Matchbox snapshots for the compact actions bar, as do room refresh streams; their routes and Turbo targets retain behavior
-coverage. Existing behavior assertions remain in the
+coverage. The custom-reaction form also has a Matchbox snapshot; its validation and Turbo targets
+remain covered by native browser checks. Existing behavior assertions remain in the
 tests alongside these presentation snapshots.
+
+Workspace snapshots also cover the appearance selector, new-room return to settings, and the
+single-icon save confirmation. Native browser checks verify saved appearance choices, system
+changes, keyboard/mobile controls, profile focus, and confirmation alignment in the content pane.
 
 After making an intentional UI change, rebuild snapshots explicitly:
 

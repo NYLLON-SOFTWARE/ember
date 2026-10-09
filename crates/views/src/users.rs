@@ -274,10 +274,12 @@ pub struct SidebarShow<'a> {
     pub direct_memberships: Vec<SidebarDirectItem>,
     pub direct_placeholder_users: Vec<UserSummary>,
     pub other_memberships: Vec<SidebarRoom>,
-    /// `Current.user.administrator? || !Current.account.settings.restrict_room_creation_to_administrators?`.
-    pub can_create_rooms: bool,
+    /// JSON array of the current user's starred shared channels.
+    pub favorite_channels: String,
     /// JSON array of shared room IDs in the current user's custom ordering (empty: alphabetic).
     pub channel_order: String,
+    pub default_room_order: String,
+    pub custom_room_order: bool,
 }
 
 impl Page for SidebarShow<'_> {}

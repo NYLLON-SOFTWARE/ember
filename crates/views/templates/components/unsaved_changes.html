@@ -1,0 +1,13 @@
+<dialog class="mb-unsaved-dialog" aria-labelledby="unsaved-changes-title" aria-describedby="unsaved-changes-description" data-matchbox-unsaved-dialog>
+  <button class="btn mb-unsaved-close" type="button" aria-label="Keep editing" data-matchbox-keep-editing>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+  </button>
+  <div class="mb-unsaved-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M16 3l5 5M10 14l-1 4 4-1L22 8a2.1 2.1 0 0 0-3-3Z"/></svg></div>
+  <h2 id="unsaved-changes-title">Unsaved Changes</h2>
+  <p id="unsaved-changes-description">You’ve made changes to this room. Save them before you leave, or discard them to keep things as they were.</p>
+  <p class="mb-unsaved-error" role="alert" data-matchbox-save-error hidden></p>
+  <div class="mb-unsaved-actions">
+    <button class="btn" type="button" data-matchbox-discard>Discard</button>
+    <button class="btn btn--reversed" type="button" data-matchbox-save autofocus>Save</button>
+  </div>
+</dialog>

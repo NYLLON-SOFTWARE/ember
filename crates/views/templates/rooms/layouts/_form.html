@@ -1,5 +1,5 @@
 {#- reference/app/views/rooms/layouts/_form.html.erb: used as the `room_form` filter block -#}
-<form action="{{ room.action(*kind) }}" accept-charset="UTF-8" method="post">
+<form action="{{ room.action(*kind) }}" accept-charset="UTF-8" method="post"{% if can_administer %} data-matchbox-settings="channel-{% if let Some(id) = room.id %}{{ id }}{% else %}new{% endif %}"{% endif %}>
 {%- if room.id.is_some() %}<input type="hidden" name="_method" value="patch" />{% else %}{% endif %}
   <div class="flex align-center gap">
     {%- if can_administer %}
@@ -31,3 +31,5 @@
   <button name="button" type="submit" class="btn btn--reversed mb-primary-button">Save</button>
   {%- endif %}
 </form>
+
+{% if can_administer %}{% include "components/unsaved_changes.html" %}{% endif %}

@@ -470,8 +470,10 @@ fn sidebar<'a>(name: &str, ctx: &'a matchbox_views::ViewContext<'a>) -> users::S
                 unread: r["unread"].as_bool().unwrap(),
             })
             .collect(),
-        can_create_rooms: sidebar["can_create_rooms"].as_bool().unwrap(),
+        favorite_channels: "[]".into(),
         channel_order: "[]".into(),
+        default_room_order: "[]".into(),
+        custom_room_order: false,
     }
 }
 

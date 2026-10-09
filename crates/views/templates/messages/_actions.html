@@ -13,7 +13,6 @@
             {% if loop.index0 < 3 %}{% include "messages/_reaction.html" %}{% endif %}
           {% endfor %}
         </div>
-        <span class="mb-message-action-divider" aria-hidden="true"></span>
         {% if let Some(attachment) = message.attachment() %}
           <a class="btn message__action-btn hide-in-ios-pwa" title="Download" aria-label="Download" href="{{ attachment.download_path }}">
             {{ crate::helpers::lucide_icon("download") }}

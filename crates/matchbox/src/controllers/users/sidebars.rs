@@ -15,7 +15,7 @@ pub async fn show(c: &mut Ctx) -> Result {
     c.respond_to(&[&format::HTML])?;
     let user = concerns::require_current_user(c)?.clone();
     let secrets = c.app().secrets.clone();
-    let (mut sidebar, restricted, channel_order) = {
+    let (mut sidebar, channel_order, default_room_order, custom_room_order, favorite_channels) = {
         let (user, secrets, fragments) = (user.clone(), secrets.clone(), c.app().fragment_cache.clone());
         c.app()
             .read(move |conn| {
@@ -24,15 +24,32 @@ pub async fn show(c: &mut Ctx) -> Result {
                 let sidebar = matchbox_views::fragment_cache::with(&fragments, || {
                     presenters::accounts::sidebar(conn, &secrets, &user, settings.as_ref())
                 })?;
-                let restricted = settings.as_ref().is_some_and(|settings| settings.restrict_room_creation_to_administrators());
-                let order = settings.map(|settings| settings.channel_order(user.id)).unwrap_or_default();
-                Ok((sidebar, restricted, order))
+                let visible: std::collections::HashSet<_> = sidebar.other_memberships.iter().map(|room| room.id).collect();
+                let defaults: Vec<_> = settings
+                    .as_ref()
+                    .map(|settings| settings.default_room_order())
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter(|id| visible.contains(id))
+                    .collect();
+                let personal: Vec<_> = settings
+                    .as_ref()
+                    .map(|settings| settings.channel_order(user.id))
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter(|id| visible.contains(id))
+                    .collect();
+                let custom = if user.is_administrator() { !defaults.is_empty() } else { !personal.is_empty() };
+                let order = if user.is_administrator() || personal.is_empty() { defaults.clone() } else { personal };
+                let favorites = settings.map(|settings| settings.favorite_channels(user.id)).unwrap_or_default();
+                Ok((sidebar, order, defaults, custom, favorites))
             })
             .await?
     };
-    // Stable sorting leaves newly joined channels alphabetic after the personal ordering.
+    // Unranked rooms stay alphabetic after the effective personal or workspace order.
     let positions: std::collections::HashMap<_, _> = channel_order.iter().enumerate().map(|(index, id)| (*id, index)).collect();
-    sidebar.other_memberships.sort_by_key(|room| positions.get(&room.id).copied().unwrap_or(usize::MAX));
+    let favorites: std::collections::HashSet<_> = favorite_channels.iter().copied().collect();
+    sidebar.other_memberships.sort_by_key(|room| (!favorites.contains(&room.id), positions.get(&room.id).copied().unwrap_or(usize::MAX)));
 
     let data = SidebarData {
         current_user: presenters::user_summary(&secrets, &user),
@@ -40,9 +57,10 @@ pub async fn show(c: &mut Ctx) -> Result {
         rooms_stream: rails_compat::turbo::signed_stream_name(&secrets, &["rooms"]),
         user_rooms_stream: rails_compat::turbo::signed_stream_name(&secrets, &[&user_gid(user.id).to_param(), "rooms"]),
         sidebar,
-        // `Current.user.administrator? || !Current.account.settings.restrict_room_creation_to_administrators?`
-        can_create_rooms: user.is_administrator() || !restricted,
+        favorite_channels: serde_json::to_string(&favorite_channels).expect("favorite channels are JSON"),
         channel_order: serde_json::to_string(&channel_order).expect("channel order is JSON"),
+        default_room_order: serde_json::to_string(&default_room_order).expect("room order is JSON"),
+        custom_room_order,
     };
     view_context::page_or_frame(
         c,
@@ -68,10 +86,22 @@ pub async fn update_order(c: &mut Ctx) -> Result {
     Ok(c.head(StatusCode::NO_CONTENT))
 }
 
+pub async fn update_default_order(c: &mut Ctx) -> Result {
+    concerns::before_actions(c, Before::default()).await?;
+    concerns::ensure_can_administer(c)?;
+    let user_id = concerns::require_current_user(c)?.id;
+    let order = parse_order(c.params.get("room_ids"))?;
+    if !c.app().write(move |tx| Account::set_default_room_order(tx, user_id, &order)).await? {
+        return Err(Error::Status(StatusCode::FORBIDDEN));
+    }
+    c.app().broadcasts.room_order_changed();
+    Ok(c.head(StatusCode::NO_CONTENT))
+}
+
 fn parse_order(value: Option<&Param>) -> Result<Vec<i64>> {
     let values = value.and_then(Param::as_array).ok_or_else(|| Error::BadRequest("room_ids must be an array".into()))?;
     if values.len() > matchbox_db::models::account::MAX_CHANNEL_ORDER {
-        return Err(Error::BadRequest("too many channels".into()));
+        return Err(Error::BadRequest("too many rooms".into()));
     }
     let mut seen = std::collections::HashSet::new();
     values
@@ -83,7 +113,7 @@ fn parse_order(value: Option<&Param>) -> Result<Vec<i64>> {
                 _ => None,
             }
             .filter(|id| *id > 0 && seen.insert(*id));
-            id.ok_or_else(|| Error::BadRequest("channel IDs must be unique positive integers".into()))
+            id.ok_or_else(|| Error::BadRequest("room IDs must be unique positive integers".into()))
         })
         .collect()
 }
@@ -93,8 +123,10 @@ struct SidebarData {
     rooms_stream: String,
     user_rooms_stream: String,
     sidebar: presenters::accounts::Sidebar,
-    can_create_rooms: bool,
+    favorite_channels: String,
     channel_order: String,
+    default_room_order: String,
+    custom_room_order: bool,
 }
 
 impl SidebarData {
@@ -107,8 +139,10 @@ impl SidebarData {
             direct_memberships: self.sidebar.direct_memberships.clone(),
             direct_placeholder_users: self.sidebar.direct_placeholder_users.clone(),
             other_memberships: self.sidebar.other_memberships.clone(),
-            can_create_rooms: self.can_create_rooms,
+            favorite_channels: self.favorite_channels.clone(),
             channel_order: self.channel_order.clone(),
+            default_room_order: self.default_room_order.clone(),
+            custom_room_order: self.custom_room_order,
         }
     }
 }
