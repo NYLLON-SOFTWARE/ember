@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="crates/assets/overrides/ember-icon.png" alt="Ember logo" width="160" height="160">
+</p>
+
 # How does this differ from Campfire in Rust?
 
 **Ember is a fork of [Campfire in Rust](https://github.com/basecamp/once-campfire-rust) with a
