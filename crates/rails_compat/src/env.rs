@@ -1,11 +1,16 @@
-//! Matchbox environment names, with the original names accepted for existing installations.
+//! Ember environment names, with the original names accepted for existing installations.
 
 use std::env::VarError;
 use std::ffi::OsString;
 
-/// Prefer the current name; fall back only when it is absent (an empty value is explicit).
+/// Prefer `EMBER_`, then `MATCHBOX_`, then `CAMPFIRE_`, including when called with a legacy
+/// name. Fall back only when a name is absent: an empty value is explicit.
 pub fn lookup<T>(name: &str, get: impl Fn(&str) -> Option<T>) -> Option<T> {
-    get(name).or_else(|| name.strip_prefix("MATCHBOX_").and_then(|suffix| get(&format!("CAMPFIRE_{suffix}"))))
+    let prefixes = ["EMBER_", "MATCHBOX_", "CAMPFIRE_"];
+    match prefixes.iter().find_map(|prefix| name.strip_prefix(*prefix)) {
+        Some(suffix) => prefixes.iter().find_map(|prefix| get(&format!("{prefix}{suffix}"))),
+        None => get(name),
+    }
 }
 
 /// Like `std::env::var_os`, accepting legacy installation settings.
@@ -23,12 +28,40 @@ mod tests {
     use super::*;
 
     #[test]
-    fn legacy_settings_work_and_explicit_new_settings_win() {
-        let values = [("CAMPFIRE_STORAGE_PATH", "old"), ("MATCHBOX_STORAGE_PATH", "new")];
+    fn current_settings_win_over_each_legacy_name() {
+        let values = [("CAMPFIRE_STORAGE_PATH", "campfire"), ("MATCHBOX_STORAGE_PATH", "matchbox"), ("EMBER_STORAGE_PATH", "ember")];
+        for requested in ["EMBER_STORAGE_PATH", "MATCHBOX_STORAGE_PATH", "CAMPFIRE_STORAGE_PATH"] {
+            let get = |name: &str| values.iter().find(|(key, _)| *key == name).map(|(_, value)| *value);
+            assert_eq!(lookup(requested, get), Some("ember"));
+        }
+    }
+
+    #[test]
+    fn falls_back_through_both_legacy_names() {
+        let values = [("CAMPFIRE_STORAGE_PATH", "campfire"), ("MATCHBOX_STORAGE_PATH", "matchbox")];
         let get = |name: &str| values.iter().find(|(key, _)| *key == name).map(|(_, value)| *value);
-        assert_eq!(lookup("MATCHBOX_STORAGE_PATH", get), Some("new"));
-        assert_eq!(lookup("MATCHBOX_STORAGE_PATH", |name| (name == "CAMPFIRE_STORAGE_PATH").then_some("old")), Some("old"));
-        assert_eq!(lookup("MATCHBOX_STORAGE_PATH", |name| (name == "MATCHBOX_STORAGE_PATH").then_some("")), Some(""));
-        assert_eq!(lookup("SECRET_KEY_BASE", get), None);
+        assert_eq!(lookup("EMBER_STORAGE_PATH", get), Some("matchbox"));
+        assert_eq!(lookup("EMBER_STORAGE_PATH", |name| (name == "CAMPFIRE_STORAGE_PATH").then_some("campfire")), Some("campfire"));
+        assert_eq!(lookup::<&str>("EMBER_STORAGE_PATH", |_| None), None);
+    }
+
+    #[test]
+    fn empty_settings_do_not_fall_back() {
+        for empty_name in ["EMBER_STORAGE_PATH", "MATCHBOX_STORAGE_PATH"] {
+            assert_eq!(
+                lookup("EMBER_STORAGE_PATH", |name| match name {
+                    name if name == empty_name => Some(""),
+                    "CAMPFIRE_STORAGE_PATH" => Some("campfire"),
+                    _ => None,
+                }),
+                Some("")
+            );
+        }
+    }
+
+    #[test]
+    fn unrelated_variables_keep_their_exact_names() {
+        assert_eq!(lookup("SECRET_KEY_BASE", |name| (name == "SECRET_KEY_BASE").then_some("secret")), Some("secret"));
+        assert_eq!(lookup("SECRET_KEY_BASE", |name| (name == "EMBER_SECRET_KEY_BASE").then_some("secret")), None);
     }
 }

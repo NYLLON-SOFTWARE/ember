@@ -1,4 +1,4 @@
-//! Matchbox's Action Text content pipeline: what a stored message body looks like on screen, in
+//! Ember's Action Text content pipeline: what a stored message body looks like on screen, in
 //! the editor, and as plain text.
 //!
 //! The Rails app is the oracle (see reference/app/helpers/messages_helper.rb,

@@ -26,7 +26,7 @@ CATEGORIES = [
     ("db models / queries", r"matchbox_db::"),
     ("cable", r"matchbox_cable::"),
     ("kit (request/response plumbing)", r"matchbox_kit::"),
-    ("app (controllers/channels/jobs)", r"^matchbox::"),
+    ("app (controllers/channels/jobs)", r"^(?:ember|matchbox)::"),
 ]
 LEAF_CATEGORIES = [
     ("malloc/free/realloc", r"^(__libc_)?(malloc|free|realloc|calloc|cfree|_int_malloc|_int_free|_int_free_chunk|_int_free_merge_chunk|malloc_consolidate|malloc_consolidate|_int_realloc|tcache|mi_|je_|arena_|unlink_chunk)|alloc::alloc|__rust_(alloc|dealloc|realloc)|_rjem|sdallocx"),

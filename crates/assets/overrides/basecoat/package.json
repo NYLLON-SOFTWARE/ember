@@ -1,5 +1,5 @@
 {
-  "name": "matchbox-basecoat",
+  "name": "ember-basecoat",
   "private": true,
   "type": "module",
   "scripts": {

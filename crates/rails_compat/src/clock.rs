@@ -2,7 +2,7 @@
 //!
 //! The models, cookies and sessions read the time from a [`SharedClock`] as they go; what needs
 //! it once (verifiers, storage) takes a `now` argument instead. Parity runs freeze the whole app
-//! with a [`TestClock`] (`MATCHBOX_FROZEN_TIME`), and tests move one.
+//! with a [`TestClock`] (`EMBER_FROZEN_TIME`), and tests move one.
 
 use std::sync::{Arc, Mutex, MutexGuard};
 

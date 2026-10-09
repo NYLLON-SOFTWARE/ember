@@ -74,7 +74,7 @@ pub async fn show(c: &mut Ctx) -> Result {
     .await
 }
 
-/// A Matchbox personal preference; the URL and the authenticated user, never a submitted
+/// An Ember personal preference; the URL and the authenticated user, never a submitted
 /// user ID, determine whose order changes. Normal before-actions retain authentication/CSRF.
 pub async fn update_order(c: &mut Ctx) -> Result {
     concerns::before_actions(c, Before::default()).await?;

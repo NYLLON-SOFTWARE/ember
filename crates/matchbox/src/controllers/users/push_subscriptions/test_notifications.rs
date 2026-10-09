@@ -10,7 +10,7 @@ use crate::concerns::{self, Before};
 use crate::integrations::net::Network;
 use crate::integrations::web_push;
 
-/// `@push_subscription.notification(title: "Matchbox Test", body: Random.uuid, path: user_push_subscriptions_url).deliver`
+/// `@push_subscription.notification(title: "Ember Test", body: Random.uuid, path: user_push_subscriptions_url).deliver`
 pub async fn create(c: &mut Ctx) -> Result {
     concerns::before_actions(c, Before::default()).await?;
     let user_id = concerns::require_current_user(c)?.id;

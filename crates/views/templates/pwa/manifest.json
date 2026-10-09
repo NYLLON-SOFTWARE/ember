@@ -1,5 +1,5 @@
 {
-  "name": {{ self.json(account_name.as_deref().unwrap_or("Matchbox")) }},
+  "name": {{ self.json(account_name.as_deref().unwrap_or("Ember")) }},
   "icons": [
     {
       "src": {{ self.json(logo_path_small) }},
@@ -28,13 +28,13 @@
   "shortcuts": [
     {
       "name": "New chat room",
-      "description": "Open Matchbox and start a new chat room",
+      "description": "Open Ember and start a new chat room",
       "url": "rooms/opens/new",
       "icons": [{ "src": {{ self.json(self.image_url("add.svg").as_str()) }}, "sizes": "any" }]
     },
     {
       "name": "My profile",
-      "description": "Open Matchbox and view your profile",
+      "description": "Open Ember and view your profile",
       "url": "/users/me/profile",
       "icons": [{ "src": {{ self.json(self.image_url("person.svg").as_str()) }}, "sizes": "any" }]
     }
@@ -44,7 +44,7 @@
       "src": {{ self.json(self.image_url("screenshots/android-chat.png").as_str()) }},
       "sizes": "1080x2400",
       "form_factor": "narrow",
-      "label": "Matchbox is an installable, self-hosted group chat system."
+      "label": "Ember is an installable, self-hosted group chat system."
     },
     {
       "src": {{ self.json(self.image_url("screenshots/android-sidebar.png").as_str()) }},

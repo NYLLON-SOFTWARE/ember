@@ -1,4 +1,4 @@
-//! A cable server with Matchbox's channels over a fixtures database, and a WebSocket client.
+//! A cable server with Ember's channels over a fixtures database, and a WebSocket client.
 #![allow(dead_code)]
 
 use std::sync::{Arc, OnceLock};

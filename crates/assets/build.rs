@@ -176,7 +176,7 @@ fn assets_version(rails_root: &Path) -> String {
 fn importmap_tags(load_path: &propshaft::LoadPath, entries: &[(String, String, String)], rails_root: &Path) -> String {
     let resolve = |path: &str| load_path.find(path).map(|index| format!("{PREFIX}/{}", entries[index].1));
     let mut pins = importmap::expand(&rails_root.join("config/importmap.rb"), rails_root);
-    // Matchbox controllers have no counterpart in reference/app/javascript, but must still
+    // Ember controllers have no counterpart in reference/app/javascript, but must still
     // participate in Stimulus discovery and the same digested importmap as inherited ones.
     let mut controllers: Vec<_> =
         entries.iter().filter(|(path, _, _)| path.starts_with("controllers/") && path.ends_with("_controller.js")).collect();

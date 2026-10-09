@@ -24,7 +24,7 @@ pub fn golden(name: &str, ext: &str) -> String {
     // Keep the frozen Rails evidence intact; only the intentional product name differs.
     std::fs::read_to_string(golden_dir().join(format!("{name}.{ext}")))
         .unwrap()
-        .replace("Campfire", "Matchbox")
+        .replace("Campfire", "Ember")
         .replace("campfire-icon", "matchbox-icon")
 }
 

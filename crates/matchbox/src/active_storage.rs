@@ -2,11 +2,11 @@
 //! engine's controllers serve them, plus `ActiveStorage::Blob#purge` for the purge job.
 //!
 //! Downloads stay public behind signed URLs; the disk `PUT` and direct uploads require a
-//! Matchbox session (`reference/config/initializers/active_storage_authentication.rb`). The disk
+//! Ember session (`reference/config/initializers/active_storage_authentication.rb`). The disk
 //! service's `show` gets `Cache-Control: max-age=3600, public`
 //! (`reference/config/initializers/active_storage.rb`). These controllers inherit from
 //! `ActiveStorage::BaseController` (`protect_from_forgery with: :exception`), not
-//! `ApplicationController`, so none of Matchbox's concerns run.
+//! `ApplicationController`, so none of Ember's concerns run.
 
 use std::sync::{Arc, LazyLock};
 
@@ -474,7 +474,7 @@ pub async fn direct_uploads_create(c: &mut Ctx) -> Result {
         return Err(Error::Status(StatusCode::UNPROCESSABLE_ENTITY));
     };
     // The upload's PUT body is read into memory, so it's capped like other bodies: don't hand out
-    // a URL for more than it will accept. (Matchbox's editor only attaches mentions and embeds;
+    // a URL for more than it will accept. (Ember's editor only attaches mentions and embeds;
     // files go up with the message form.)
     if !(0..=matchbox_kit::body::MAX_BUFFERED_BODY as i64).contains(&byte_size) {
         return Err(Error::Status(StatusCode::PAYLOAD_TOO_LARGE));

@@ -11,7 +11,7 @@ use crate::recorded::{self, RecordedPage};
 
 /// The instance variables a page template hands to the application layout.
 pub trait Page {
-    /// `@page_title`; the layout falls back to "Matchbox".
+    /// `@page_title`; the layout falls back to "Ember".
     fn page_title(&self) -> Option<String> {
         None
     }

@@ -1,6 +1,6 @@
 //! The process clock, and the HTTP layer's date arithmetic and formats.
 //!
-//! Set `MATCHBOX_FROZEN_TIME` (an RFC 3339 timestamp such as `2024-06-01T12:00:00Z`) to pin
+//! Set `EMBER_FROZEN_TIME` (an RFC 3339 timestamp such as `2024-06-01T12:00:00Z`) to pin
 //! `now()` for the whole process; [`from_env`] reads it at boot.
 
 use std::sync::Arc;
@@ -9,9 +9,9 @@ use jiff::Timestamp;
 
 pub use rails_compat::clock::{Clock, SharedClock, SystemClock, TestClock};
 
-pub const FROZEN_TIME_ENV: &str = "MATCHBOX_FROZEN_TIME";
+pub const FROZEN_TIME_ENV: &str = "EMBER_FROZEN_TIME";
 
-/// The process clock: frozen at `MATCHBOX_FROZEN_TIME` when set, the system clock otherwise.
+/// The process clock: frozen at `EMBER_FROZEN_TIME` when set, the system clock otherwise.
 pub fn from_env() -> anyhow::Result<SharedClock> {
     match rails_compat::env::var(FROZEN_TIME_ENV) {
         Ok(value) if !value.trim().is_empty() => {

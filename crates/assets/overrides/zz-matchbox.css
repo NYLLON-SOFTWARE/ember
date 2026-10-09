@@ -52,7 +52,7 @@ html[data-appearance].dark {
   --mb-reversed-icon-invert: 0;
 }
 
-/* Matchbox workspace. Keep behavior hooks in the original styles; presentation lives here. */
+/* Ember workspace. Keep behavior hooks in the original styles; presentation lives here. */
 body.mb-app {
   --mb-canvas: light-dark(#fff, #171717);
   --mb-surface: light-dark(#fafafa, #1c1c1c);

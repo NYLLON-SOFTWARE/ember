@@ -1,6 +1,6 @@
 //! Runs the same scenario as `scenario.rb` (reproduced below) through the Rust models and
 //! compares every table with the database the reference app produced from the same
-//! fixtures. Ignored unless `MATCHBOX_RUBY_SCENARIO_DB` points at that database.
+//! fixtures. Ignored unless `EMBER_RUBY_SCENARIO_DB` points at that database.
 //!
 //! ```ruby
 //! m = rooms(:designers).messages.create!(body: "Hello <b>there</b>", client_message_id: "s1", creator: david)
@@ -133,9 +133,9 @@ fn normalized_dump(conn: &Connection, table: &str, order: &str) -> Vec<String> {
 }
 
 #[test]
-#[ignore = "needs MATCHBOX_RUBY_SCENARIO_DB, the reference app's database after scenario.rb"]
+#[ignore = "needs EMBER_RUBY_SCENARIO_DB, the reference app's database after scenario.rb"]
 fn scenario_matches_ruby() {
-    let path = rails_compat::env::var("MATCHBOX_RUBY_SCENARIO_DB").expect("MATCHBOX_RUBY_SCENARIO_DB");
+    let path = rails_compat::env::var("EMBER_RUBY_SCENARIO_DB").expect("EMBER_RUBY_SCENARIO_DB");
     let ruby = Connection::open(path).unwrap();
     let t = TestDb::new();
     run_scenario(&t);

@@ -115,7 +115,7 @@ fn is_windows(operating_system: &Rb<Option<String>>) -> Rb<bool> {
 }
 
 impl ApplicationPlatform {
-    /// `ActionController::AllowBrowser::BrowserBlocker#blocked?` with Matchbox's
+    /// `ActionController::AllowBrowser::BrowserBlocker#blocked?` with Ember's
     /// `AllowBrowser::VERSIONS = { safari: 17.2, chrome: 120, firefox: 121, opera: 104, ie: false }`.
     /// The blocker parses the header itself; this reads the platform's parse of the same string.
     /// Rails raises (a 500) for a versioned agent with a nil browser; that is not blocked here.
@@ -242,7 +242,7 @@ mod tests {
 
     /// Times the User-Agent work of a page request for a few common agents, in ns per call (the
     /// median of `RUNS` runs of `ITERATIONS` calls):
-    /// `cargo test --release -p matchbox --bin matchbox time_user_agent_work -- --ignored --nocapture`
+    /// `cargo test --release -p matchbox --bin ember time_user_agent_work -- --ignored --nocapture`
     #[test]
     #[ignore = "timing harness; run by hand with --release"]
     fn time_user_agent_work() {

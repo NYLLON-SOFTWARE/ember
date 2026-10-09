@@ -12,8 +12,11 @@ fn branding_changes_the_default_display_name_without_overwriting_stored_names() 
     let t = TestDb::new();
     let mut account = signal(&t);
     account.name = "Campfire".into();
-    assert_eq!(account.display_name(), "Matchbox");
+    assert_eq!(account.display_name(), "Ember");
     assert_eq!(account.name, "Campfire");
+    account.name = "Matchbox".into();
+    assert_eq!(account.display_name(), "Ember");
+    assert_eq!(account.name, "Matchbox");
     account.name = "Our team".into();
     assert_eq!(account.display_name(), "Our team");
 }

@@ -11,7 +11,7 @@ REPO_PATH="${IMAGE_LINE%%:*}"                       # mcr.microsoft.com/playwrig
 REGISTRY="${REPO_PATH%%/*}"
 NAME="${REPO_PATH#*/}"
 INDEX_DIGEST="${IMAGE_LINE##*@}"
-CACHE="${PARITY_CACHE:-$HOME/.cache/matchbox-parity}"
+CACHE="${PARITY_CACHE:-$HOME/.cache/ember-parity}"
 ROOTFS="$CACHE/rootfs-${INDEX_DIGEST#sha256:}"
 LOCKHASH="$(sha256sum "$PARITY/package-lock.json" | cut -c1-16)"
 

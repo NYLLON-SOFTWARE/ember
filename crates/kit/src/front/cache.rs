@@ -21,7 +21,7 @@ use bytes::Bytes;
 use rand::Rng;
 use regex::Regex;
 
-/// The longest path and query a cacheable request may have. Matchbox's own cacheable URLs
+/// The longest path and query a cacheable request may have. Ember's own cacheable URLs
 /// (assets, avatars, QR codes) are far shorter.
 pub const MAX_CACHEABLE_URI: usize = 2048;
 

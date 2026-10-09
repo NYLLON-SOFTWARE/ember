@@ -1,5 +1,5 @@
 //! The fixture loader against facts from a Ruby-loaded fixtures database, and (ignored
-//! unless `MATCHBOX_RUBY_FIXTURES_DB` is set) a row-for-row comparison with one.
+//! unless `EMBER_RUBY_FIXTURES_DB` is set) a row-for-row comparison with one.
 
 use super::*;
 use crate::{Membership, Message, Role, Room, RoomType, Session, User};
@@ -94,9 +94,9 @@ pub(super) fn dump(conn: &Connection, table: &str) -> Vec<String> {
 }
 
 #[test]
-#[ignore = "needs MATCHBOX_RUBY_FIXTURES_DB, a database the reference app filled with `db:fixtures:load`"]
+#[ignore = "needs EMBER_RUBY_FIXTURES_DB, a database the reference app filled with `db:fixtures:load`"]
 fn fixtures_match_ruby_row_for_row() {
-    let path = rails_compat::env::var("MATCHBOX_RUBY_FIXTURES_DB").expect("MATCHBOX_RUBY_FIXTURES_DB");
+    let path = rails_compat::env::var("EMBER_RUBY_FIXTURES_DB").expect("EMBER_RUBY_FIXTURES_DB");
     let ruby = Connection::open(path).unwrap();
     let t = TestDb::new();
     let tables = [
@@ -111,9 +111,9 @@ fn fixtures_match_ruby_row_for_row() {
 }
 
 #[test]
-#[ignore = "writes a database to MATCHBOX_EXPORT_DB for the Rails rollback check"]
+#[ignore = "writes a database to EMBER_EXPORT_DB for the Rails rollback check"]
 fn export_database_for_rails() {
-    let path = rails_compat::env::var("MATCHBOX_EXPORT_DB").expect("MATCHBOX_EXPORT_DB");
+    let path = rails_compat::env::var("EMBER_EXPORT_DB").expect("EMBER_EXPORT_DB");
     let _ = std::fs::remove_file(&path);
     let env = crate::Env { bcrypt_cost: 4, ..Default::default() };
     let mut config = crate::Config::new(&path);

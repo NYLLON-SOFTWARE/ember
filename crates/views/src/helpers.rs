@@ -1,4 +1,4 @@
-//! Ports of `reference/app/helpers` and the Rails built-in helpers Matchbox's views use.
+//! Ports of `reference/app/helpers` and the Rails built-in helpers Ember's views use.
 //!
 //! Helpers return [`Html`] (askama's `Safe<String>`, the SafeBuffer equivalent), which templates
 //! print unescaped; everything else is escaped by [`ErbEscaper`] exactly like ERB. Block helpers

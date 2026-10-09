@@ -1,4 +1,4 @@
-//! Matchbox personal channel favorites, stored separately from channel ordering.
+//! Ember personal channel favorites, stored separately from channel ordering.
 
 use matchbox_db::Account;
 use matchbox_kit::{Ctx, Error, Result, StatusCode, format};

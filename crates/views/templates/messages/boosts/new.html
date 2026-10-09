@@ -1,4 +1,4 @@
-{# Matchbox reaction form; preserve the reference's submission, validation, and Turbo targets. #}
+{# Ember reaction form; preserve the reference's submission, validation, and Turbo targets. #}
 <turbo-frame id="{{ message.dom_id("new_boost") }}">
   <div class="mb-custom-reaction">
     <form class="boost__form mb-custom-reaction-form" data-controller="form scroll-into-view" data-turbo-frame="{{ message.dom_id("boosting") }}" data-action="keydown.esc-&gt;form#cancel" action="{{ message.boosts_path() }}" accept-charset="UTF-8" method="post">

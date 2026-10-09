@@ -254,7 +254,7 @@ impl Room {
         Ok(())
     }
 
-    /// Matchbox channel appearance is shared across members; no Rails table changes are needed.
+    /// Ember channel appearance is shared across members; no Rails table changes are needed.
     /// `icon` has already been validated against the embedded catalog by the controller.
     pub fn set_icon(&mut self, tx: &mut Tx<'_>, icon: Option<&str>) -> Result<()> {
         if self.direct() {

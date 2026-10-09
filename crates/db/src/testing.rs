@@ -56,7 +56,7 @@ impl EventSink for RecordingSink {
     }
 }
 
-/// Tag stripping, with mentions read from unverified SGIDs, as Matchbox's plain text reads them
+/// Tag stripping, with mentions read from unverified SGIDs, as Ember's plain text reads them
 /// (`reference/lib/rails_ext/action_text_attachables.rb`); the exact rules belong to
 /// `matchbox_richtext`. It reports no mentions: those need verified SGIDs (`Content#attachables`),
 /// so tests that need mentions state them.

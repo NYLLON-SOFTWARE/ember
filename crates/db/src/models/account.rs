@@ -56,7 +56,7 @@ impl AccountSettings {
         self.data.insert(RESTRICT_ROOM_CREATION.into(), cast);
     }
 
-    /// Matchbox defaults to hiding translation controls, including for existing accounts.
+    /// Ember defaults to hiding translation controls, including for existing accounts.
     /// Keep the default virtual so reading old settings does not rewrite their JSON.
     pub fn hide_translation_buttons(&self) -> bool {
         self.data.get(HIDE_TRANSLATION_BUTTONS).is_none_or(|value| present(Some(value)))
@@ -170,7 +170,7 @@ columns! {
 impl Account {
     /// Display the former default workspace name with the current branding without rewriting data.
     pub fn display_name(&self) -> &str {
-        if self.name == "Campfire" { "Matchbox" } else { &self.name }
+        if matches!(self.name.as_str(), "Campfire" | "Matchbox") { "Ember" } else { &self.name }
     }
 
     /// `Account.first` (`Current.account`).

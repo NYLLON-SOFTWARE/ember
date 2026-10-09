@@ -16,7 +16,7 @@ concurrency:
 permissions: {}
 
 env:
-  IMAGE_DESCRIPTION: Matchbox is an independent MIT-licensed fork of Basecamp Campfire in Rust, with chat rooms, direct messages, file attachments, search, web push, and bot integrations. One executable provides the web app, WebSockets, background jobs, file serving, and TLS.
+  IMAGE_DESCRIPTION: Ember is an independent MIT-licensed fork of Basecamp Campfire in Rust, with chat rooms, direct messages, file attachments, search, web push, and bot integrations. One executable provides the web app, WebSockets, background jobs, file serving, and TLS.
   SOURCE_URL: https://github.com/${{ github.repository }}
 
 jobs:
