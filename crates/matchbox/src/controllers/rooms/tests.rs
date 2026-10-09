@@ -314,14 +314,16 @@ async fn back_links_go_to_the_last_room_visited() {
         back_link(&reply.text()).to_string()
     };
 
-    assert_eq!(back_link_of(david.get("/rooms/opens/new").await), format!("/rooms/{original}"), "no cookie");
+    assert_eq!(back_link_of(david.get("/account/edit").await), format!("/rooms/{original}"), "no cookie");
     david.get(&format!("/rooms/{QUIET_CORNER}")).await;
-    assert_eq!(back_link_of(david.get("/rooms/opens/new").await), format!("/rooms/{QUIET_CORNER}"));
+    for path in ["/rooms/opens/new", "/rooms/closeds/new"] {
+        assert_eq!(back_link_of(david.get(path).await), "/account/edit", "new rooms return to settings");
+    }
     assert_eq!(back_link_of(david.get("/account/edit").await), format!("/rooms/{QUIET_CORNER}"));
     david.set_cookie("last_room", &DIRECT_KEVIN_BENDER.to_string());
-    assert_eq!(back_link_of(david.get("/rooms/opens/new").await), format!("/rooms/{original}"), "a room he isn't in");
+    assert_eq!(back_link_of(david.get("/account/edit").await), format!("/rooms/{original}"), "a room he isn't in");
     david.set_cookie("last_room", "nonsense");
-    assert_eq!(back_link_of(david.get("/rooms/opens/new").await), format!("/rooms/{original}"));
+    assert_eq!(back_link_of(david.get("/account/edit").await), format!("/rooms/{original}"));
 }
 
 #[tokio::test]
