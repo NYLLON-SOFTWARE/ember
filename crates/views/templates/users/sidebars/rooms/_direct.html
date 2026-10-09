@@ -1,4 +1,4 @@
-{% filter link_to_room(membership.room_id, h::attrs().class(membership.class_names()).id(h::dom_id("rooms_direct", membership.room_id, Some("list"))).data("sorted_list_number", membership.updated_at_epoch.as_str()).data("ember_room_row", "")) %}
+{% filter link_to_room(membership.room_id, h::attrs().class(membership.class_names()).id(h::dom_id("rooms_direct", membership.room_id, Some("list"))).data("sorted_list_number", membership.updated_at_epoch.as_str()).data("ember_room_row", "").data("matchbox_room_row", "")) %}
 {% if membership.members.len() > 1 %}
   <span class="avatar__group">
 {% for member in membership.members.iter().take(4) %}

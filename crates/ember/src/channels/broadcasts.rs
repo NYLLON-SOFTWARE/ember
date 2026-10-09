@@ -75,7 +75,8 @@ impl Broadcasts {
 
     /// Clients reload their own authorized sidebar; the global stream carries no room IDs.
     pub fn room_order_changed(&self) {
-        self.server.broadcast_stream_to(&[ROOMS], "<turbo-stream action=\"ember_room_order_changed\"></turbo-stream>");
+        // This wire name must also reach tabs that loaded their shell before the Ember rename.
+        self.server.broadcast_stream_to(&[ROOMS], "<turbo-stream action=\"matchbox_room_order_changed\"></turbo-stream>");
     }
 
     fn room_messages(room: &Room) -> [String; 2] {

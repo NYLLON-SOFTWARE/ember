@@ -1,14 +1,12 @@
 // One delegated adapter survives Turbo visits; the conversation frame can stay permanent.
 (() => {
-  if (window.emberWorkspace) return
-  window.emberWorkspace = true
+  if (window.matchboxWorkspace) return
+  window.matchboxWorkspace = true
   const mobile = matchMedia('(max-width: 900px)')
   let observer
   let returnFocus
   let unreadOnly = false
   let fieldPointer
-  // A retained Turbo sidebar can come from either side of an Ember upgrade.
-  const hook = name => `:is([data-ember-${name}], [data-matchbox-${name}])`
   const sidebar = () => document.querySelector('.mb-sidebar')
   const rail = () => document.querySelector('.mb-rail')
   const isOpen = () => document.body.classList.contains('mb-sidebar-open')
@@ -16,7 +14,7 @@
   function replaceableField(target) {
     return document.body.classList.contains('mb-app') && target instanceof HTMLInputElement &&
       ['text', 'search', 'email', 'url', 'tel', 'password'].includes(target.type) &&
-      !target.disabled && !target.readOnly && !target.matches(hook('preserve-selection'))
+      !target.disabled && !target.readOnly && !target.hasAttribute('data-matchbox-preserve-selection')
   }
 
   // Select on entry, not on every click: a second click can still position the caret.
@@ -34,7 +32,7 @@
     open = open && mobile.matches
     if (open && !isOpen()) returnFocus = document.activeElement
     document.body.classList.toggle('mb-sidebar-open', open)
-    document.querySelectorAll(hook('sidebar-toggle')).forEach(button => {
+    document.querySelectorAll('[data-matchbox-sidebar-toggle]').forEach(button => {
       button.setAttribute('aria-expanded', String(open))
       button.setAttribute('aria-label', open ? 'Close conversations' : 'Open conversations')
     })
@@ -44,9 +42,9 @@
       if (region) region.inert = mobile.matches && !open
     }
     for (const region of document.querySelectorAll('.mb-main, .mb-header')) region.inert = open
-    if (open) sidebar()?.querySelector(hook('sidebar-close'))?.focus()
+    if (open) sidebar()?.querySelector('[data-matchbox-sidebar-close]')?.focus()
     else if (restoreFocus) {
-      const target = returnFocus?.isConnected ? returnFocus : document.querySelector(hook('sidebar-toggle'))
+      const target = returnFocus?.isConnected ? returnFocus : document.querySelector('[data-matchbox-sidebar-toggle]')
       target?.focus()
     }
   }
@@ -54,7 +52,7 @@
   function filterRooms() {
     let visible = 0
     let unread = 0
-    const rows = document.querySelectorAll(hook('room-row'))
+    const rows = document.querySelectorAll('[data-matchbox-room-row]')
     for (const row of rows) {
       if (row.matches('a[href]')) {
         const active = new URL(row.href).pathname === location.pathname.replace(/\/@\d+$/, '')
@@ -68,20 +66,20 @@
       container.hidden = !show
       if (show) visible++
     }
-    const empty = document.querySelector(hook('room-empty'))
+    const empty = document.querySelector('[data-matchbox-room-empty]')
     if (empty) {
       empty.hidden = visible > 0
       const text = unreadOnly ? 'You’re all caught up. No unread conversations.' : 'No conversations found.'
       if (empty.textContent !== text) empty.textContent = text
     }
-    document.querySelectorAll(hook('unread-count')).forEach(badge => {
+    document.querySelectorAll('[data-matchbox-unread-count]').forEach(badge => {
       badge.hidden = unread === 0
       badge.textContent = String(unread)
     })
-    document.querySelectorAll(hook('activity')).forEach(button => button.setAttribute('aria-pressed', String(unreadOnly)))
+    document.querySelectorAll('[data-matchbox-activity]').forEach(button => button.setAttribute('aria-pressed', String(unreadOnly)))
     for (const link of document.querySelectorAll('.mb-rail a[href]')) {
       const path = new URL(link.href).pathname
-      const active = path === location.pathname || (link.matches(hook('home')) && /^\/rooms\/\d+(?:\/)?$/.test(location.pathname))
+      const active = path === location.pathname || (link.hasAttribute('data-matchbox-home') && /^\/rooms\/\d+(?:\/)?$/.test(location.pathname))
       if (active && !unreadOnly) link.setAttribute('aria-current', 'page')
       else link.removeAttribute('aria-current')
     }
@@ -108,9 +106,9 @@
     fieldPointer = undefined
     const target = event.target.closest('button, a')
     if (!target) return
-    if (target.matches(hook('sidebar-toggle'))) setDrawer(!isOpen(), isOpen())
-    else if (target.matches(hook('sidebar-close'))) setDrawer(false, true)
-    else if (target.matches(hook('activity'))) {
+    if (target.matches('[data-matchbox-sidebar-toggle]')) setDrawer(!isOpen(), isOpen())
+    else if (target.matches('[data-matchbox-sidebar-close]')) setDrawer(false, true)
+    else if (target.matches('[data-matchbox-activity]')) {
       unreadOnly = !unreadOnly
       filterRooms()
       if (mobile.matches) setDrawer(true)
@@ -137,11 +135,10 @@
       items[next].focus()
     }
   })
-  window.addEventListener('ember:close-sidebar', () => setDrawer(false))
   window.addEventListener('matchbox:close-sidebar', () => setDrawer(false))
   document.addEventListener('turbo:before-stream-render', event => {
-    if (['ember_room_order_changed', 'matchbox_room_order_changed'].includes(event.target.getAttribute('action'))) {
-      event.detail.render = () => window.dispatchEvent(new Event('ember:room-order-changed'))
+    if (event.target.getAttribute('action') === 'matchbox_room_order_changed') {
+      event.detail.render = () => window.dispatchEvent(new Event('matchbox:room-order-changed'))
     }
   })
   document.addEventListener('turbo:before-cache', () => { setDrawer(false); observer?.disconnect() })

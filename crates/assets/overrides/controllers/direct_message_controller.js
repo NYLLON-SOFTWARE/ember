@@ -1,5 +1,8 @@
 import { Controller } from "@hotwired/stimulus"
 
+// A cached sidebar may still use the hooks from before the Ember rename.
+const newDirectSelector = ":is([data-ember-new-direct], [data-matchbox-new-direct])"
+
 // The shared dialog lives outside the permanent sidebar, so background room updates do not
 // replace a search or its selected recipients. The ordinary link remains a fallback.
 export default class extends Controller {
@@ -22,11 +25,11 @@ export default class extends Controller {
     this.#events = new AbortController()
     const options = { signal: this.#events.signal }
     document.addEventListener("click", event => {
-      const trigger = event.target.closest("[data-ember-new-direct]")
+      const trigger = event.target.closest(newDirectSelector)
       if (!trigger || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
       event.preventDefault()
       this.#trigger = trigger
-      this.#triggerSelector = trigger.closest(".mb-rail") ? ".mb-rail [data-ember-new-direct]" : "#sidebar [data-ember-new-direct]"
+      this.#triggerSelector = `${trigger.closest(".mb-rail") ? ".mb-rail" : "#sidebar"} ${newDirectSelector}`
       window.dispatchEvent(new Event("ember:close-sidebar"))
       this.#reset()
       this.element.showModal()
@@ -56,7 +59,7 @@ export default class extends Controller {
     this.element.close()
     this.#reset()
     const trigger = this.#trigger?.isConnected ? this.#trigger : document.querySelector(this.#triggerSelector)
-    const target = trigger && !trigger.closest("[inert]") ? trigger : document.querySelector("[data-ember-sidebar-toggle]")
+    const target = trigger && !trigger.closest("[inert]") ? trigger : document.querySelector("[data-ember-sidebar-toggle], [data-matchbox-sidebar-toggle]")
     target?.focus({ preventScroll: true })
   }
 

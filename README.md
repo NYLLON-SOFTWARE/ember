@@ -242,6 +242,9 @@ The executable is `ember`, with `matchbox` retained as a compatibility alias. Sc
 the upstream `campfire` executable must use `ember`; there is no `campfire` executable alias.
 Rust crate names, the application source directory (`crates/ember/`), frontend asset paths,
 JavaScript identifiers, and owned snapshot paths use `ember`.
+Sidebar markup retains legacy browser attributes and the room-order stream action so tabs left
+open through an upgrade keep filtering, unread counts, and live room ordering. New scripts also
+recognize older cached sidebar markup.
 
 Configuration uses `EMBER_*`, accepting `MATCHBOX_*` and then `CAMPFIRE_*` as fallbacks.
 The first defined value wins, including an explicitly empty value. Style-profile headers use
@@ -510,8 +513,8 @@ unread activity, and the mobile drawer live in
 [`ember/shell.js`](crates/assets/overrides/ember/shell.js). Edit these two files for shared
 workspace behavior and appearance; page markup remains in `crates/views/templates/`.
 
-The workspace bundle contains 68,365 bytes of CSS (12,474 gzip) and 7,319 bytes of shell JavaScript
-(2,358 gzip), measured with gzip level 9. Room ordering, icon selection, and SVG previews use separate Stimulus
+The workspace bundle contains 68,365 bytes of CSS (12,474 gzip) and 7,497 bytes of shell JavaScript
+(2,444 gzip), measured with gzip level 9. Room ordering, icon selection, and SVG previews use separate Stimulus
 controllers, discovered through the digested importmap alongside the inherited controllers.
 The compact message-actions controller adds 8,566 bytes (2,298 gzip).
 The composer upload override is 7,703 bytes (2,636 gzip), with a 1,814-byte uploader (734 gzip).

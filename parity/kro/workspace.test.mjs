@@ -1959,6 +1959,146 @@ test('DM picker searches full names and @names, keeps recipients, and handles mo
   assert.equal(await page.locator('#room_name').inputValue(), 'Keep this draft')
 })
 
+test('tabs left open across the Ember rename retain Activity and shared room-order updates', { timeout: 90_000 }, async t => {
+  const { context: admin, roomPath, joinURL, server } = await setUp(t, { viewport: { width: 1200, height: 900 } })
+  for (const name of ['Alpha', 'Zulu']) {
+    assert.equal((await admin.request.post('/rooms/opens', { headers: sameOrigin, form: { 'room[name]': name } })).status(), 200)
+  }
+  const { page, context } = await newPage(t, server, { viewport: { width: 1200, height: 900 } })
+  // Intercepted documents have no network address, so Chromium requires this for loopback Cable.
+  await context.grantPermissions(['local-network-access'], { origin: server.origin })
+  assert.equal((await context.request.post(joinURL, { headers: sameOrigin,
+    multipart: { 'user[name]': 'Upgrade Member', 'user[email_address]': 'upgrade@example.test', 'user[password]': password },
+  })).status(), 200)
+
+  // Keep the actual previous shell and order controller in memory, just as an open tab does.
+  // Only the initial document/frame gets legacy markup; later frames and Cable are untouched.
+  const fixtures = path.join(repo, 'parity/kro/fixtures/pre-ember-rename')
+  const [oldShell, oldOrderController] = await Promise.all([
+    fs.readFile(path.join(fixtures, 'shell.js'), 'utf8'),
+    fs.readFile(path.join(fixtures, 'channel_order_controller.js'), 'utf8'),
+  ])
+  const loadedFixtures = new Set()
+  await page.route('**/assets/**', async route => {
+    const pathname = new URL(route.request().url()).pathname
+    if (/\/ember\/shell-[^/]+\.js$/.test(pathname)) {
+      loadedFixtures.add('shell')
+      return route.fulfill({ contentType: 'text/javascript', body: oldShell })
+    }
+    if (/\/controllers\/channel_order_controller-[^/]+\.js$/.test(pathname)) {
+      loadedFixtures.add('order')
+      return route.fulfill({ contentType: 'text/javascript', body: oldOrderController })
+    }
+    return route.continue()
+  })
+  let legacyMarkup = true
+  const initialMarkup = async route => {
+    if (!legacyMarkup) return route.continue()
+    const response = await route.fetch()
+    await route.fulfill({ response, body: (await response.text()).replaceAll('data-ember-', 'data-matchbox-') })
+  }
+  await page.route(`${server.origin}${roomPath}`, initialMarkup)
+  await page.route(`${server.origin}/users/me/sidebar`, initialMarkup)
+  await page.goto(roomPath)
+  await page.locator('#shared_rooms a').nth(2).waitFor()
+  await page.waitForFunction(() => [...document.querySelectorAll('turbo-cable-stream-source')].every(node => node.hasAttribute('connected')))
+  assert.deepEqual([...loadedFixtures].sort(), ['order', 'shell'])
+  assert.equal(await page.evaluate(() => window.matchboxWorkspace && !window.emberWorkspace), true, 'the previous shell is the only workspace runtime')
+  assert.equal(await page.locator('#shared_rooms [data-ember-room-row]').count(), 0, 'the initial sidebar uses the previous hooks')
+  const ids = await page.locator('#shared_rooms a').evaluateAll(rows => Object.fromEntries(rows.map(row => [row.dataset.sortedListName, Number(row.dataset.roomId)])))
+  const postMessage = async name => {
+    assert.equal((await admin.request.post(`/rooms/${ids[name]}/messages`, {
+      headers: { ...sameOrigin, Accept: 'text/vnd.turbo-stream.html' }, form: { 'message[body]': `Upgrade unread in ${name}` },
+    })).status(), 200)
+  }
+  const badge = page.locator('[data-matchbox-unread-count]')
+  const activity = page.locator('[data-matchbox-activity]')
+  const allTalk = page.locator('#shared_rooms a[data-sorted-list-name="All Talk"]')
+  await postMessage('Alpha')
+  await badge.filter({ hasText: '1' }).waitFor()
+  await activity.click()
+  assert.equal(await allTalk.isVisible(), false, 'the previous runtime filters read rooms before the upgrade')
+
+  legacyMarkup = false
+  const currentSidebar = page.waitForResponse(response => new URL(response.url()).pathname === '/users/me/sidebar')
+  await page.evaluate(async () => {
+    window.upgradeDocument = true
+    const { cable } = await import('@hotwired/turbo-rails')
+    const consumer = await cable.getConsumer()
+    consumer.disconnect()
+  })
+  await page.waitForFunction(() => [...document.querySelectorAll('turbo-cable-stream-source')].every(node => !node.hasAttribute('connected')))
+  await page.evaluate(async () => {
+    const { cable } = await import('@hotwired/turbo-rails')
+    ;(await cable.getConsumer()).connect()
+  })
+  assert.equal((await currentSidebar).status(), 200)
+  await page.locator('#shared_rooms [data-ember-room-row]').nth(2).waitFor({ state: 'attached' })
+  assert.equal(await allTalk.isVisible(), false, 'Activity still filters read rooms in the upgraded sidebar')
+  assert.equal(await badge.isVisible(), true, 'the unread count survives the new sidebar markup')
+  assert.equal(await badge.textContent(), '1')
+  assert.equal(await activity.getAttribute('aria-pressed'), 'true')
+
+  await postMessage('Zulu')
+  await badge.filter({ hasText: '2' }).waitFor()
+  assert.equal(await page.locator('#shared_rooms a:visible').count(), 2, 'new unread notifications still update Activity')
+  const order = [ids.Zulu, ids['All Talk'], ids.Alpha]
+  assert.equal((await admin.request.put('/account/room_order', { headers: sameOrigin, data: { room_ids: order } })).status(), 204)
+  await page.waitForFunction(order => JSON.stringify([...document.querySelectorAll('#shared_rooms a')].map(row => Number(row.dataset.roomId))) === JSON.stringify(order), order)
+  assert.equal(await allTalk.isVisible(), false, 'the order broadcast preserves the active unread filter')
+  assert.equal(await badge.textContent(), '2')
+  assert.equal(await page.evaluate(() => window.upgradeDocument && window.matchboxWorkspace && !window.emberWorkspace), true, 'no document reload or new workspace runtime was needed')
+})
+
+test('the Ember shell deduplicates legacy hooks and room-order stream aliases', { timeout: 90_000 }, async t => {
+  const { context: admin, roomPath, joinURL, server } = await setUp(t, { viewport: { width: 1200, height: 900 } })
+  for (const name of ['Alpha', 'Zulu']) {
+    assert.equal((await admin.request.post('/rooms/opens', { headers: sameOrigin, form: { 'room[name]': name } })).status(), 200)
+  }
+  const { page, context } = await newPage(t, server, { viewport: { width: 1200, height: 900 } })
+  assert.equal((await context.request.post(joinURL, { headers: sameOrigin,
+    multipart: { 'user[name]': 'Current Member', 'user[email_address]': 'current-upgrade@example.test', 'user[password]': password },
+  })).status(), 200)
+  await page.goto(roomPath)
+  await page.locator('#shared_rooms a').nth(2).waitFor()
+  await page.waitForFunction(() => [...document.querySelectorAll('turbo-cable-stream-source')].every(node => node.hasAttribute('connected')))
+  assert.equal(await page.evaluate(() => window.emberWorkspace && !window.matchboxWorkspace), true)
+  const ids = await page.locator('#shared_rooms a').evaluateAll(rows => Object.fromEntries(rows.map(row => [row.dataset.sortedListName, Number(row.dataset.roomId)])))
+  assert.equal((await admin.request.post(`/rooms/${ids.Alpha}/messages`, {
+    headers: { ...sameOrigin, Accept: 'text/vnd.turbo-stream.html' }, form: { 'message[body]': 'Unread with both row hooks' },
+  })).status(), 200)
+  const badge = page.locator('[data-ember-unread-count]')
+  await badge.filter({ hasText: '1' }).waitFor()
+  assert.equal(await page.locator('#shared_rooms [data-ember-room-row][data-matchbox-room-row]').count(), 3)
+  assert.equal(await badge.textContent(), '1', 'dual row hooks count each unread conversation once')
+  await page.locator('[data-ember-activity]').click()
+  assert.equal(await page.locator('#shared_rooms a:visible').count(), 1)
+  await page.evaluate(() => {
+    window.upgradeOrderEvents = 0
+    window.addEventListener('ember:room-order-changed', () => window.upgradeOrderEvents++)
+  })
+  const order = [ids.Zulu, ids['All Talk'], ids.Alpha]
+  assert.equal((await admin.request.put('/account/room_order', { headers: sameOrigin, data: { room_ids: order } })).status(), 204)
+  await page.waitForFunction(order => JSON.stringify([...document.querySelectorAll('#shared_rooms a')].map(row => Number(row.dataset.roomId))) === JSON.stringify(order), order)
+  assert.equal(await page.evaluate(() => window.upgradeOrderEvents), 1, 'one server broadcast emits one local refresh event')
+
+  // A new shell can also encounter older cached/sidebar markup during a deployment.
+  await page.route(`${server.origin}/users/me/sidebar`, async route => {
+    const response = await route.fetch()
+    await route.fulfill({ response, body: (await response.text()).replaceAll('data-ember-', 'data-matchbox-') })
+  })
+  for (const [index, action] of ['matchbox_room_order_changed', 'ember_room_order_changed'].entries()) {
+    const refreshed = page.waitForResponse(response => new URL(response.url()).pathname === '/users/me/sidebar')
+    await page.evaluate(action => window.Turbo.renderStreamMessage(`<turbo-stream action="${action}"></turbo-stream>`), action)
+    assert.equal((await refreshed).status(), 200)
+    await page.waitForFunction(() => document.querySelectorAll('#shared_rooms [data-ember-room-row]').length === 0)
+    await page.evaluate(async () => { await document.querySelector('#user_sidebar').loaded })
+    assert.equal(await page.evaluate(() => window.upgradeOrderEvents), index + 2, `${action} emits exactly one local refresh event`)
+    assert.equal(await badge.textContent(), '1', 'legacy-only rows retain the unread count')
+    assert.equal(await page.locator('#shared_rooms a:visible').count(), 1, 'legacy-only rows retain Activity filtering')
+  }
+})
+
 test('admin settings stage the shared room order and preserve only personal starred ordering', { timeout: 90_000 }, async t => {
   const { page, context, roomPath, joinURL, server } = await setUp(t, { viewport: { width: 1200, height: 1000 } })
   for (const name of ['Alpha', 'Zulu']) {

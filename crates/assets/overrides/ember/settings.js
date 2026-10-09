@@ -141,7 +141,7 @@
     const link = event.target.closest('a[href]')
     if (!link || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || link.hasAttribute('download') || (link.target && link.target !== '_self')) return
     // Opening the people picker leaves this draft in place; its eventual submit is guarded.
-    if (link.hasAttribute('data-ember-new-direct') && document.querySelector('[data-ember-dm-ready]')) return
+    if (link.matches('[data-ember-new-direct], [data-matchbox-new-direct]') && document.querySelector('[data-ember-dm-ready], [data-matchbox-dm-ready]')) return
     // Sidebar frame controls do not leave the settings document.
     const container = link.closest('turbo-frame')
     const frame = link.dataset.turboFrame || container?.getAttribute('target') || container?.id

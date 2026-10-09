@@ -93,6 +93,10 @@ async fn room_list_broadcasts() {
     let own_rooms = user_gid(id("jz")).to_param();
     turbo(&app, &mut jz, &[&own_rooms, "rooms"]).await;
 
+    app.broadcasts.room_order_changed();
+    assert_eq!(turbo_stream(&jz.next_text().await), r#"<turbo-stream action="matchbox_room_order_changed"></turbo-stream>"#);
+    jz.assert_silent().await;
+
     let hq = app.room("hq").await;
     app.broadcasts.open_room_create(&hq, &FakePartials);
     assert_eq!(
