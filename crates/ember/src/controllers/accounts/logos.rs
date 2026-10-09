@@ -20,10 +20,17 @@ pub async fn show(c: &mut Ctx) -> Result {
     c.use_live_response(); // `include ActiveStorage::Streaming`
     concerns::before_actions(c, Before::default().allow_unauthenticated_access()).await?;
     let account = c.app().read(Account::first).await?;
+    let small = c.param_str("size") == Some("small");
+    let stock_icon = if small { "logos/app-icon-192.png" } else { "logos/app-icon.png" };
 
-    // `stale?(etag: Current.account)`; there's no accounts/logos/show template to digest.
+    // Unlike reference/app/controllers/accounts/logos_controller.rb, include the bundled
+    // artwork's digest so upgrades replace cached stock icons without touching account data.
     let freshness = Freshness {
-        etag: account.as_ref().map(|account| cache_key_with_version("accounts", account.id, account.updated_at.jiff())),
+        etag: Some(format!(
+            "{}/{}",
+            account.as_ref().map(|account| cache_key_with_version("accounts", account.id, account.updated_at.jiff())).unwrap_or_default(),
+            ember_assets::digested_path(stock_icon).expect("stock icon is embedded")
+        )),
         ..Freshness::default()
     };
     if let Some(not_modified) = c.fresh_when(freshness) {
@@ -31,7 +38,6 @@ pub async fn show(c: &mut Ctx) -> Result {
     }
     c.expires_in(MAX_AGE, ExpiresIn { public: true, stale_while_revalidate: Some(STALE_WHILE_REVALIDATE), ..ExpiresIn::default() });
 
-    let small = c.param_str("size") == Some("small");
     let variant = match &account {
         // `logo.variant(size).processed if logo.variable?`: :small is 192, :large 512, both PNG.
         Some(account) => {
@@ -53,8 +59,7 @@ pub async fn show(c: &mut Ctx) -> Result {
         }
         // send_stock_icon
         None => {
-            let filename = if small { "app-icon-192.png" } else { "app-icon.png" };
-            let path = asset_file(&format!("logos/{filename}"))?;
+            let path = asset_file(stock_icon)?;
             c.send_file(path, SendOptions::inline("image/png"))
         }
     }

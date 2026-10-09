@@ -188,7 +188,8 @@ body.mb-app.mb-authenticated {
 
 .mb-app .mb-rail__brand img { block-size: 44px; inline-size: 44px; border-radius: inherit; object-fit: cover; }
 .mb-app .mb-rail__brand:has(img) { background: var(--mb-canvas); }
-.mb-app .mb-rail__brand svg { block-size: 25px; inline-size: 25px; }
+.mb-app .mb-rail__brand:has(.mb-brand-logo) { background: transparent; }
+.mb-app .mb-rail__brand .mb-brand-logo { border-radius: 0; object-fit: contain; }
 .mb-app .mb-rail__link {
   align-items: center;
   block-size: 56px;
@@ -463,8 +464,7 @@ html[data-appearance] .mb-app :is(.btn.btn--negative img:not(.avatar), .flash__i
   text-align: start;
 }
 .mb-app .mb-auth-heading { margin-block-end: 28px; text-align: center; }
-.mb-app .mb-brand-mark { align-items: center; background: var(--mb-ink); block-size: 48px; border-radius: 13px; color: var(--mb-canvas); display: flex; inline-size: 48px; justify-content: center; margin: 0 auto 20px; }
-.mb-app .mb-brand-mark svg { block-size: 25px; inline-size: 25px; }
+.mb-app .mb-brand-mark { block-size: 48px; display: block; inline-size: 48px; margin: 0 auto 20px; object-fit: contain; }
 .mb-app .mb-auth-heading h1 { font-size: 24px; font-weight: 650; line-height: 1.25; margin: 0 0 8px; }
 .mb-app .mb-auth-heading p { color: var(--mb-muted); margin: 0; }
 .mb-app .mb-auth-form { display: flex; flex-direction: column; gap: 20px; }
@@ -630,7 +630,7 @@ html[data-appearance] .mb-app :is(.btn.btn--negative img:not(.avatar), .flash__i
   text-align: start;
 }
 .mb-app #system_welcome .mb-welcome-logo { --avatar-size: 44px; align-items: center; background: var(--mb-ink); block-size: 44px; border-radius: 11px; color: var(--mb-canvas); display: flex; flex: 0 0 44px; inline-size: 44px; justify-content: center; margin: 0; }
-.mb-app #system_welcome .mb-welcome-logo svg { block-size: 23px; inline-size: 23px; }
+.mb-app #system_welcome .mb-welcome-logo.mb-brand-mark { background: transparent; border-radius: 0; }
 .mb-app .mb-welcome-heading { align-items: flex-start; display: flex; gap: 14px; margin-block-end: 20px; }
 .mb-app .mb-welcome-heading > :is(svg, .mb-welcome-icon, .avatar, .account-logo) { --avatar-size: 44px; background: var(--mb-ink); block-size: 44px; border-radius: 11px; color: var(--mb-canvas); flex: 0 0 44px; inline-size: 44px; margin: 0; }
 .mb-app #system_welcome .account-logo { background: var(--mb-canvas); }

@@ -122,7 +122,7 @@ mod tests {
 
     #[test]
     fn digests_logical_paths() {
-        assert_eq!(asset_path("ember-icon.png"), "/assets/ember-icon-3d9986c5.png");
+        assert_eq!(asset_path("ember-icon.png"), "/assets/ember-icon-0b20945a.png");
         assert_eq!(image_path("bot.svg"), "/assets/bot-8a69692e.svg");
         assert_eq!(audio_path("56k.mp3"), "/assets/56k-67359aa6.mp3");
         assert_eq!(

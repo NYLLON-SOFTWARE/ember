@@ -218,6 +218,11 @@ test("setup creates an account, switches style profiles, signs in, and prevents 
   assert.equal(new URL(page.url()).pathname, "/first_run", "empty installation redirects sign-in to setup")
   await profile(page, "basecoat")
   assert.equal(await page.title(), "Set up Ember")
+  const setupLogo = page.locator(".ui-brand-mark")
+  assert.match(await setupLogo.getAttribute("src"), /^\/assets\/ember-icon-[0-9a-f]+\.png$/)
+  assert.equal(await setupLogo.evaluate(async image => { await image.decode(); return image.naturalWidth > 0 }), true)
+  assert.deepEqual(await (await context.request.get(await setupLogo.getAttribute("src"))).body(),
+    await fs.readFile(path.join(repo, "crates/assets/overrides/ember-icon.png")))
   const setupHTML = await (await context.request.get("/first_run")).text()
   await page.evaluate(() => { window.kroDocumentMarker = "setup" })
   await fillSignup(page, "ada@example.test")
@@ -225,9 +230,19 @@ test("setup creates an account, switches style profiles, signs in, and prevents 
   await page.getByText("Welcome to Ember", { exact: true }).waitFor()
   const manifest = await (await context.request.get("/webmanifest.json")).json()
   assert.equal(manifest.name, "Ember")
+  for (const icon of manifest.icons) {
+    const filename = icon.sizes === "192x192" ? "app-icon-192.png" : "app-icon.png"
+    const response = await context.request.get(icon.src)
+    assert.equal(response.status(), 200)
+    assert.deepEqual(await response.body(), await fs.readFile(path.join(repo, "crates/assets/overrides/logos", filename)))
+  }
   assert.doesNotMatch(JSON.stringify(manifest), /Campfire|Matchbox/)
   assert.doesNotMatch(await page.locator("body").innerText(), /Campfire|Matchbox/)
-  assert.ok((await (await context.request.get("/502.html")).text()).includes("Starting Ember"))
+  const startupHTML = await (await context.request.get("/502.html")).text()
+  assert.ok(startupHTML.includes("Starting Ember"))
+  const startupLogo = startupHTML.match(/src="data:image\/png;base64,([A-Za-z0-9+/=]+)"/)
+  assert.ok(startupLogo, "startup branding is self-contained while the asset server starts")
+  assert.deepEqual(Buffer.from(startupLogo[1], "base64"), await fs.readFile(path.join(repo, "crates/assets/overrides/logos/app-icon.png")))
   assert.equal(await page.evaluate(() => window.kroDocumentMarker), undefined, "cross-profile signup creates a new document")
   // MessagesController#index uses fresh_when for non-empty pages; a new install's empty page is
   // deliberately 204, so create a message before checking the unchanged cache contract.

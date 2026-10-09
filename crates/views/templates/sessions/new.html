@@ -1,5 +1,4 @@
 {% extends "layouts/application.html" %}
-{% import "components/icons.html" as icons %}
 
 {% block head %}{{ h::turbo_page_requires_reload_tag() }}{% endblock %}
 
@@ -8,7 +7,7 @@
   <div class="panel mb-auth-card {% if ctx.flash_alert.is_some() %}shake{% endif %}">
     <header class="mb-auth-heading">
 {% if ctx.account.has_logo %}{{ h::account_logo_tag(ctx, Some("mb-auth-logo")) }}{% else %}
-      <span class="mb-brand-mark">{% call icons::icon("flame") %}</span>
+      {{ h::image_tag(ctx, "ember-icon.png", h::attrs().class("mb-brand-mark").alt("Ember").size(48)) }}
 {% endif %}
       <h1>Sign in to {{ ctx.account.name }}</h1>
       <p>Welcome back. Pick up the conversation.</p>
