@@ -31,16 +31,28 @@ pub struct AccountSettings {
 
 const RESTRICT_ROOM_CREATION: &str = "restrict_room_creation_to_administrators";
 const HIDE_TRANSLATION_BUTTONS: &str = "hide_translation_buttons";
-const DEFAULT_ROOM_ORDER: &str = "matchbox_default_room_order";
-const CHANNEL_ORDER: &str = "matchbox_channel_order";
-const FAVORITE_CHANNELS: &str = "matchbox_favorite_channels";
-const CHANNEL_ICONS: &str = "matchbox_channel_icons";
+const DEFAULT_ROOM_ORDER: &str = "ember_default_room_order";
+const CHANNEL_ORDER: &str = "ember_channel_order";
+const FAVORITE_CHANNELS: &str = "ember_favorite_channels";
+const CHANNEL_ICONS: &str = "ember_channel_icons";
 
 pub const MAX_CHANNEL_ORDER: usize = 4096;
 
 impl AccountSettings {
     fn from_column(raw: Option<&str>) -> Self {
         let mut data = raw.and_then(|r| serde_json::from_str::<Map<String, Value>>(r).ok()).unwrap_or_default();
+        // Normalize former branding in memory. Reads leave the stored JSON untouched; the next
+        // settings write preserves the preferences under Ember's names.
+        for (legacy, current) in [
+            ("matchbox_default_room_order", DEFAULT_ROOM_ORDER),
+            ("matchbox_channel_order", CHANNEL_ORDER),
+            ("matchbox_favorite_channels", FAVORITE_CHANNELS),
+            ("matchbox_channel_icons", CHANNEL_ICONS),
+        ] {
+            if let Some(value) = data.remove(legacy) {
+                data.entry(current).or_insert(value);
+            }
+        }
         data.entry(RESTRICT_ROOM_CREATION).or_insert(Value::Bool(false));
         Self { data }
     }
@@ -419,4 +431,48 @@ impl Account {
 pub fn generate_join_code() -> String {
     let code = sql::alphanumeric(12);
     format!("{}-{}-{}", &code[0..4], &code[4..8], &code[8..12])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn legacy_settings_preserve_orders_favorites_and_icons_without_a_database() {
+        let settings = AccountSettings::from_column(Some(
+            r#"{"matchbox_default_room_order":[3,1],"matchbox_channel_order":{"7":[1]},"matchbox_favorite_channels":{"7":[3,1],"8":[1]},"matchbox_channel_icons":{"3":"flame"},"custom":"kept"}"#,
+        ));
+        assert_eq!(settings.default_room_order(), vec![3, 1]);
+        assert_eq!(settings.favorite_channels(7), vec![3, 1]);
+        assert_eq!(settings.favorite_channels(8), vec![1]);
+        assert_eq!(settings.channel_icon(3), Some("flame"));
+        assert_eq!(settings.channel_icons().get(&3).map(String::as_str), Some("flame"));
+        let json: Value = serde_json::from_str(&settings.to_json()).unwrap();
+        assert_eq!(json["ember_channel_order"]["7"], serde_json::json!([1]));
+        assert_eq!(json["custom"], "kept");
+        assert!(json.as_object().unwrap().keys().all(|key| !key.starts_with("matchbox_")));
+    }
+
+    #[test]
+    fn explicit_current_settings_and_malformed_legacy_settings_remain_safe() {
+        let settings = AccountSettings::from_column(Some(
+            r#"{"matchbox_default_room_order":[3],"ember_default_room_order":null,"matchbox_favorite_channels":{"7":[3]},"ember_favorite_channels":{},"matchbox_channel_icons":{"3":"flame"},"ember_channel_icons":{}}"#,
+        ));
+        assert!(settings.default_room_order().is_empty());
+        assert!(settings.favorite_channels(7).is_empty());
+        assert_eq!(settings.channel_icon(3), None);
+        assert!(settings.channel_icons().is_empty());
+
+        for raw in [
+            "null",
+            "invalid JSON",
+            r#"{"matchbox_default_room_order":{},"matchbox_favorite_channels":false,"matchbox_channel_icons":null}"#,
+        ] {
+            let settings = AccountSettings::from_column(Some(raw));
+            assert!(settings.default_room_order().is_empty());
+            assert!(settings.favorite_channels(7).is_empty());
+            assert_eq!(settings.channel_icon(3), None);
+            assert!(settings.channel_icons().is_empty());
+        }
+    }
 }

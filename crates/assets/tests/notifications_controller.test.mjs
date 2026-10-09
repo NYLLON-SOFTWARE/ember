@@ -39,7 +39,7 @@ function fixture({ permission = "default", key = "AQID", available = true, exist
     Notification: available ? Notification : null,
     PushManager: available ? class {} : null,
     isSecureContext: true,
-    location: { origin: "https://matchbox.example" },
+    location: { origin: "https://ember.example" },
     matchMedia: () => ({ matches: false }),
     atob,
   }

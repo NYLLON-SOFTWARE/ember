@@ -105,7 +105,7 @@ impl FormWith {
 
     /// `<form ...>` plus the `_method` hidden field (`html_options_for_form_with` +
     /// `extra_tags_for_form`). No `authenticity_token`: forgery protection is by `Sec-Fetch-Site`.
-    /// (See `matchbox_kit::Ctx::verify_authenticity_token`.)
+    /// (See `ember_kit::Ctx::verify_authenticity_token`.)
     pub fn open(&self) -> Html {
         let mut out = String::new();
         self.open_into(&mut out);

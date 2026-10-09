@@ -1,4 +1,4 @@
-# Golden vectors for matchbox_storage, produced by the reference app itself.
+# Golden vectors for ember_storage, produced by the reference app itself.
 #
 # Runs under `bin/rails runner` in production mode with the fixed parity SECRET_KEY_BASE (see
 # reference-tools/storage/run.sh). It drives the real models (Message::Attachment, User::Avatar,

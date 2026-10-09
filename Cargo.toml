@@ -17,16 +17,16 @@ unsafe_code = "deny"
 undocumented_unsafe_blocks = "warn"
 
 [workspace.dependencies]
-ruby_compat       = { path = "crates/ruby" }
-rails_compat      = { path = "crates/rails_compat" }
-matchbox_kit      = { path = "crates/kit" }
-matchbox_routes   = { path = "crates/routes" }
-matchbox_db       = { path = "crates/db" }
-matchbox_richtext = { path = "crates/richtext" }
-matchbox_storage  = { path = "crates/storage" }
-matchbox_cable    = { path = "crates/cable" }
-matchbox_assets   = { path = "crates/assets" }
-matchbox_views    = { path = "crates/views" }
+ruby_compat    = { path = "crates/ruby" }
+rails_compat   = { path = "crates/rails_compat" }
+ember_kit      = { path = "crates/kit" }
+ember_routes   = { path = "crates/routes" }
+ember_db       = { path = "crates/db" }
+ember_richtext = { path = "crates/richtext" }
+ember_storage  = { path = "crates/storage" }
+ember_cable    = { path = "crates/cable" }
+ember_assets   = { path = "crates/assets" }
+ember_views    = { path = "crates/views" }
 
 tokio        = { version = "1", features = ["full"] }
 # Router plus ConnectInfo (`tokio`) only: kit parses params and multipart itself, the front server
@@ -79,7 +79,7 @@ tempfile     = "3"
 md-5         = "0.10"
 multer       = "3"
 http-body-util = "0.1"
-# integrations (crates/matchbox/src/integrations): HTTP/1.1 client, TLS, Web Push crypto
+# integrations (crates/ember/src/integrations): HTTP/1.1 client, TLS, Web Push crypto
 hyper-util   = { version = "0.1", features = ["tokio"] }
 http         = "1"
 bytes        = "1"
@@ -98,7 +98,7 @@ instant-acme = { version = "0.8", default-features = false, features = ["ring", 
 rcgen        = { version = "0.14", default-features = false, features = ["ring", "pem", "crypto"] }
 x509-parser  = "0.18"
 zstd         = "0.13"
-# The global allocator (crates/matchbox/src/main.rs)
+# The global allocator (crates/ember/src/main.rs)
 tikv-jemallocator = "0.6"
 tikv-jemalloc-sys = "0.6"
 

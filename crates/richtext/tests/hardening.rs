@@ -3,8 +3,8 @@
 
 use std::time::{Duration, Instant};
 
-use matchbox_richtext::dom::{Dom, MAX_ATTRIBUTES};
-use matchbox_richtext::{AttachableResolver, GidLookup, RenderContext, SignedLookup, editable_value, message_presentation, to_plain_text};
+use ember_richtext::dom::{Dom, MAX_ATTRIBUTES};
+use ember_richtext::{AttachableResolver, GidLookup, RenderContext, SignedLookup, editable_value, message_presentation, to_plain_text};
 
 struct NoRecords;
 

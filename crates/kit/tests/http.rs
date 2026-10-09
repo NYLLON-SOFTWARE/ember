@@ -7,9 +7,9 @@ use axum::Router;
 use axum::body::Body as AxumBody;
 use axum::extract::ConnectInfo;
 use axum::http::{Request as HttpRequest, header};
-use matchbox_kit::exceptions::ErrorPages;
-use matchbox_kit::format::{HTML, JSON, TURBO_STREAM};
-use matchbox_kit::{
+use ember_kit::exceptions::ErrorPages;
+use ember_kit::format::{HTML, JSON, TURBO_STREAM};
+use ember_kit::{
     Cookie, Ctx, ExpiresIn, Freshness, Kit, KitConfig, Redirect, Result, SendOptions, SharedClock, StatusCode, TestClock, action, front,
     halt,
 };
@@ -201,28 +201,28 @@ fn kit_with(config: KitConfig) -> Kit {
 
 fn app_with(config: KitConfig) -> Router {
     let router = Router::new()
-        .route("/rooms/{id}", matchbox_kit::get(show))
-        .route("/form", matchbox_kit::get(form).post(action(create)))
-        .route("/echo/{id}", matchbox_kit::get(echo).post(action(echo)).patch(action(echo)).delete(action(echo)))
-        .route("/upload", matchbox_kit::patch(upload).post(action(upload)))
-        .route("/session", matchbox_kit::get(session_get).post(action(session_set)).delete(action(session_reset)))
-        .route("/noop", matchbox_kit::get(noop))
-        .route("/notice", matchbox_kit::get(notice))
-        .route("/flash", matchbox_kit::get(show_flash))
-        .route("/sign_in", matchbox_kit::get(sign_in))
-        .route("/live_sign_in", matchbox_kit::get(live_sign_in))
-        .route("/whoami", matchbox_kit::get(whoami))
-        .route("/sign_out", matchbox_kit::get(sign_out))
-        .route("/admin", matchbox_kit::get(admin))
-        .route("/messages", matchbox_kit::get(messages).post(action(messages)))
-        .route("/messages.{format}", matchbox_kit::get(messages))
-        .route("/autocomplete", matchbox_kit::get(autocomplete))
-        .route("/redirect", matchbox_kit::get(redirects))
-        .route("/created", matchbox_kit::get(created))
-        .route("/file", matchbox_kit::get(file))
-        .route("/logo", matchbox_kit::get(logo))
-        .route("/fresh", matchbox_kit::get(index_fresh));
-    matchbox_kit::app(router, kit_with(config))
+        .route("/rooms/{id}", ember_kit::get(show))
+        .route("/form", ember_kit::get(form).post(action(create)))
+        .route("/echo/{id}", ember_kit::get(echo).post(action(echo)).patch(action(echo)).delete(action(echo)))
+        .route("/upload", ember_kit::patch(upload).post(action(upload)))
+        .route("/session", ember_kit::get(session_get).post(action(session_set)).delete(action(session_reset)))
+        .route("/noop", ember_kit::get(noop))
+        .route("/notice", ember_kit::get(notice))
+        .route("/flash", ember_kit::get(show_flash))
+        .route("/sign_in", ember_kit::get(sign_in))
+        .route("/live_sign_in", ember_kit::get(live_sign_in))
+        .route("/whoami", ember_kit::get(whoami))
+        .route("/sign_out", ember_kit::get(sign_out))
+        .route("/admin", ember_kit::get(admin))
+        .route("/messages", ember_kit::get(messages).post(action(messages)))
+        .route("/messages.{format}", ember_kit::get(messages))
+        .route("/autocomplete", ember_kit::get(autocomplete))
+        .route("/redirect", ember_kit::get(redirects))
+        .route("/created", ember_kit::get(created))
+        .route("/file", ember_kit::get(file))
+        .route("/logo", ember_kit::get(logo))
+        .route("/fresh", ember_kit::get(index_fresh));
+    ember_kit::app(router, kit_with(config))
 }
 
 fn app() -> Router {
@@ -379,7 +379,7 @@ async fn method_override_from_form_param_and_header() {
 
 #[tokio::test]
 async fn multipart_uploads_with_method_override() {
-    let boundary = "----matchbox";
+    let boundary = "----ember";
     let body = format!(
         "--{b}\r\nContent-Disposition: form-data; name=\"_method\"\r\n\r\npatch\r\n\
          --{b}\r\nContent-Disposition: form-data; name=\"user[name]\"\r\n\r\nJo\r\n\
@@ -626,7 +626,7 @@ async fn send_file_with_disposition_and_the_whole_file() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("logo.png");
     std::fs::write(&path, b"0123456789").unwrap();
-    let encoded = matchbox_kit::cookies::escape(path.to_str().unwrap());
+    let encoded = ember_kit::cookies::escape(path.to_str().unwrap());
     let app = app();
 
     let whole = send(&app, get(&format!("/file?path={encoded}")).body(AxumBody::empty()).unwrap()).await;

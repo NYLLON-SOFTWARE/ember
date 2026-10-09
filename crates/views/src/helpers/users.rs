@@ -57,7 +57,7 @@ pub struct AvatarUser {
 pub fn avatar_tag(ctx: &ViewContext, user: impl std::borrow::Borrow<AvatarUser>, options: Attrs) -> Html {
     let user = user.borrow();
     let image = image_tag(ctx, &user.avatar_path, attrs().aria_hidden().size(48).merge(options));
-    link_to(&matchbox_routes::user(user.id), attrs().title(user.title.as_str()).class("btn avatar").data("turbo_frame", "_top"), &image.0)
+    link_to(&ember_routes::user(user.id), attrs().title(user.title.as_str()).class("btn avatar").data("turbo_frame", "_top"), &image.0)
 }
 
 /// `button_to_direct_room_with(user)`.

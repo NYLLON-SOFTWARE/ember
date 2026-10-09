@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use matchbox_views::{AccountSummary, CurrentUser, Platform, ViewContext};
+use ember_views::{AccountSummary, CurrentUser, Platform, ViewContext};
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
@@ -27,11 +27,11 @@ pub fn golden(name: &str) -> Golden {
         serde_json::from_str(&std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path:?}: {e}"))).expect("golden is JSON");
     let mut assets: HashMap<String, String> = serde_json::from_value(json["context"]["assets"].clone()).unwrap_or_default();
     if let Some(original) = assets.get("campfire-icon.png") {
-        assets.insert("matchbox-icon.png".into(), original.replace("campfire-icon", "matchbox-icon"));
+        assets.insert("ember-icon.png".into(), original.replace("campfire-icon", "ember-icon"));
     }
-    assets.insert("matchbox/shell.js".into(), "/assets/matchbox/shell.js".into());
-    assets.insert("matchbox/appearance.js".into(), "/assets/matchbox/appearance.js".into());
-    assets.insert("matchbox/settings.js".into(), "/assets/matchbox/settings.js".into());
+    assets.insert("ember/shell.js".into(), "/assets/ember/shell.js".into());
+    assets.insert("ember/appearance.js".into(), "/assets/ember/appearance.js".into());
+    assets.insert("ember/settings.js".into(), "/assets/ember/settings.js".into());
     assets.insert("lucide/catalog.json".into(), "/assets/lucide/catalog.json".into());
     Golden { name: name.to_string(), kind: json["kind"].as_str().unwrap().to_string(), json, assets }
 }

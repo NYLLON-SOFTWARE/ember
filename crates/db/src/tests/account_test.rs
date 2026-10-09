@@ -72,6 +72,73 @@ fn translation_visibility_defaults_to_hidden_and_persists_without_changing_other
 }
 
 #[test]
+fn former_settings_names_preserve_preferences_and_migrate_on_write() {
+    let t = TestDb::new();
+    let original = serde_json::json!({
+        "matchbox_default_room_order": [id("pets"), id("hq")],
+        "matchbox_channel_order": { id("kevin").to_string(): [id("hq")] },
+        "matchbox_favorite_channels": {
+            id("david").to_string(): [id("pets"), id("hq")],
+            id("jason").to_string(): [id("hq")]
+        },
+        "matchbox_channel_icons": { id("hq").to_string(): "flame" },
+        "hide_translation_buttons": false,
+        "unrelated_preference": "preserved"
+    })
+    .to_string();
+    let stored = original.clone();
+    t.write(move |tx| {
+        tx.conn().execute("UPDATE accounts SET settings = ?", [stored])?;
+        Ok(())
+    });
+    let settings = signal(&t).settings();
+    assert_eq!(settings.default_room_order(), vec![id("pets"), id("hq")]);
+    assert_eq!(settings.favorite_channels(id("david")), vec![id("pets"), id("hq")]);
+    assert_eq!(settings.favorite_channels(id("jason")), vec![id("hq")]);
+    assert_eq!(settings.channel_icon(id("hq")), Some("flame"));
+    assert_eq!(settings.channel_icons().get(&id("hq")).map(String::as_str), Some("flame"));
+    assert!(!settings.hide_translation_buttons());
+    assert_eq!(signal(&t).settings_json.as_deref(), Some(original.as_str()), "reads do not rewrite stored settings");
+
+    assert_eq!(t.write(|tx| Account::set_channel_favorite(tx, id("david"), id("pets"), false)), Some(vec![id("hq")]));
+    let migrated = signal(&t);
+    let stored: serde_json::Value = serde_json::from_str(migrated.settings_json.as_deref().unwrap()).unwrap();
+    for key in ["matchbox_default_room_order", "matchbox_channel_order", "matchbox_favorite_channels", "matchbox_channel_icons"] {
+        assert!(stored.get(key).is_none(), "legacy key {key} was migrated");
+    }
+    assert_eq!(stored["ember_default_room_order"], serde_json::json!([id("pets"), id("hq")]));
+    assert!(stored.get("ember_channel_order").is_some());
+    assert_eq!(stored["ember_favorite_channels"][id("jason").to_string()], serde_json::json!([id("hq")]));
+    assert_eq!(stored["ember_channel_icons"][id("hq").to_string()], "flame");
+    assert_eq!(stored["unrelated_preference"], "preserved");
+    assert!(!migrated.settings().hide_translation_buttons());
+    assert!(t.write(|tx| Account::set_default_room_order(tx, id("david"), &[id("hq"), id("pets")])));
+    assert!(signal(&t).settings().get("ember_channel_order").is_none(), "shared ordering still removes former personal room orders");
+}
+
+#[test]
+fn current_settings_names_take_precedence_over_former_names() {
+    let t = TestDb::new();
+    let mut account = signal(&t);
+    account.settings_json = Some(
+        serde_json::json!({
+            "matchbox_default_room_order": [id("pets")],
+            "ember_default_room_order": [],
+            "matchbox_favorite_channels": { id("david").to_string(): [id("pets")] },
+            "ember_favorite_channels": {},
+            "matchbox_channel_icons": { id("hq").to_string(): "flame" },
+            "ember_channel_icons": {}
+        })
+        .to_string(),
+    );
+    let settings = account.settings();
+    assert!(settings.default_room_order().is_empty());
+    assert!(settings.favorite_channels(id("david")).is_empty());
+    assert_eq!(settings.channel_icon(id("hq")), None);
+    assert!(settings.channel_icons().is_empty());
+}
+
+#[test]
 fn updating_other_attributes_leaves_null_settings_alone() {
     // What Rails does: `update!(name:)` on the fixture account doesn't write settings.
     let t = TestDb::new();
@@ -203,7 +270,7 @@ fn default_room_order_replaces_legacy_orders_and_preserves_stars_and_caches() {
     assert!(!t.write(|tx| Account::set_default_room_order(tx, id("kevin"), &[id("hq")])));
     t.write(|tx| {
         tx.conn().execute(
-            "UPDATE accounts SET settings = json_set(settings, '$.matchbox_channel_order', json(?))",
+            "UPDATE accounts SET settings = json_set(COALESCE(settings, '{}'), '$.matchbox_channel_order', json(?))",
             [serde_json::json!({ id("kevin").to_string(): [id("hq")] }).to_string()],
         )?;
         Ok(())
@@ -214,7 +281,8 @@ fn default_room_order_replaces_legacy_orders_and_preserves_stars_and_caches() {
     t.write(move |tx| stale_account.update(tx, None, None, Some(&[("hide_translation_buttons", "false")])));
     let settings = signal(&t).settings();
     assert_eq!(settings.default_room_order(), vec![id("pets"), id("hq")]);
-    assert!(settings.get("matchbox_channel_order").is_none());
+    assert!(settings.get("ember_channel_order").is_none());
+    assert!(!signal(&t).settings_json.unwrap().contains("matchbox_channel_order"));
     assert_eq!(settings.favorite_channels(id("kevin")), vec![id("hq")]);
     assert!(!settings.hide_translation_buttons());
     for ids in [vec![id("hq"), id("hq")], vec![id("david_and_kevin")], vec![0], vec![i64::MAX]] {

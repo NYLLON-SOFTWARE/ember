@@ -22,11 +22,11 @@ export default class extends Controller {
   connect() {
     this.#events = new AbortController()
     const options = { signal: this.#events.signal }
-    window.addEventListener("matchbox:room-order-changed", () => {
+    window.addEventListener("ember:room-order-changed", () => {
       this.#refreshPending = true
       this.#refresh()
     }, options)
-    window.addEventListener("matchbox:favorites-changed", event => {
+    window.addEventListener("ember:favorites-changed", event => {
       if (this.stagedValue) return
       this.#cancel()
       this.favoritesValue = event.detail.favorites

@@ -3,13 +3,13 @@ pub fn assert_snapshot(group: &str, name: &str, actual: &[String]) {
     // Some cases also exercise the wrapper with the same expectation in parallel.
     static UPDATE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
     let _guard = UPDATE_LOCK.lock().unwrap();
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden/matchbox").join(group).join(format!("{name}.json"));
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden/ember").join(group).join(format!("{name}.json"));
     if rails_compat::env::var("EMBER_UPDATE_VIEWS").as_deref() == Ok("1") {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(&path, format!("{}\n", serde_json::to_string_pretty(actual).unwrap())).unwrap();
     }
     let expected: Vec<String> = serde_json::from_str(
-        &std::fs::read_to_string(&path).unwrap_or_else(|error| panic!("{}: {error}; see tests/golden/matchbox/README.md", path.display())),
+        &std::fs::read_to_string(&path).unwrap_or_else(|error| panic!("{}: {error}; see tests/golden/ember/README.md", path.display())),
     )
     .unwrap();
     if actual != expected {

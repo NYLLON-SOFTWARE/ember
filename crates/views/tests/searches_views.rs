@@ -3,7 +3,7 @@
 mod messages_support;
 
 use askama::Template;
-use matchbox_views::searches::{self, IndexView};
+use ember_views::searches::{self, IndexView};
 use messages_support::golden;
 
 #[test]

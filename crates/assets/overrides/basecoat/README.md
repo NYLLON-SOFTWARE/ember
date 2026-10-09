@@ -12,8 +12,8 @@ for Tailwind utilities. Add an official `basecoat-css/components/...` import the
 a later page needs a new component. Components use the shared `ui-*` classes with
 Basecoat's `input`, `select`, `btn`, and `card` primitives.
 
-`src/theme-init.js` applies the browser's `matchbox:appearance` preference before paint, falling back to the previous
-`campfire:appearance` key for existing browsers.
+`src/theme-init.js` applies the browser's `ember:appearance` preference before paint, falling back to
+`matchbox:appearance` and then `campfire:appearance` for existing browsers. New choices use the Ember key.
 `src/app.js` bundles the Basecoat runtime and the Turbo lifecycle adapter. Import individual
 Basecoat component scripts there only when a migrated page needs them. The first-run page
 uses native controls plus a small delegated password-visibility toggle, so it needs no
@@ -28,14 +28,14 @@ Tailwind and its CLI are pinned to 4.3.0; the lockfile includes the compatible 2
 watcher rather than the vulnerable watcher pinned by CLI 4.3.3. No build dependencies
 ship in the server binary.
 
-Generated sizes for the first-run delivery, measured on 2026-10-07 with Node 24.18.1
+Generated sizes for the first-run delivery, measured on 2026-10-09 with Node 24.18.1
 (`gzipSync` defaults; transferred sizes can vary with server compression settings):
 
 | Asset | Minified bytes | Gzip bytes |
 | --- | ---: | ---: |
-| `app.css` | 156,537 | 16,164 |
-| `app.js` | 6,606 | 2,697 |
-| `theme-init.js` | 501 | 300 |
+| `app.css` | 156,949 | 16,215 |
+| `app.js` | 6,786 | 2,754 |
+| `theme-init.js` | 545 | 308 |
 
 The stylesheet retains the official Vega style pack, which Basecoat distributes as one
 file, plus only the component structures used by this delivery.

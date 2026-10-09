@@ -20,15 +20,15 @@ faster or better.
 |---|---|---|
 | `crates/ruby` | `ruby_compat` | Ruby's own string behaviour the other crates share (ERB escaping, `String#to_i`/`#to_f`/`#strip`, `Float#to_s`, `CGI.escape`, `ERB::Util.url_encode`, Active Record's integer binding, Rack's byte ranges), checked against Ruby by `vectors/ruby_core.json`; no dependencies |
 | `crates/rails_compat` | `rails_compat` | Rails signing/encryption/serialization contracts and the Rails formats several crates write (`ActiveSupport::JSON`, `Content-Disposition`), verified by `vectors/`, and the app's `Clock` (`Time.current`, and time travel for tests) |
-| `crates/kit` | `matchbox_kit` | Axum adapter, `Ctx`, params, cookies, session, forgery protection, flash, formats, responses, gzip, and the front server (TLS, ACME, HTTP/2, response cache) |
-| `crates/routes` | `matchbox_routes` | Path helpers mirroring `config/routes.rb` |
-| `crates/db` | `matchbox_db` | rusqlite over the existing schema, models, queries, fixtures loader |
-| `crates/richtext` | `matchbox_richtext` | Action Text content pipeline: sanitize, attachments, autolink, plain text |
-| `crates/storage` | `matchbox_storage` | Active Storage-compatible blobs, disk service, variants (libvips), previews (ffmpeg) |
-| `crates/cable` | `matchbox_cable` | Action Cable protocol server, its WebSocket implementation, and in-process pub/sub |
-| `crates/assets` | `matchbox_assets` | Propshaft-compatible digesting, importmap, vendored JS/CSS, port-owned overrides |
-| `crates/views` | `matchbox_views` | Askama templates (at the ERB file's relative path) and view helpers |
-| `crates/matchbox` | `matchbox` (`ember` bin) | Controllers, router wiring, channels, jobs, integrations |
+| `crates/kit` | `ember_kit` | Axum adapter, `Ctx`, params, cookies, session, forgery protection, flash, formats, responses, gzip, and the front server (TLS, ACME, HTTP/2, response cache) |
+| `crates/routes` | `ember_routes` | Path helpers mirroring `config/routes.rb` |
+| `crates/db` | `ember_db` | rusqlite over the existing schema, models, queries, fixtures loader |
+| `crates/richtext` | `ember_richtext` | Action Text content pipeline: sanitize, attachments, autolink, plain text |
+| `crates/storage` | `ember_storage` | Active Storage-compatible blobs, disk service, variants (libvips), previews (ffmpeg) |
+| `crates/cable` | `ember_cable` | Action Cable protocol server, its WebSocket implementation, and in-process pub/sub |
+| `crates/assets` | `ember_assets` | Propshaft-compatible digesting, importmap, vendored JS/CSS, port-owned overrides |
+| `crates/views` | `ember_views` | Askama templates (at the ERB file's relative path) and view helpers |
+| `crates/ember` | `ember` (`ember` bin) | Controllers, router wiring, channels, jobs, integrations |
 | `parity/` | — | Playwright parity harness, screen inventory, reference Docker setup |
 | `reference-tools/` | — | Ruby scripts run inside the reference container to produce `vectors/` |
 | `bench/` | — | Load generator, benchmark scripts and recorded results |

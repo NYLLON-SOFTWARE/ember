@@ -37,4 +37,4 @@ pub use url::*;
 pub use users::*;
 
 /// Path helpers, re-exported so templates can write `h::routes::user_profile()`.
-pub use matchbox_routes as routes;
+pub use ember_routes as routes;

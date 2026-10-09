@@ -1321,7 +1321,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "matchbox"
+name = "ember"
 version = "1.0.0"
 dependencies = [
  "aes-gcm",
@@ -1341,14 +1341,14 @@ dependencies = [
  "hyper-util",
  "jiff",
  "libc",
- "matchbox_assets",
- "matchbox_cable",
- "matchbox_db",
- "matchbox_kit",
- "matchbox_richtext",
- "matchbox_routes",
- "matchbox_storage",
- "matchbox_views",
+ "ember_assets",
+ "ember_cable",
+ "ember_db",
+ "ember_kit",
+ "ember_richtext",
+ "ember_routes",
+ "ember_storage",
+ "ember_views",
  "p256",
  "percent-encoding",
  "rails_compat",
@@ -1375,7 +1375,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "matchbox_assets"
+name = "ember_assets"
 version = "0.1.0"
 dependencies = [
  "fancy-regex",
@@ -1386,7 +1386,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "matchbox_cable"
+name = "ember_cable"
 version = "0.1.0"
 dependencies = [
  "async-trait",
@@ -1407,14 +1407,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "matchbox_db"
+name = "ember_db"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "crc32fast",
  "hex",
  "jiff",
- "matchbox_db",
+ "ember_db",
  "rails_compat",
  "rand 0.9.5",
  "rusqlite",
@@ -1429,7 +1429,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "matchbox_kit"
+name = "ember_kit"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -1475,7 +1475,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "matchbox_richtext"
+name = "ember_richtext"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
@@ -1488,11 +1488,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "matchbox_routes"
+name = "ember_routes"
 version = "0.1.0"
 
 [[package]]
-name = "matchbox_storage"
+name = "ember_storage"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
@@ -1510,15 +1510,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "matchbox_views"
+name = "ember_views"
 version = "0.1.0"
 dependencies = [
  "askama",
  "crc32fast",
  "html5ever",
  "jiff",
- "matchbox_assets",
- "matchbox_routes",
+ "ember_assets",
+ "ember_routes",
  "rails_compat",
  "ruby_compat",
  "serde",

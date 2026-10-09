@@ -19,7 +19,7 @@ export default class extends Controller {
       this.buttonTarget.title = favorite ? "Remove from favorites" : "Add to favorites"
       this.valueTarget.value = String(!favorite)
       window.Turbo?.cache.clear()
-      window.dispatchEvent(new CustomEvent("matchbox:favorites-changed", { detail: { favorites } }))
+      window.dispatchEvent(new CustomEvent("ember:favorites-changed", { detail: { favorites } }))
     } catch {
       this.statusTarget.textContent = "Couldn’t save your favorite. Please try again."
       this.statusTarget.hidden = false

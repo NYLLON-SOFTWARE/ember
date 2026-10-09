@@ -1,4 +1,4 @@
-//! What the models need from Action Text. The real pipeline lives in `matchbox_richtext`;
+//! What the models need from Action Text. The real pipeline lives in `ember_richtext`;
 //! the app plugs it in through [`RichText`]. Tests have a stand-in, `testing::BasicRichText`.
 
 use rusqlite::Connection;

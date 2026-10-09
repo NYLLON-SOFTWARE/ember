@@ -4,9 +4,9 @@
 
 use std::collections::BTreeMap;
 
-use matchbox_richtext::dom::Dom;
-use matchbox_richtext::sanitizer::SafeList;
-use matchbox_richtext::{
+use ember_richtext::dom::Dom;
+use ember_richtext::sanitizer::SafeList;
+use ember_richtext::{
     AttachableResolver, GidLookup, MentionUser, Presentation, RenderContext, SignedLookup, editable_value, mentioned_users,
     present_message, to_plain_text,
 };
@@ -272,7 +272,7 @@ fn outcome_str(v: &Value) -> Result<Option<String>, String> {
     Ok(v["ok"].as_str().map(str::to_string))
 }
 
-fn render<T: std::fmt::Debug>(r: &Result<T, matchbox_richtext::Error>) -> String {
+fn render<T: std::fmt::Debug>(r: &Result<T, ember_richtext::Error>) -> String {
     format!("{r:?}")
 }
 
@@ -353,7 +353,7 @@ fn corpus_matches_rails() {
     for url in corpus.json["web_urls"].as_array().unwrap() {
         let value = url["value"].as_str().unwrap();
         let host = url["host"].as_str().unwrap();
-        let actual = matchbox_richtext::attachables::web_url(Some(value), host);
+        let actual = ember_richtext::attachables::web_url(Some(value), host);
         let label = format!("[web_url] {value:?}");
         match (outcome_str(&url["result"]), &actual) {
             (Ok(e), Ok(a)) => tallies.entry("web_url").or_default().record(label, &format!("{e:?}"), &format!("{a:?}")),
