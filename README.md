@@ -123,7 +123,7 @@ unread activity, and the mobile drawer live in
 [`matchbox/shell.js`](crates/assets/overrides/matchbox/shell.js). Edit these two files for shared
 workspace behavior and appearance; page markup remains in `crates/views/templates/`.
 
-The workspace bundle contains 67,534 bytes of CSS (12,331 gzip) and 7,356 bytes of shell JavaScript
+The workspace bundle contains 67,502 bytes of CSS (12,329 gzip) and 7,356 bytes of shell JavaScript
 (2,357 gzip), measured with gzip level 9. Room ordering, icon selection, and SVG previews use separate Stimulus
 controllers, discovered through the digested importmap alongside the inherited controllers.
 The compact message-actions controller adds 8,522 bytes (2,270 gzip).
@@ -213,6 +213,7 @@ behavior changes and compatibility limits are listed below.
 - **Workspace redesign:** application pages use a neutral interface with a left navigation rail,
   a conversation sidebar, a compact room header, left-aligned message threads, an invitation card,
   and a full-width composer. Small screens use a dismissible sidebar drawer and touch-sized controls.
+  The navigation rail has 56 × 56 px buttons with rounded corners and padded 80px-wide spacing.
   Home and direct-message navigation use actual room memberships; Activity shows actual unread
   conversations and counts. Search in the rail opens the existing full message search. Ember
   uses “rooms” consistently in labels, settings, favorites, and search. The sidebar starts with

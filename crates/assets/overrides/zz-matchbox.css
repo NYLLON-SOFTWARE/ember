@@ -65,7 +65,7 @@ body.mb-app {
   --mb-message-border: light-dark(#dedede, #343434);
   --mb-message-divider: light-dark(#ddd, #343434);
   --mb-message-hover: light-dark(#f8f8f8, #202020);
-  --mb-rail-width: 72px;
+  --mb-rail-width: 80px;
   --mb-sidebar-width: 280px;
   --mb-header-height: 60px;
   --color-bg: var(--mb-canvas);
@@ -138,7 +138,7 @@ body.mb-app.mb-authenticated {
   gap: 12px;
   grid-area: rail;
   min-block-size: 0;
-  padding: 12px 8px max(12px, env(safe-area-inset-bottom));
+  padding: 16px 12px max(16px, env(safe-area-inset-bottom));
   z-index: 6;
 }
 
@@ -159,17 +159,19 @@ body.mb-app.mb-authenticated {
 .mb-app .mb-rail__brand svg { block-size: 25px; inline-size: 25px; }
 .mb-app .mb-rail__link {
   align-items: center;
+  block-size: 56px;
   border-radius: 10px;
   background: transparent;
   border: 0;
   color: var(--mb-muted);
   display: flex;
+  flex: 0 0 56px;
   flex-direction: column;
   font-size: 11px;
   gap: 5px;
   inline-size: 56px;
   justify-content: center;
-  min-block-size: 58px;
+  min-block-size: 56px;
   padding: 6px 3px;
   position: relative;
   text-decoration: none;
@@ -672,8 +674,7 @@ html[data-appearance] .mb-app :is(.btn.btn--negative img:not(.avatar), .flash__i
 .mb-app .message:focus-within .message__options-btn { opacity: 1; }
 
 @media (max-width: 1100px) and (min-width: 901px) {
-  body.mb-app { --mb-rail-width: 64px; --mb-sidebar-width: 230px; }
-  .mb-app .mb-rail { padding-inline: 4px; }
+  body.mb-app { --mb-sidebar-width: 230px; }
   .mb-app .mb-conversations { padding-inline: 8px; }
   .mb-app #nav.mb-header { padding-inline: 18px; }
   .mb-app #system_welcome.mb-welcome-card { margin-inline: 18px; max-inline-size: calc(100% - 36px); padding: 18px; }
@@ -688,14 +689,13 @@ html[data-appearance] .mb-app :is(.btn.btn--negative img:not(.avatar), .flash__i
   .mb-app .mb-appearance-menu label { min-block-size: 44px; }
   body.mb-app, body.mb-app.mb-authenticated {
     --mb-header-height: 56px;
-    --mb-rail-width: 64px;
-    --mb-sidebar-width: min(280px, calc(100dvw - 80px));
+    --mb-sidebar-width: min(280px, calc(100dvw - var(--mb-rail-width) - 16px));
     --btn-size: 44px;
     grid-template-areas: "nav" "main";
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: calc(var(--mb-header-height) + env(safe-area-inset-top)) minmax(0, 1fr);
   }
-  .mb-app .mb-rail { block-size: 100dvh; inline-size: var(--mb-rail-width); inset: 0 auto 0 0; padding-block-start: max(12px, env(safe-area-inset-top)); position: fixed; transform: translateX(-110%); visibility: hidden; z-index: 22; }
+  .mb-app .mb-rail { block-size: 100dvh; inline-size: var(--mb-rail-width); inset: 0 auto 0 0; padding-block-start: max(16px, env(safe-area-inset-top)); position: fixed; transform: translateX(-110%); visibility: hidden; z-index: 22; }
   .mb-app #sidebar.mb-sidebar { block-size: 100dvh; inline-size: var(--mb-sidebar-width); inset: 0 auto 0 var(--mb-rail-width); padding-block-start: env(safe-area-inset-top); position: fixed; transform: translateX(calc(-100% - var(--mb-rail-width))); visibility: hidden; z-index: 21; }
   .mb-app.mb-sidebar-open :is(.mb-rail, #sidebar.mb-sidebar) { transform: none; visibility: visible; }
   .mb-app.mb-sidebar-open .mb-sidebar-backdrop { background: #0006; border: 0; display: block; inset: 0; position: fixed; z-index: 20; }
