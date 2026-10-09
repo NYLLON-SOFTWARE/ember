@@ -546,6 +546,18 @@ test(`workspace appearance persists, follows the system, and remains accessible 
 
   const trigger = page.locator('.mb-appearance-toggle')
   const menu = page.getByRole('dialog', { name: 'Appearance', exact: true })
+  const tabOutOfFallback = async () => {
+    if (nativePopover) return
+    for (const [key, destination] of [
+      ['Tab', page.locator('.mb-rail__profile')],
+      ['Shift+Tab', page.locator('.mb-rail').getByRole('link', { name: 'Admin', exact: true })],
+    ]) {
+      await trigger.click()
+      await page.keyboard.press(key)
+      assert.equal(await menu.isVisible(), false, `${key} closes the fallback appearance menu`)
+      assert.equal(await destination.evaluate(node => node === document.activeElement), true, `${key} continues through workspace controls`)
+    }
+  }
   const select = async mode => {
     if (!await menu.isVisible()) await trigger.click()
     await menu.getByText(mode, { exact: true }).click()
@@ -561,6 +573,7 @@ test(`workspace appearance persists, follows the system, and remains accessible 
   await page.keyboard.press('Escape')
   assert.equal(await menu.isVisible(), false)
   assert.equal(await trigger.evaluate(node => node === document.activeElement), true)
+  await tabOutOfFallback()
   await page.locator('.mb-rail__profile').click()
   await page.locator('#user_name').waitFor()
   assert.equal(await surface(), dark, 'preference survives Turbo navigation')
@@ -595,6 +608,7 @@ test(`workspace appearance persists, follows the system, and remains accessible 
   await page.keyboard.press('Escape')
   assert.equal(await menu.isVisible(), false)
   assert.equal(await page.locator('body').evaluate(node => node.classList.contains('mb-sidebar-open')), true, 'Escape closes appearance before the mobile drawer')
+  await tabOutOfFallback()
   await page.keyboard.press('Escape')
 
   await page.addInitScript(() => {

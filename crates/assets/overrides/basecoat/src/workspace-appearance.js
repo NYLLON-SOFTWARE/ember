@@ -63,8 +63,8 @@ if (!window.matchboxAppearance) {
       event.stopImmediatePropagation();
       closeMenu(true);
     } else if (event.key === "Tab") {
-      event.preventDefault();
-      menu().querySelector("input:checked")?.focus();
+      // Continue the browser's normal tab order from the menu's trigger.
+      closeMenu(true);
     }
   }, true);
 
