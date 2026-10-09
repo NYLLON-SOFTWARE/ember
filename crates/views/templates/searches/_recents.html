@@ -1,4 +1,4 @@
-{#- Matchbox shows recent searches once above the results, instead of repeating the Rails nav/sidebar links. -#}
+{#- Ember shows recent searches once above the results, instead of repeating the Rails nav/sidebar links. -#}
     {%- for search in index.recent_searches %}
       <a class="align-center gap room btn txt-nowrap" href="{{ crate::searches::search_path(search) }}">
         <span class="overflow-ellipsis">“{{ search }}”</span>

@@ -7,13 +7,13 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 /// `parity/.seed/<name>`, or `None` when it hasn't been built. The first test to find a seed
-/// missing says so on stderr, and with `MATCHBOX_REQUIRE_SEED` set a missing seed fails instead.
+/// missing says so on stderr, and with `EMBER_REQUIRE_SEED` set a missing seed fails instead.
 pub fn seed_dir(name: &str) -> Option<PathBuf> {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../parity/.seed").join(name);
     if dir.join("db/production.sqlite3").exists() {
         return Some(dir);
     }
-    assert!(rails_compat::env::var_os("MATCHBOX_REQUIRE_SEED").is_none(), "parity/.seed/{name} isn't built (parity/bin/seed build {name})");
+    assert!(rails_compat::env::var_os("EMBER_REQUIRE_SEED").is_none(), "parity/.seed/{name} isn't built (parity/bin/seed build {name})");
     note_missing(name);
     None
 }
@@ -27,7 +27,7 @@ fn note_missing(name: &str) {
         let _ = writeln!(
             std::io::stderr(),
             "note: parity/.seed/{name} isn't built, so the tests that boot it pass without running \
-             (parity/bin/seed build {name}; MATCHBOX_REQUIRE_SEED=1 fails them instead)"
+             (parity/bin/seed build {name}; EMBER_REQUIRE_SEED=1 fails them instead)"
         );
     }
 }

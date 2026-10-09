@@ -89,11 +89,11 @@ for route in routes:
         rows.append((f"c={c} p99 ms", lambda r, g=g: g(r)["latency"]["p99_ms"], False))
     for c in concs:
         g = http(route, c)
-        rows.append((f"c={c} matchbox CPU ms/req", lambda r, g=g: g(r)["cpu_ms_per_req"]["matchbox"], False))
+        rows.append((f"c={c} Ember CPU ms/req", lambda r, g=g: g(r)["cpu_ms_per_req"]["matchbox"], False))
         rows.append((f"c={c} thrust CPU ms/req", lambda r, g=g: g(r)["cpu_ms_per_req"]["thrust"], None))
         rows.append((f"c={c} docker-proxy CPU ms/req", lambda r, g=g: g(r)["cpu_ms_per_req"]["docker-proxy"], None))
         rows.append((f"c={c} loadgen cores busy", lambda r, g=g: g(r)["cpu_cores"]["loadgen"], None))
-        rows.append((f"c={c} matchbox cores busy", lambda r, g=g: g(r)["cpu_cores"]["matchbox"], None))
+        rows.append((f"c={c} Ember cores busy", lambda r, g=g: g(r)["cpu_cores"]["matchbox"], None))
     rows.append(("avg response bytes", lambda r, g=http(route, concs[0]): g(r)["avg_bytes"], None))
     table(f"HTTP {route}", rows)
 
@@ -108,7 +108,7 @@ for n in cable_ns:
         ("max sustained msgs/s (to all)", lambda r, g=g: g(r)["throughput"]["delivered_msgs_per_sec"], True),
         ("deliveries/s", lambda r, g=g: g(r)["throughput"]["frames_per_sec"], True),
         ("saturated post→all p50 ms", lambda r, g=g: g(r)["throughput"]["all_clients"]["p50_ms"], False),
-        ("matchbox CPU µs/delivery", lambda r, g=g: g(r)["cpu_us_per_delivery"]["matchbox"], False),
+        ("Ember CPU µs/delivery", lambda r, g=g: g(r)["cpu_us_per_delivery"]["matchbox"], False),
         ("thrust CPU µs/delivery", lambda r, g=g: g(r)["cpu_us_per_delivery"]["thrust"], None),
         ("docker-proxy CPU µs/delivery", lambda r, g=g: g(r)["cpu_us_per_delivery"]["docker-proxy"], None),
         ("loadgen CPU µs/delivery", lambda r, g=g: g(r)["cpu_us_per_delivery"]["loadgen"], None),

@@ -244,7 +244,7 @@ fn file_extname(path: &[u8]) -> &[u8] {
     }
 }
 
-/// Rack::Mime.mime_type(ext, nil) for the extensions a Matchbox deploy serves (and the other
+/// Rack::Mime.mime_type(ext, nil) for the extensions an Ember deploy serves (and the other
 /// common web ones); lookups are case-insensitive.
 fn mime_type(extname: &[u8]) -> Option<&'static str> {
     let ext = String::from_utf8_lossy(extname).to_ascii_lowercase();

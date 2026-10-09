@@ -124,14 +124,22 @@ impl Layout {
     fn style_header(&self, c: &mut Ctx) {
         // Only migrated pages and requests from them need this transition hint. Legacy responses
         // otherwise retain their existing headers, including the cached chat paths.
-        let legacy_client = c.request.header("X-Campfire-Style-Profile").is_some();
-        if self.style_profile == StyleProfile::Basecoat || c.request.header("X-Matchbox-Style-Profile").is_some() || legacy_client {
+        let matchbox_client = c.request.header("X-Matchbox-Style-Profile").is_some();
+        let campfire_client = c.request.header("X-Campfire-Style-Profile").is_some();
+        if self.style_profile == StyleProfile::Basecoat
+            || c.request.header("X-Ember-Style-Profile").is_some()
+            || matchbox_client
+            || campfire_client
+        {
             let profile = match self.style_profile {
                 StyleProfile::Legacy => "legacy",
                 StyleProfile::Basecoat => "basecoat",
             };
-            c.set_header("X-Matchbox-Style-Profile", profile);
-            if legacy_client {
+            c.set_header("X-Ember-Style-Profile", profile);
+            if matchbox_client {
+                c.set_header("X-Matchbox-Style-Profile", profile);
+            }
+            if campfire_client {
                 c.set_header("X-Campfire-Style-Profile", profile);
             }
         }

@@ -1,33 +1,33 @@
-# Matchbox
+# Ember
 
-[MIT licensed](MIT-LICENSE) · [GitHub](https://github.com/nyllon-software/matchbox)
+[MIT licensed](MIT-LICENSE) · [GitHub](https://github.com/nyllon-software/ember)
 
-Matchbox is an independently maintained fork of
+Ember is an independently maintained fork of
 [Basecamp's Campfire in Rust](https://github.com/basecamp/once-campfire-rust), developed by
 [NYLLON-SOFTWARE](https://github.com/nyllon-software). Campfire was created by
 [37signals](https://37signals.com); the Rust implementation is based on the original
 [ONCE Campfire Rails application](https://github.com/basecamp/once-campfire).
 
 This repository preserves the upstream Git history and the pinned Rails source in `reference/`.
-Matchbox adds its own interface and configuration changes, documented under
+Ember adds its own interface and configuration changes, documented under
 [Known differences](#known-differences). It is an independent project, not an official
 37signals or Basecamp release.
 
 The existing SQLite database, storage layout and signed/encrypted cookies remain compatible,
 so existing installs can upgrade without migrating data or signing everyone out.
 
-One `matchbox` executable replaces Ruby, Puma, Redis, Resque and Thruster, with libvips and ffmpeg
+One `ember` executable replaces Ruby, Puma, Redis, Resque and Thruster, with libvips and ffmpeg
 for media. The Rails frontend ships with a few [port-owned overrides](crates/assets/OVERRIDES.md).
 The app includes TLS, HTTP/2, Web Push, bot webhooks, search and Action Cable-compatible WebSockets.
 
 ## Running it
 
-Build Matchbox from this repository, including the pinned upstream submodule:
+Build Ember from this repository, including the pinned upstream submodule:
 
 ```sh
-git clone --recurse-submodules https://github.com/nyllon-software/matchbox.git
-cd matchbox
-docker build -t matchbox .
+git clone --recurse-submodules https://github.com/nyllon-software/ember.git
+cd ember
+docker build -t ember .
 ```
 
 Run the resulting image with persistent storage:
@@ -36,16 +36,18 @@ Run the resulting image with persistent storage:
 docker run -d -p 80:80 -p 443:443 \
   -e SECRET_KEY_BASE=... -e VAPID_PUBLIC_KEY=... -e VAPID_PRIVATE_KEY=... \
   -e TLS_DOMAIN=chat.example.com \
-  -v matchbox:/rails/storage \
-  matchbox
+  -v ember:/rails/storage \
+  ember
 ```
 
 [ONCE](https://github.com/basecamp/once) can also deploy an image you build and publish to your
-own registry. The executable is `matchbox` and the application crate lives in `crates/matchbox/`.
+own registry. The executable is `ember`; `matchbox` remains available as a compatibility alias.
+The application crate lives in `crates/matchbox/`. Configuration uses `EMBER_*` names, with
+`MATCHBOX_*` and `CAMPFIRE_*` accepted for existing deployments, in that order of precedence.
 
 - `TLS_DOMAIN` enables automatic Let's Encrypt certificates; `DISABLE_SSL` enables plain HTTP.
 - `/rails/storage` holds the database, uploads, backups and certificates. Existing installs must
-  keep their storage and secrets.
+  keep their storage volume (including its existing name) and secrets.
 - Web Push needs a valid P-256 VAPID key pair in URL-safe Base64. `VAPID_SUBJECT` sets the contact
   URL; its default is `https://` plus the first `TLS_DOMAIN`, or the project's URL. Keep this pair
   stable across restarts. The room-header bell requests browser permission and saves the subscription
@@ -63,7 +65,7 @@ own registry. The executable is `matchbox` and the application crate lives in `c
 ## Performance
 
 These are historical measurements from the upstream Campfire comparison, retained with attribution.
-They are not new benchmarks of Matchbox.
+They are not new benchmarks of Ember.
 
 Measured with 16 concurrent clients on an AMD Ryzen AI MAX+ 395 with 32 GB RAM,
 with four hardware cores allocated to each app.
@@ -91,7 +93,7 @@ native media dependencies are specified in the [`Dockerfile`](Dockerfile).
 git submodule update --init
 parity/bin/reference build
 parity/bin/seed build
-MATCHBOX_REQUIRE_SEED=1 cargo test --workspace --exclude html5ever
+EMBER_REQUIRE_SEED=1 cargo test --workspace --exclude html5ever
 cargo clippy --workspace --exclude html5ever --all-targets
 parity/bin/candidate build
 parity/bin/candidate compare
@@ -99,11 +101,11 @@ bench/run
 ```
 
 Seed generation and parity checks need Docker. Tests without the seed skip app integration tests.
-For local development, run `cargo run -p matchbox -- server` with `SECRET_KEY_BASE` set
-(or `SECRET_KEY_BASE_DUMMY=1`). Build an image with `docker build -t matchbox .`.
+For local development, run `cargo run --bin ember -- server` with `SECRET_KEY_BASE` set
+(or `SECRET_KEY_BASE_DUMMY=1`). Build an image with `docker build -t ember .`.
 
 The reference harness compares HTML, DOM, accessibility trees, assets, Cable frames and screenshots
-against Rails. Matchbox now owns application-page presentation: reviewed Matchbox DOM snapshots and
+against Rails. Ember now owns application-page presentation: reviewed Ember DOM snapshots and
 native browser checks cover its redesign. Presentation exceptions do not exempt HTTP status,
 network, or Cable checks. The full Rails browser comparison requires a separate review of changed
 asset requests, HTML body hashes, and sidebar broadcasts; it is not a claim of visual parity.
@@ -111,7 +113,7 @@ See [`parity/SCREENS.md`](parity/SCREENS.md) for the historical coverage and mas
 [`AGENTS.md`](AGENTS.md) for repository layout and working rules,
 [`CONTRIBUTING.md`](CONTRIBUTING.md) for contributions, and [`SECURITY.md`](SECURITY.md) for security reports.
 
-### Matchbox frontend
+### Ember frontend
 
 All pages use compiled Askama templates and the existing form helpers for field names, escaping,
 and multipart handling. The workspace interface is styled in
@@ -143,7 +145,7 @@ included in `crates/assets/overrides/lucide/LICENSE.txt`.
 The setup screen keeps its separate Basecoat Vega profile. Its shared controls live in
 `crates/views/templates/components/ui.html`; colors, fonts, radii and component overrides live in
 `crates/assets/overrides/basecoat/src/theme.css`. The internal `Legacy` asset profile now includes the
-Matchbox workspace override; it does not mean those pages retain the original appearance. Basecoat's
+Ember workspace override; it does not mean those pages retain the original appearance. Basecoat's
 bundle and the workspace styles are never loaded together.
 
 Frontend dependencies are pinned. After editing the frontend sources or adding Tailwind classes,
@@ -153,7 +155,7 @@ regenerate the assets and rebuild the Rust app:
 npm ci --prefix crates/assets/overrides/basecoat
 npm run build --prefix crates/assets/overrides/basecoat
 npm test --prefix crates/assets/overrides/basecoat
-cargo build -p matchbox
+cargo build --bin ember
 ```
 
 Generated CSS, JavaScript, and the Lucide catalog are checked in and embedded with digested URLs, so ordinary Cargo and
@@ -161,7 +163,7 @@ Docker builds do not require Node.js. CI runs the frontend build in check mode t
 Basecoat build inputs and npm dependencies are excluded from the served asset inventory.
 Stylesheets still require rebuilding the executable; they are not loaded from disk at runtime.
 
-The Matchbox browser checks start temporary app instances and never use the normal storage directory:
+The Ember browser checks start temporary app instances and never use the normal storage directory:
 
 ```sh
 npm ci --prefix parity
@@ -169,7 +171,7 @@ npm exec --prefix parity -- playwright install chromium
 npm run test:kro --prefix parity
 ```
 
-Set `MATCHBOX_BIN` to test a different binary. Native browser checks cover setup, authentication,
+Set `EMBER_BIN` to test a different binary. Native browser checks cover setup, authentication,
 workspace navigation, conversations, settings, and responsive layouts without Docker. They create
 real disposable accounts and messages rather than using the development database. They do not
 replace the reference-seeded integration suite.
@@ -178,7 +180,7 @@ Reviewed page DOM snapshots live under `crates/views/tests/golden/matchbox/{a,b}
 frozen Rails fixture inputs. To intentionally update them after reviewing a UI change:
 
 ```sh
-MATCHBOX_UPDATE_VIEWS=1 cargo test -p matchbox_views
+EMBER_UPDATE_VIEWS=1 cargo test -p matchbox_views
 cargo test -p matchbox_views
 ```
 
@@ -194,12 +196,16 @@ behavior changes and compatibility limits are listed below.
 <details>
 <summary>Differences from Rails</summary>
 
-- **Matchbox branding:** application copy, page titles, translations, sharing prompts, installation
-  instructions, the web app manifest, executable, Rust crates, and developer tooling use Matchbox.
-  New workspaces default to Matchbox; an existing workspace named exactly Campfire displays as
-  Matchbox without rewriting its stored name. Other workspace names and message contents stay intact.
-  `MATCHBOX_*` environment variables replace the old prefix, with `CAMPFIRE_*` accepted as a fallback
-  and the new name taking precedence. Existing browser appearance preferences are also honored.
+- **Ember branding:** application copy, page titles, translations, sharing prompts, installation
+  instructions, the web app manifest, and repository documentation use Ember.
+  New workspaces default to Ember; an existing workspace named exactly Campfire or Matchbox displays as
+  Ember without rewriting its stored name. Other workspace names and message contents stay intact.
+  The executable is `ember`, configuration uses `EMBER_*`, and style-profile headers use
+  `X-Ember-Style-Profile`. The `matchbox` executable, `MATCHBOX_*` and `CAMPFIRE_*` configuration,
+  and legacy style-profile headers remain compatible. Configuration precedence is `EMBER_*`,
+  then `MATCHBOX_*`, then `CAMPFIRE_*`; an explicit empty value also takes precedence.
+  Rust crate names, internal asset paths, stored settings, and existing browser appearance
+  preferences are retained for compatibility.
   The `_campfire_session` cookie, GlobalID namespace, mention MIME type, and upstream asset module
   paths remain compatible so existing sessions, links, and messages work. Upstream source, URLs,
   copyright notices, recorded benchmarks, and Rails golden fixtures retain their original names.
@@ -207,7 +213,7 @@ behavior changes and compatibility limits are listed below.
   a conversation sidebar, a compact room header, left-aligned message threads, an invitation card,
   and a full-width composer. Small screens use a dismissible sidebar drawer and touch-sized controls.
   Home and direct-message navigation use actual room memberships; Activity shows actual unread
-  conversations and counts. Search in the rail opens the existing full message search. Matchbox
+  conversations and counts. Search in the rail opens the existing full message search. Ember
   uses “rooms” consistently in labels, settings, favorites, and search. The sidebar starts with
   rooms directly beneath the workspace name. Room creation lives in workspace
   settings, alongside the admin-only room-creation permission control; existing creation permissions
@@ -251,7 +257,7 @@ behavior changes and compatibility limits are listed below.
   room management, search, bots, and user settings. Account custom CSS remains supported.
   The redesign changes templates, shared CSS, and shell JavaScript; the database, sessions, message
   submission, rich-text editor, uploads, notifications, and fragment/cache mechanisms retain their
-  existing contracts. Matchbox DOM snapshots and browser checks replace Rails pixel/DOM equality
+  existing contracts. Ember DOM snapshots and browser checks replace Rails pixel/DOM equality
   for owned pages. HTTP outcomes and network/Cable behavior are not blanket-allowlisted.
 - **Translation controls:** administrators can toggle **Hide translation buttons** in Account
   settings. Hiding is enabled by default for new and existing installs, including sign-in,
@@ -263,7 +269,7 @@ behavior changes and compatibility limits are listed below.
   their usual editing behavior. Workspace logos and profile avatars use a single large preview with
   an overlaid camera picker and a separate removal action. Uploads still save immediately and offer
   a submit button without JavaScript. The navigation rail shows the uploaded workspace logo, falling
-  back to the Matchbox mark when no logo is set. Immediate account switches save without success flashes; name/logo
+  back to the Ember mark when no logo is set. Immediate account switches save without success flashes; name/logo
   saves have a readable confirmation. Membership badges use the shared control styling.
 - **Unsaved room edits:** new/edit room forms prompt with **Unsaved Changes**, **Discard**, and
   **Save** before in-app navigation or same-document browser back/forward. Escape or the close action
@@ -311,7 +317,7 @@ behavior changes and compatibility limits are listed below.
   have distinct feedback. A failed new subscription is rolled back and can be retried.
 - **Release display:** the former default version `0` is replaced by the actual Cargo release version,
   with the existing deployment overrides retained as described above.
-- **Matchbox setup screen:** `/first_run` uses a responsive Basecoat form card with visible labels and an
+- **Ember setup screen:** `/first_run` uses a responsive Basecoat form card with visible labels and an
   optional camera-style avatar picker, input icons, a password visibility toggle, and a Continue
   button. The setup screen omits the field translation popups and appearance selector. It follows
   system colors by default and honors an existing saved appearance preference. Workspace pages use
@@ -399,7 +405,7 @@ behavior changes and compatibility limits are listed below.
   beyond 400 nesting levels or 400 attributes per element are stored unchanged with empty plain
   text. These messages render as unrenderable.
 - **Not ported:** Active Storage streaming's duplicate `session_token` cookie or legacy AES-CBC
-  cookies; Matchbox uses AES-GCM.
+  cookies; Ember uses AES-GCM.
 
 HTTP-01 ACME validation is only unit-tested; TLS-ALPN-01 is tested end to end against a local ACME
 server. Rich text is checked against Rails on 658 cases, including 400 fuzzed cases.
@@ -408,11 +414,11 @@ server. Rich text is checked against Rails on 658 cases, including 400 fuzzed ca
 
 ## License and attribution
 
-Matchbox is distributed under the [MIT License](MIT-LICENSE), the same license as the upstream
+Ember is distributed under the [MIT License](MIT-LICENSE), the same license as the upstream
 Campfire projects. The original 37signals copyright and permission notice are preserved.
-Matchbox contributions are also MIT licensed. Third-party assets and vendored dependencies retain
+Ember contributions are also MIT licensed. Third-party assets and vendored dependencies retain
 their own notices, including [Basecoat and Tailwind](crates/assets/overrides/basecoat/LICENSES.txt).
 
 Credit for Campfire, the original Rails application, and the Rust port belongs to their respective
 upstream authors and contributors. The Campfire name and original artwork identify that lineage;
-this fork is maintained and released as Matchbox.
+this fork is maintained and released as Ember.

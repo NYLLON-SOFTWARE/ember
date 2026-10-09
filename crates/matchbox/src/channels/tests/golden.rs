@@ -38,9 +38,9 @@ const GOLDEN: &str = "crates/matchbox/src/channels/tests/golden/reference.json";
 const EXPECTED_FRAME_WAIT: Duration = Duration::from_secs(10);
 const TRIGGER: &str = "crates/matchbox/src/channels/tests/golden/trigger.rb";
 
-/// The repository root (`MATCHBOX_REPO_ROOT` when this module is built outside the workspace).
+/// The repository root (`EMBER_REPO_ROOT` when this module is built outside the workspace).
 fn repo_root() -> std::path::PathBuf {
-    rails_compat::env::var_os("MATCHBOX_REPO_ROOT").map_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."), Into::into)
+    rails_compat::env::var_os("EMBER_REPO_ROOT").map_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."), Into::into)
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

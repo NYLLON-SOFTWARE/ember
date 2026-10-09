@@ -4,9 +4,9 @@
   procmem.py sample CGROUP_DIR OUT.jsonl        # every 250 ms until killed or the cgroup goes
   procmem.py phases OUT.jsonl LOADGEN.stderr    # peak per role within each loadgen PHASE window
 
-Roles, from each process's command line: `matchbox` (the Rust app: one process, its own front
-server included), `puma` (the Rails app: Puma's master and workers, which also serve Action Cable),
-`thrust` (Thruster), `redis` (the reference's cable pub/sub and Resque queue), `jobs` (resque-pool
+Roles, from each process's command line: `ember` (the Rust app: one process, its own front
+server included; recorded as `matchbox` for compatibility with earlier benchmark results),
+`puma` (the Rails app: Puma's master and workers, which also serve Action Cable), `thrust` (Thruster), `redis` (the reference's cable pub/sub and Resque queue), `jobs` (resque-pool
 and its workers), `other`. Each sample sums, per role, Pss (proportional set size, so pages the
 forked Puma workers share with their master count once) and RssAnon (anonymous resident memory,
 counted in every process that maps it), both from /proc/PID/smaps_rollup, in MB.
@@ -15,7 +15,7 @@ import json, os, re, sys, time
 
 
 def role(cmdline):
-    if "matchbox" in cmdline:
+    if re.search(r"(?:^|/)(?:ember|matchbox)(?:\s|$)", cmdline):
         return "matchbox"
     if "puma" in cmdline:
         return "puma"

@@ -40,7 +40,7 @@
 
 {% if let Some(user) = ctx.current_user.as_ref() %}
     <nav class="mb-rail" aria-label="Workspace">
-      <a class="mb-rail__brand" href="{{ h::routes::root() }}" aria-label="Matchbox home" title="{{ ctx.account.name }}">{% if ctx.account.has_logo %}<img src="{{ ctx.account.logo_url }}" alt="" width="44" height="44">{% else %}{% call icons::icon("flame") %}{% endif %}</a>
+      <a class="mb-rail__brand" href="{{ h::routes::root() }}" aria-label="Ember home" title="{{ ctx.account.name }}">{% if ctx.account.has_logo %}<img src="{{ ctx.account.logo_url }}" alt="" width="44" height="44">{% else %}{% call icons::icon("flame") %}{% endif %}</a>
       <a class="mb-rail__link" href="{{ h::routes::root() }}" data-matchbox-home>{% call icons::icon("home") %}<span>Home</span></a>
       <a class="mb-rail__link" href="{{ h::routes::new_rooms_direct() }}" data-matchbox-new-direct>{% call icons::icon("messages") %}<span>DMs</span></a>
       <button type="button" class="mb-rail__link" data-matchbox-activity aria-pressed="false" title="Show unread conversations">{% call icons::icon("bell") %}<span>Activity</span><span class="mb-activity-count" data-matchbox-unread-count hidden></span></button>

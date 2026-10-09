@@ -486,7 +486,7 @@ mod turbo_native {
     }
 }
 
-/// Action Mailbox's ingress and conductor routes, which Matchbox doesn't use.
+/// Action Mailbox's ingress and conductor routes, which Ember doesn't use.
 mod mailbox {
     use super::*;
 
@@ -690,7 +690,7 @@ mod tests {
 
     /// Times `recognize` on the paths the page benchmarks request, `/up`, Active Storage URLs and a
     /// 404 (bench/results/routing-20260930):
-    /// `cargo test --release -p matchbox --bin matchbox -- --ignored --nocapture times_recognition`
+    /// `cargo test --release -p matchbox --bin ember -- --ignored --nocapture times_recognition`
     #[test]
     #[ignore = "a timing harness; run it in a release build"]
     fn times_recognition() {

@@ -30,7 +30,7 @@ export default class extends Controller {
     if (this.#subscribing) return
     this.#endFirstRun()
     if (!this.#allowed) {
-      this.#showNotice("Notifications aren’t available here", "Open Matchbox in a browser that supports notifications. On iPhone or iPad, add it to your Home Screen first.", true)
+      this.#showNotice("Notifications aren’t available here", "Open Ember in a browser that supports notifications. On iPhone or iPad, add it to your Home Screen first.", true)
       return
     }
     if (!this.#encodedVapidPublicKey) {

@@ -19,7 +19,11 @@ pub async fn show(c: &mut Ctx) -> Result {
 
 async fn render(c: &mut Ctx, status: StatusCode, values: first_runs::FormValues<'_>) -> Result {
     c.respond_to(&[&format::HTML])?;
-    let profile = c.request.header("X-Matchbox-Style-Profile").or_else(|| c.request.header("X-Campfire-Style-Profile"));
+    let profile = c
+        .request
+        .header("X-Ember-Style-Profile")
+        .or_else(|| c.request.header("X-Matchbox-Style-Profile"))
+        .or_else(|| c.request.header("X-Campfire-Style-Profile"));
     let reload_frame = c.is_turbo_frame_request() && profile != Some("basecoat");
     framed_page!(c, status, matchbox_assets::StyleProfile::Basecoat, |ctx| first_runs::Show { ctx, values, reload_frame }).await
 }
@@ -91,7 +95,7 @@ mod tests {
         let config = Config::from_lookup(|name| match name {
             "SECRET_KEY_BASE" => Some("first-run-assets-test-secret".repeat(4)),
             "DISABLE_SSL" => Some("1".into()),
-            "MATCHBOX_STORAGE_PATH" => Some(dir.path().to_string_lossy().into_owned()),
+            "EMBER_STORAGE_PATH" => Some(dir.path().to_string_lossy().into_owned()),
             _ => None,
         })
         .unwrap();
@@ -156,7 +160,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
-        assert_eq!(response.headers()["x-matchbox-style-profile"], "basecoat");
+        assert_eq!(response.headers()["x-ember-style-profile"], "basecoat");
+        assert!(!response.headers().contains_key("x-matchbox-style-profile"));
+        assert!(!response.headers().contains_key("x-campfire-style-profile"));
         let preload = response.headers()["link"].to_str().unwrap().to_owned();
         let html = String::from_utf8(to_bytes(response.into_body(), usize::MAX).await.unwrap().to_vec()).unwrap();
         let css = matchbox_assets::asset_path("basecoat/app.css");
@@ -171,25 +177,54 @@ mod tests {
     #[tokio::test]
     async fn cross_profile_frames_promote_to_full_navigation() {
         let (app, _dir) = empty_app().await;
-        for (profile, reload) in [("legacy", true), ("basecoat", false)] {
-            let response = app
-                .router
-                .clone()
-                .oneshot(
-                    Request::builder()
-                        .uri("/first_run")
-                        .header("host", "campfire.test")
-                        .header("turbo-frame", "setup")
-                        .header("x-matchbox-style-profile", profile)
-                        .body(Body::empty())
-                        .unwrap(),
-                )
-                .await
-                .unwrap();
-            assert_eq!(response.status(), StatusCode::OK);
-            assert!(!response.headers().contains_key("link"));
-            let html = String::from_utf8(to_bytes(response.into_body(), usize::MAX).await.unwrap().to_vec()).unwrap();
-            assert_eq!(html.contains("name=\"turbo-visit-control\" content=\"reload\""), reload);
+        for header in ["x-ember-style-profile", "x-matchbox-style-profile", "x-campfire-style-profile"] {
+            for (profile, reload) in [("legacy", true), ("basecoat", false)] {
+                let response = app
+                    .router
+                    .clone()
+                    .oneshot(
+                        Request::builder()
+                            .uri("/first_run")
+                            .header("host", "campfire.test")
+                            .header("turbo-frame", "setup")
+                            .header(header, profile)
+                            .body(Body::empty())
+                            .unwrap(),
+                    )
+                    .await
+                    .unwrap();
+                assert_eq!(response.status(), StatusCode::OK);
+                assert_eq!(response.headers()["x-ember-style-profile"], "basecoat");
+                if header != "x-ember-style-profile" {
+                    assert_eq!(response.headers()[header], "basecoat");
+                }
+                assert!(!response.headers().contains_key("link"));
+                let html = String::from_utf8(to_bytes(response.into_body(), usize::MAX).await.unwrap().to_vec()).unwrap();
+                assert_eq!(html.contains("name=\"turbo-visit-control\" content=\"reload\""), reload);
+            }
         }
+    }
+
+    #[tokio::test]
+    async fn current_style_header_takes_precedence_over_legacy_headers() {
+        let (app, _dir) = empty_app().await;
+        let response = app
+            .router
+            .oneshot(
+                Request::builder()
+                    .uri("/first_run")
+                    .header("host", "campfire.test")
+                    .header("turbo-frame", "setup")
+                    .header("x-ember-style-profile", "basecoat")
+                    .header("x-matchbox-style-profile", "legacy")
+                    .header("x-campfire-style-profile", "legacy")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let html = String::from_utf8(to_bytes(response.into_body(), usize::MAX).await.unwrap().to_vec()).unwrap();
+        assert!(!html.contains("name=\"turbo-visit-control\" content=\"reload\""));
     }
 }

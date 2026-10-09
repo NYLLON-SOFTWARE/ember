@@ -1,5 +1,5 @@
 //! Environment configuration: the env vars the reference reads in production, plus a few
-//! `MATCHBOX_*` knobs for things Rails gets from its directory layout.
+//! `EMBER_*` knobs for things Rails gets from its directory layout.
 //!
 //! Reference sources:
 //! - `SECRET_KEY_BASE`: Rails' `secret_key_base` (required in production; `SECRET_KEY_BASE_DUMMY`
@@ -11,7 +11,7 @@
 //!   `https://` and the first `TLS_DOMAIN`, or the project's URL without one.
 //! - `DISABLE_SSL`: `config/environments/production.rb` (`assume_ssl`/`force_ssl` unless present).
 //! - `APP_VERSION`, `GIT_REVISION`: `config/initializers/version.rb` (`X-Version`, `X-Rev`).
-//!   Matchbox falls back to the compiled Cargo package version when neither is set.
+//!   Ember falls back to the compiled Cargo package version when neither is set.
 //! - `RAILS_ENV`: names the database file (`storage/db/<env>.sqlite3`, `config/database.yml`).
 //! - `RAILS_MAX_THREADS`: `config/database.yml` pool size, used for the number of reader threads,
 //!   each with a reader connection of its own (`matchbox_db::Database`).
@@ -22,7 +22,7 @@
 //! - Not applicable: `REDIS_URL` and `WEB_CONCURRENCY` (no Redis, one process), `PORT` (Puma's;
 //!   the app listens on Thruster's `TARGET_PORT`), and `SENTRY_DSN` and `SKIP_TELEMETRY` (the app
 //!   sends no telemetry).
-//! - `MATCHBOX_FRAGMENT_CACHE_MB`: the fragment store's limit in megabytes (default 32). The
+//! - `EMBER_FRAGMENT_CACHE_MB`: the fragment store's limit in megabytes (default 32). The
 //!   reference caches fragments in Redis (`redis_cache_store`) with no `maxmemory`; this store is
 //!   in the process, so it's bounded like Rails' `MemoryStore` (default `size` 32 MB), evicting the
 //!   least recently used fragments. See `matchbox_views::fragment_cache`.
@@ -52,7 +52,7 @@ pub struct Config {
     pub db_readers: usize,
     pub job_concurrency: usize,
     pub log_level: String,
-    /// The fragment store's limit in bytes (`MATCHBOX_FRAGMENT_CACHE_MB`).
+    /// The fragment store's limit in bytes (`EMBER_FRAGMENT_CACHE_MB`).
     pub fragment_cache_bytes: usize,
 }
 
@@ -103,15 +103,15 @@ impl Config {
         };
         let environment = present("RAILS_ENV").unwrap_or_else(|| "production".into());
 
-        let storage_root = present("MATCHBOX_STORAGE_PATH").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("storage"));
+        let storage_root = present("EMBER_STORAGE_PATH").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("storage"));
         let mut storage = StoragePaths::new(storage_root, &environment);
-        if let Some(database) = present("MATCHBOX_DATABASE_PATH") {
+        if let Some(database) = present("EMBER_DATABASE_PATH") {
             storage.database = database.into();
         }
-        if let Some(files) = present("MATCHBOX_FILES_PATH") {
+        if let Some(files) = present("EMBER_FILES_PATH") {
             storage.files = files.into();
         }
-        if let Some(backups) = present("MATCHBOX_BACKUPS_PATH") {
+        if let Some(backups) = present("EMBER_BACKUPS_PATH") {
             storage.backups = backups.into();
         }
 
@@ -135,7 +135,7 @@ impl Config {
             db_readers: number("RAILS_MAX_THREADS", 5)?.max(1),
             job_concurrency: number("JOB_CONCURRENCY", 2)?.max(1),
             log_level: present("RAILS_LOG_LEVEL").unwrap_or_else(|| "info".into()),
-            fragment_cache_bytes: number("MATCHBOX_FRAGMENT_CACHE_MB", matchbox_views::fragment_cache::DEFAULT_MAX_BYTES >> 20)?
+            fragment_cache_bytes: number("EMBER_FRAGMENT_CACHE_MB", matchbox_views::fragment_cache::DEFAULT_MAX_BYTES >> 20)?
                 .saturating_mul(1 << 20),
         })
     }
@@ -152,7 +152,7 @@ fn default_vapid_subject(tls_domains: Option<String>) -> String {
     let domain = tls_domains.as_deref().and_then(|domains| domains.split(',').map(str::trim).find(|domain| !domain.is_empty()));
     match domain {
         Some(domain) => format!("https://{domain}"),
-        None => "https://github.com/NYLLON-SOFTWARE/matchbox".into(),
+        None => "https://github.com/NYLLON-SOFTWARE/ember".into(),
     }
 }
 
@@ -190,9 +190,9 @@ mod tests {
 
     #[test]
     fn fragment_cache_size_in_megabytes() {
-        let bytes = config(&[("SECRET_KEY_BASE", "abc"), ("MATCHBOX_FRAGMENT_CACHE_MB", "64")]).unwrap().fragment_cache_bytes;
+        let bytes = config(&[("SECRET_KEY_BASE", "abc"), ("EMBER_FRAGMENT_CACHE_MB", "64")]).unwrap().fragment_cache_bytes;
         assert_eq!(bytes, 64 * 1024 * 1024);
-        assert!(config(&[("SECRET_KEY_BASE", "abc"), ("MATCHBOX_FRAGMENT_CACHE_MB", "lots")]).is_err());
+        assert!(config(&[("SECRET_KEY_BASE", "abc"), ("EMBER_FRAGMENT_CACHE_MB", "lots")]).is_err());
     }
 
     #[test]
@@ -227,28 +227,42 @@ mod tests {
         let subject = |vars: &[(&str, &str)]| config(&[&[("SECRET_KEY_BASE", "abc")], vars].concat()).unwrap().vapid_subject;
         assert_eq!(subject(&[("VAPID_SUBJECT", "mailto:ops@example.com"), ("TLS_DOMAIN", "chat.example.com")]), "mailto:ops@example.com");
         assert_eq!(subject(&[("TLS_DOMAIN", " , chat.example.com,other.example.com")]), "https://chat.example.com");
-        assert_eq!(subject(&[("VAPID_SUBJECT", " ")]), "https://github.com/NYLLON-SOFTWARE/matchbox");
+        assert_eq!(subject(&[("VAPID_SUBJECT", " ")]), "https://github.com/NYLLON-SOFTWARE/ember");
     }
 
     #[test]
     fn storage_overrides() {
         let config =
-            config(&[("SECRET_KEY_BASE", "abc"), ("MATCHBOX_STORAGE_PATH", "/rails/storage"), ("MATCHBOX_FILES_PATH", "/seed/storage")])
-                .unwrap();
+            config(&[("SECRET_KEY_BASE", "abc"), ("EMBER_STORAGE_PATH", "/rails/storage"), ("EMBER_FILES_PATH", "/seed/storage")]).unwrap();
         assert_eq!(config.storage.database, PathBuf::from("/rails/storage/db/production.sqlite3"));
         assert_eq!(config.storage.files, PathBuf::from("/seed/storage"));
     }
 
     #[test]
     fn existing_installation_paths_work_and_current_names_take_precedence() {
-        let legacy = config(&[("SECRET_KEY_BASE", "abc"), ("CAMPFIRE_DATABASE_PATH", "/existing/production.sqlite3")]).unwrap();
-        assert_eq!(legacy.storage.database, PathBuf::from("/existing/production.sqlite3"));
+        for legacy_name in ["MATCHBOX_DATABASE_PATH", "CAMPFIRE_DATABASE_PATH"] {
+            let legacy = config(&[("SECRET_KEY_BASE", "abc"), (legacy_name, "/existing/production.sqlite3")]).unwrap();
+            assert_eq!(legacy.storage.database, PathBuf::from("/existing/production.sqlite3"));
+        }
         let current = config(&[
             ("SECRET_KEY_BASE", "abc"),
             ("CAMPFIRE_DATABASE_PATH", "/existing/production.sqlite3"),
-            ("MATCHBOX_DATABASE_PATH", "/selected/production.sqlite3"),
+            ("MATCHBOX_DATABASE_PATH", "/previous/production.sqlite3"),
+            ("EMBER_DATABASE_PATH", "/selected/production.sqlite3"),
         ])
         .unwrap();
         assert_eq!(current.storage.database, PathBuf::from("/selected/production.sqlite3"));
+    }
+
+    #[test]
+    fn an_explicit_empty_current_setting_uses_the_default() {
+        let current = config(&[
+            ("SECRET_KEY_BASE", "abc"),
+            ("CAMPFIRE_STORAGE_PATH", "/campfire/storage"),
+            ("MATCHBOX_STORAGE_PATH", "/matchbox/storage"),
+            ("EMBER_STORAGE_PATH", ""),
+        ])
+        .unwrap();
+        assert_eq!(current.storage.database, PathBuf::from("storage/db/production.sqlite3"));
     }
 }

@@ -148,7 +148,7 @@ mod tests {
         let page = david.get("/searches?q=zanzibar").await.text();
         assert!(page.contains("Zanzibar at sunrise"), "{page}");
         assert!(page.contains(r#"<span class="flex-item-no-shrink">1</span>"#), "one result");
-        assert_eq!(page.matches(r#"href="/searches?q=zanzibar""#).count(), 1, "Matchbox shows each recent search once above the results");
+        assert_eq!(page.matches(r#"href="/searches?q=zanzibar""#).count(), 1, "Ember shows each recent search once above the results");
         let recents = page.split(r#"aria-label="Recent searches">"#).nth(1).unwrap().split("</div>").next().unwrap();
         assert!(recents.contains(r#"href="/searches?q=zanzibar""#));
         assert!(page.contains(&exit_to(QUIET_CORNER)));

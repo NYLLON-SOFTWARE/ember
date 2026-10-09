@@ -12,7 +12,7 @@ async fn app() -> (Booted, tempfile::TempDir) {
     let root = dir.path().to_string_lossy().into_owned();
     let config = Config::from_lookup(|name| match name {
         "SECRET_KEY_BASE_DUMMY" => Some("1".into()),
-        "MATCHBOX_STORAGE_PATH" => Some(root.clone()),
+        "EMBER_STORAGE_PATH" => Some(root.clone()),
         _ => None,
     })
     .unwrap();

@@ -32,7 +32,7 @@ export default class extends Controller {
   }
 
   loaded() {
-    // Matchbox keeps the conversation list on settings and profile pages too.
+    // Ember keeps the conversation list on settings and profile pages too.
     if (Current.room) this.read({ detail: { roomId: Current.room.id } })
     for (const room of this.roomTargets) this.#syncChannelIcon(room)
   }

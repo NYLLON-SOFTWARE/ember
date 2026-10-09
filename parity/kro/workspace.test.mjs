@@ -10,9 +10,9 @@ import { fileURLToPath } from "node:url"
 import { chromium } from "playwright"
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
-const binary = path.resolve(process.env.MATCHBOX_BIN || path.join(repo, "target/debug/matchbox"))
+const binary = path.resolve(process.env.EMBER_BIN || process.env.MATCHBOX_BIN || process.env.CAMPFIRE_BIN || path.join(repo, "target/debug/ember"))
 const artifacts = path.join(repo, "parity/out/kro")
-const password = "matchbox-workspace-test-password"
+const password = "ember-workspace-test-password"
 const sameOrigin = { "Sec-Fetch-Site": "same-origin" }
 let browser
 let pageNumber = 0
@@ -48,7 +48,7 @@ async function freePort(except) {
 }
 
 async function freshServer(t) {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "matchbox-workspace-browser-"))
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "ember-workspace-browser-"))
   const port = await freePort()
   const targetPort = await freePort(port)
   const origin = `http://127.0.0.1:${port}`
@@ -56,15 +56,15 @@ async function freshServer(t) {
   const env = { ...process.env }
   // Each test owns its complete installation; never inherit the user's running app or data.
   for (const key of Object.keys(env)) {
-    if (/^(MATCHBOX_|CAMPFIRE_|THRUSTER_|VAPID_)/.test(key)) delete env[key]
+    if (/^(EMBER_|MATCHBOX_|CAMPFIRE_|THRUSTER_|VAPID_)/.test(key)) delete env[key]
   }
   Object.assign(env, {
     SECRET_KEY_BASE: "workspace-disposable-browser-test-secret".repeat(4),
-    MATCHBOX_STORAGE_PATH: dir,
-    MATCHBOX_DATABASE_PATH: path.join(dir, "db/production.sqlite3"),
-    MATCHBOX_FILES_PATH: path.join(dir, "files"),
-    MATCHBOX_BACKUPS_PATH: path.join(dir, "backups"),
-    MATCHBOX_LOG: "error",
+    EMBER_STORAGE_PATH: dir,
+    EMBER_DATABASE_PATH: path.join(dir, "db/production.sqlite3"),
+    EMBER_FILES_PATH: path.join(dir, "files"),
+    EMBER_BACKUPS_PATH: path.join(dir, "backups"),
+    EMBER_LOG: "error",
     RAILS_ENV: "production",
     DISABLE_SSL: "1",
     THRUSTER_HTTP_PORT: String(port),
@@ -97,14 +97,14 @@ async function freshServer(t) {
   const deadline = Date.now() + 20_000
   while (Date.now() < deadline) {
     if (spawnError) throw spawnError
-    if (child.exitCode !== null) throw new Error(`Matchbox exited: ${log}`)
+    if (child.exitCode !== null) throw new Error(`Ember exited: ${log}`)
     try {
       const response = await fetch(`${origin}/first_run`, { signal: AbortSignal.timeout(1000) })
       if (response.ok) return { origin, dir, lifecycle }
     } catch { /* The listening sockets are not ready yet. */ }
     await new Promise((resolve) => setTimeout(resolve, 100))
   }
-  throw new Error(`Matchbox did not become ready: ${log}`)
+  throw new Error(`Ember did not become ready: ${log}`)
 }
 
 async function newPage(t, server, options = {}) {
@@ -235,7 +235,7 @@ test("workspace navigation, global search, and room creation use the real applic
   await page.locator(`#shared_rooms a[href="${roomPath}"]`).click()
   await page.waitForURL(`**${roomPath}`)
   await page.waitForFunction((path) => document.querySelector(`#shared_rooms a[href="${path}"]`)?.getAttribute("aria-current") === "page", roomPath)
-  await page.getByText("Welcome to Matchbox", { exact: true }).waitFor()
+  await page.getByText("Welcome to Ember", { exact: true }).waitFor()
 
   const { context: member } = await newPage(t, server)
   const joined = await member.request.post(joinURL, {
@@ -269,14 +269,14 @@ test("workspace navigation, global search, and room creation use the real applic
   await page.getByText("A private conversation that actually works.", { exact: true }).waitFor()
 
   await page.locator('nav.mb-rail a[href="/account/edit"]').click()
-  await page.locator("#account_name").fill("Matchbox Studio")
+  await page.locator("#account_name").fill("Ember Studio")
   const accountForm = page.locator("form").filter({ has: page.locator("#account_name") })
   const accountSaved = page.waitForResponse((response) => response.request().method() === "POST" && /^\/account(?:\.|$)/.test(new URL(response.url()).pathname))
   await accountForm.getByRole("button", { name: "Save changes", exact: true }).click()
   assert.ok([302, 303].includes((await accountSaved).status()))
   await page.locator("#account_name").waitFor()
   await page.reload()
-  assert.equal(await page.locator("#account_name").inputValue(), "Matchbox Studio")
+  assert.equal(await page.locator("#account_name").inputValue(), "Ember Studio")
   assert.equal(await page.getByRole("checkbox", { name: "Hide translation buttons", exact: true }).isChecked(), true)
   await shell(page)
   await capture(page, { path: path.join(artifacts, "workspace-settings.png"), fullPage: true })
@@ -312,7 +312,7 @@ test("chat sends, edits, reacts, uploads, and searches without losing its contro
   await message.hover()
   await message.locator("summary").filter({ hasText: "Message options" }).click()
   await message.getByRole("link", { name: "Edit", exact: true }).click()
-  await message.locator('lexxy-editor [contenteditable="true"]').fill("Every detail has a place in Matchbox.")
+  await message.locator('lexxy-editor [contenteditable="true"]').fill("Every detail has a place in Ember.")
   const saveForm = await message.getByRole("button", { name: "Save changes", exact: true }).evaluate((button) => ({
     form: button.form?.id,
     valid: button.form?.checkValidity(),
@@ -322,7 +322,7 @@ test("chat sends, edits, reacts, uploads, and searches without losing its contro
   const saved = page.waitForResponse((response) => response.request().method() === "POST" && /\/messages\/\d+$/.test(new URL(response.url()).pathname))
   await message.getByRole("button", { name: "Save changes", exact: true }).click()
   assert.ok([302, 303].includes((await saved).status()))
-  const edited = page.locator(".message[data-message-id]").filter({ hasText: "Every detail has a place in Matchbox." })
+  const edited = page.locator(".message[data-message-id]").filter({ hasText: "Every detail has a place in Ember." })
   await edited.hover()
   await edited.locator("summary").filter({ hasText: "Message options" }).click()
   const boosted = page.waitForResponse((response) => response.request().method() === "POST" && /\/boosts$/.test(new URL(response.url()).pathname))
@@ -350,7 +350,7 @@ test("chat sends, edits, reacts, uploads, and searches without losing its contro
   await page.locator('#nav a[href="/searches"]').first().click()
   await page.locator("#q").fill("detail")
   await page.locator('form[action="/searches"]').getByRole("button", { name: "Search", exact: true }).click()
-  await page.locator("#search-results").getByText("Every detail has a place in Matchbox.", { exact: true }).waitFor()
+  await page.locator("#search-results").getByText("Every detail has a place in Ember.", { exact: true }).waitFor()
   await shell(page)
   await noOverflow(page, "desktop search")
   await capture(page, { path: path.join(artifacts, "workspace-search.png"), fullPage: true })
@@ -711,7 +711,7 @@ test("settings controls, field replacement, and workspace logo upload stay usabl
 
 test("SVG attachments preview as isolated images and keep safe downloads", { timeout: 60_000 }, async (t) => {
   const { page, context, roomPath } = await setUp(t, { viewport: { width: 1311, height: 900 } })
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180" onload="parent.svgExecuted=true"><script>parent.svgExecuted=true;fetch('/svg-preview-executed')</script><image href="https://svg-preview.example.test/tracker.png" width="1" height="1"/><rect width="320" height="180" fill="#336699"/><text x="20" y="90" fill="white">Matchbox SVG</text></svg>`
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180" onload="parent.svgExecuted=true"><script>parent.svgExecuted=true;fetch('/svg-preview-executed')</script><image href="https://svg-preview.example.test/tracker.png" width="1" height="1"/><rect width="320" height="180" fill="#336699"/><text x="20" y="90" fill="white">Ember SVG</text></svg>`
   const blockedRequests = []
   await context.route('https://svg-preview.example.test/**', (route) => {
     blockedRequests.push(route.request().url())
@@ -1017,7 +1017,7 @@ test("notification bell explains missing configuration and shows the real releas
   await dialog.getByRole("button", { name: "Close", exact: true }).click()
   await dialog.waitFor({ state: "hidden" })
   await page.goto("/account/edit")
-  assert.match(await page.locator("#footer").innerText(), /Matchbox™ version 1\.0/)
+  assert.match(await page.locator("#footer").innerText(), /Ember™ version 1\.0/)
   assert.equal((await context.request.get("/account/edit")).headers()["x-version"], "1.0")
 })
 

@@ -65,7 +65,7 @@ pub fn forced_disposition(content_type: &str) -> Option<&'static str> {
     (serve_as_binary(content_type) || !is_allowed_inline(content_type)).then_some("attachment")
 }
 
-/// `ActiveStorage.paths` is empty in Matchbox, so the binaries come from `PATH`.
+/// `ActiveStorage.paths` is empty in Ember, so the binaries come from `PATH`.
 pub fn ffmpeg_path() -> &'static str {
     "ffmpeg"
 }

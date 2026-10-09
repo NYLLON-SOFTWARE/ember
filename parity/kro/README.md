@@ -8,9 +8,9 @@ npx --prefix parity playwright install chromium
 npm run test:kro --prefix parity
 ```
 
-`MATCHBOX_BIN` can select another built binary (default `target/debug/matchbox`). These checks
-start fresh Matchbox processes on dynamically chosen ports, with private temporary SQLite and
-file storage. They never connect to the development server or use its accounts. A Rails seed and
+`EMBER_BIN` can select another built binary (default `target/debug/ember`); `MATCHBOX_BIN` and
+`CAMPFIRE_BIN` remain accepted as fallbacks. These checks start fresh Ember processes on dynamically
+chosen ports, with private temporary SQLite and file storage. They never connect to the development server or use its accounts. A Rails seed and
 Docker are not needed for this gate; the seed-backed integration and Rails parity gates remain
 separate checks.
 
@@ -39,6 +39,6 @@ its cable traffic remains subject to comparison. For other legacy comparisons th
 image explicitly enables translation controls in its disposable copied seed, matching Rails.
 This does not change production defaults. Member settings pages retain strict comparisons.
 
-Branding checks require Matchbox on setup, page titles, the welcome screen, the web app manifest,
+Branding checks require Ember on setup, page titles, the welcome screen, the web app manifest,
 and the static startup page. Rails parity normalizes the deliberate product-name and logo-path
 differences; application text is equalized before screenshots, while chat contents are left alone.

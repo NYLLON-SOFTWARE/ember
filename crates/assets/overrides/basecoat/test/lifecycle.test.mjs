@@ -52,7 +52,7 @@ function fixture({ mode = null, dark = false, storageUnavailable = false } = {})
   return { window, document, media, select, control, storage, calls, setComponents: value => { components = value; } };
 }
 
-test("appearance keeps legacy preferences and gives the Matchbox preference priority", () => {
+test("appearance keeps legacy preferences and gives the Ember preference priority", () => {
   const { window, storage } = fixture();
   storage.set("campfire:appearance", "dark");
   assert.equal(readMode(window), "dark");
@@ -127,17 +127,39 @@ test("cross-profile frames navigate to the final URL; same-profile and non-HTML 
   install(f.window, f.document);
   const options = { headers: {} };
   f.document.emit("turbo:before-fetch-request", { detail: { fetchOptions: options } });
-  assert.equal(options.headers["X-Matchbox-Style-Profile"], "basecoat");
+  assert.deepEqual(options.headers, { "X-Ember-Style-Profile": "basecoat" });
   let prevented = 0;
   for (const [profile, type, ok] of [["legacy", "text/html", true], ["basecoat", "text/html", true], ["legacy", "application/json", true], ["legacy", "text/html", false]]) {
     f.document.emit("turbo:before-fetch-response", {
       target: { closest: () => ({}) },
       preventDefault: () => prevented++,
       detail: { fetchResponse: { response: {
-        ok, url: "http://localhost/rooms/1", headers: new Headers({ "X-Matchbox-Style-Profile": profile, "Content-Type": type }),
+        ok, url: "http://localhost/rooms/1", headers: new Headers({ "X-Ember-Style-Profile": profile, "Content-Type": type }),
       } } },
     });
   }
   assert.equal(prevented, 1);
   assert.deepEqual(f.calls.filter(([kind]) => kind === "navigate"), [["navigate", "http://localhost/rooms/1"]]);
+});
+
+test("style profile responses prefer Ember and accept headers from existing servers", () => {
+  const f = fixture();
+  install(f.window, f.document);
+  let prevented = 0;
+  for (const headers of [
+    { "X-Matchbox-Style-Profile": "legacy" },
+    { "X-Campfire-Style-Profile": "legacy" },
+    { "X-Ember-Style-Profile": "basecoat", "X-Matchbox-Style-Profile": "legacy", "X-Campfire-Style-Profile": "legacy" },
+    { "X-Matchbox-Style-Profile": "basecoat", "X-Campfire-Style-Profile": "legacy" },
+  ]) {
+    f.document.emit("turbo:before-fetch-response", {
+      target: { closest: () => ({}) },
+      preventDefault: () => prevented++,
+      detail: { fetchResponse: { response: {
+        ok: true, url: "http://localhost/rooms/1", headers: new Headers({ ...headers, "Content-Type": "text/html" }),
+      } } },
+    });
+  }
+  assert.equal(prevented, 2);
+  assert.equal(f.calls.filter(([kind]) => kind === "navigate").length, 2);
 });

@@ -231,13 +231,13 @@ fn error_pages() -> ErrorPages {
 
 // --- Commands --------------------------------------------------------------------------------------
 
-const USAGE: &str = "usage: matchbox [server|backup]";
+const USAGE: &str = "usage: ember [server|backup]";
 
 /// The binary's entry point.
 ///
-/// - `matchbox` / `matchbox server`: serve the app behind the front server, as `bin/boot` did
+/// - `ember` / `ember server`: serve the app behind the front server, as `bin/boot` did
 ///   with Thruster in front of `bin/start-app` (see `matchbox_kit::front`).
-/// - `matchbox backup`: the ONCE `pre-backup` hook (`script/admin/prepare-backup`): snapshot the
+/// - `ember backup`: the ONCE `pre-backup` hook (`script/admin/prepare-backup`): snapshot the
 ///   live database into `storage/backups/` with SQLite's online backup API.
 ///
 /// The ONCE `post-restore` hook stays the reference's shell script (`hooks/post-restore`): copy
@@ -273,7 +273,7 @@ fn init_logging(config: &Config) {
     // The front server logs on its own terms, as Thruster did: requests at info, more with DEBUG.
     let front = if matchbox_kit::front::FrontConfig::from_env().debug { "debug" } else { "info" };
     let default = format!("{level},thruster={front},matchbox_kit::front={front}");
-    let filter = tracing_subscriber::EnvFilter::try_new(rails_compat::env::var("MATCHBOX_LOG").unwrap_or_else(|_| default.clone()))
+    let filter = tracing_subscriber::EnvFilter::try_new(rails_compat::env::var("EMBER_LOG").unwrap_or_else(|_| default.clone()))
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(default));
     let _ = tracing_subscriber::fmt().with_env_filter(filter).try_init();
 }

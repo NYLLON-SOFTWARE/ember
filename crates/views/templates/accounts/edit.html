@@ -45,7 +45,7 @@
       </div>
       <button type="submit" class="btn btn--reversed mb-primary-button">Save changes</button>
 {% endfilter %}
-    <!-- Matchbox localization setting -->
+    <!-- Ember localization setting -->
     <div id="localization-settings" class="pad-block pad-inline-double fill-shade border-radius">
 {% let form = h::form_with(self.account_action()).model("account").method("put").data("controller", "form").class("flex align-center gap center") %}{% filter form_with(form) %}
       <div class="flex-item-grow txt-align-start">
@@ -61,7 +61,7 @@
       <noscript><button type="submit" class="btn">Save</button></noscript>
 {% endfilter %}
     </div>
-    <!-- /Matchbox localization setting -->
+    <!-- /Ember localization setting -->
 {% else %}    {{ h::account_logo_tag(ctx, Some("txt-xx-large center")) }}
     <h2 class="flex-item-grow txt-x-large">{{ ctx.account.name }}</h2>
 {% endif %}
@@ -114,5 +114,5 @@
   </div>
 </section>
 {% endblock %}
-{% block footer %}  <div class="txt-align-center center margin-block-double txt-subtle">Matchbox&trade; version {{ h::version_badge(ctx) }}</div>
+{% block footer %}  <div class="txt-align-center center margin-block-double txt-subtle">Ember&trade; version {{ h::version_badge(ctx) }}</div>
 {% endblock %}

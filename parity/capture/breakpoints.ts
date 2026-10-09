@@ -1,5 +1,5 @@
 // The breakpoint sweep: find every width condition in reference/app/assets/stylesheets and capture
-// 1px either side of it. Matchbox's breakpoints are in `ch`, which media queries resolve against
+// 1px either side of it. Ember's breakpoints are in `ch`, which media queries resolve against
 // the engine's *initial* font, so each engine is probed with matchMedia rather than computed.
 import fs from "node:fs"
 import path from "node:path"

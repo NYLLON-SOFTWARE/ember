@@ -1,10 +1,10 @@
 //! Golden vectors from `reference-tools/storage/generate.rb` (`vectors/storage.json`).
 //!
-//! Set `MATCHBOX_STORAGE_VECTORS=/path/to/storage.json` to check against another run (e.g. one
+//! Set `EMBER_STORAGE_VECTORS=/path/to/storage.json` to check against another run (e.g. one
 //! generated on a host whose libvips/ffmpeg match the local ones). Processed media is compared
 //! byte for byte only when the local libvips/ffmpeg versions match the ones that produced the
 //! vectors; otherwise the mismatch is reported and the byte checks are skipped, unless
-//! `MATCHBOX_REQUIRE_MEDIA_VECTORS` is set, as it is in the Dockerfile's toolchain stage that CI
+//! `EMBER_REQUIRE_MEDIA_VECTORS` is set, as it is in the Dockerfile's toolchain stage that CI
 //! tests in: there a mismatch fails.
 
 use std::io::Write;
@@ -22,7 +22,7 @@ fn repo_root() -> PathBuf {
 }
 
 fn vectors_path() -> PathBuf {
-    rails_compat::env::var_os("MATCHBOX_STORAGE_VECTORS").map(PathBuf::from).unwrap_or_else(|| repo_root().join("vectors/storage.json"))
+    rails_compat::env::var_os("EMBER_STORAGE_VECTORS").map(PathBuf::from).unwrap_or_else(|| repo_root().join("vectors/storage.json"))
 }
 
 fn vectors() -> J {
@@ -245,7 +245,7 @@ impl Comparison {
                 "vectors have libvips {} / {}, local libvips {local_vips} / {local_ffmpeg}",
                 versions["libvips"], versions["ffmpeg"]
             );
-            assert!(rails_compat::env::var_os("MATCHBOX_REQUIRE_MEDIA_VECTORS").is_none(), "byte comparisons would be skipped: {versions}");
+            assert!(rails_compat::env::var_os("EMBER_REQUIRE_MEDIA_VECTORS").is_none(), "byte comparisons would be skipped: {versions}");
             // Straight to stderr: libtest captures eprintln! from passing tests.
             let _ = writeln!(std::io::stderr(), "note: skipping byte comparisons that depend on versions: {versions}");
         }

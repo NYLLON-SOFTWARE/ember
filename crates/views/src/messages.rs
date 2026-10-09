@@ -133,7 +133,7 @@ pub enum AttachmentPreview {
     Video { poster_url: String },
     /// Otherwise previewable or variable: `polymorphic_url(attachment.representation(:thumb), only_path: true)`.
     Image { thumb_url: String },
-    /// Matchbox: preview in an isolated image context; the original stays download-only.
+    /// Ember: preview in an isolated image context; the original stays download-only.
     Svg,
     /// Neither previewable nor variable: a download link.
     File,

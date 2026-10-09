@@ -68,7 +68,7 @@ async fn boot_seeded() -> Option<Test> {
         "SECRET_KEY_BASE" => Some(secret.clone()),
         "DISABLE_SSL" => Some("true".into()),
         "APP_VERSION" | "GIT_REVISION" => Some("parity".into()),
-        "MATCHBOX_STORAGE_PATH" => Some(root.clone()),
+        "EMBER_STORAGE_PATH" => Some(root.clone()),
         _ => None,
     })
     .unwrap();
@@ -207,7 +207,7 @@ async fn static_responses_send_the_embedded_bytes_without_copying_them() {
 /// Times `static_response` (ActionDispatch::Static plus building and dropping the response) for
 /// an identity GET of a small public file, the first stylesheet, the largest script and the
 /// largest file; per call, median and range of 7 runs. In release:
-/// `cargo test --release -p matchbox --bin matchbox static_response_timing -- --ignored --nocapture`
+/// `cargo test --release -p matchbox --bin ember static_response_timing -- --ignored --nocapture`
 #[test]
 #[ignore = "timing harness (bench/results/static-body-20260930)"]
 fn static_response_timing() {

@@ -232,7 +232,7 @@ fn public_files_are_served_like_action_dispatch_static() {
         assert_eq!(response.status as u64, expected_status, "{label}");
         if path == "/502.html" {
             if request.method == "GET" {
-                assert!(String::from_utf8_lossy(&response.body).contains("Starting Matchbox"));
+                assert!(String::from_utf8_lossy(&response.body).contains("Starting Ember"));
                 assert!(!String::from_utf8_lossy(&response.body).contains("Campfire"));
             }
             continue;
