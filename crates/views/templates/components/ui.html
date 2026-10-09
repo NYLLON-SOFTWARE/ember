@@ -2,7 +2,7 @@
 {% import "components/icons.html" as icons %}
 {% macro card_header(title, description) %}
   <header>
-    <div class="ui-brand-mark">{% call icons::icon("flame") %}</div>
+    {{ h::image_tag(ctx, "ember-icon.png", h::attrs().class("ui-brand-mark").alt("Ember").size(48)) }}
     <h1>{{ title }}</h1>
     <p class="ui-description">{{ description }}</p>
   </header>

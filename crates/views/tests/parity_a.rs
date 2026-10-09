@@ -45,7 +45,10 @@ fn sessions_new() {
     ] {
         let request = Request { flash_alert: alert.map(Into::into), ..Default::default() };
         let html = with_context(name, request, |ctx| {
-            sessions::New { ctx, email_address: email.map(Into::into), help_contact: help_contact(name) }.render().unwrap()
+            let html = sessions::New { ctx, email_address: email.map(Into::into), help_contact: help_contact(name) }.render().unwrap();
+            let logo = if ctx.account.has_logo { ctx.account.logo_url.clone() } else { ctx.asset("ember-icon.png") };
+            assert!(normalize_html(&html).iter().any(|token| token.starts_with("<img ") && token.contains(&format!("src=\"{logo}\""))));
+            html
         });
         assert_parity(name, "html", html);
     }
@@ -272,7 +275,9 @@ fn first_runs_show() {
     // KRO intentionally changes the setup presentation. Keep the Rails form contract instead
     // of masking this screen out of all verification or rewriting its historical golden HTML.
     let html = with_context("first_run", Request { basecoat: true, ..Default::default() }, |ctx| {
-        first_runs::Show { ctx, values: first_runs::FormValues::default(), reload_frame: false }.render().unwrap()
+        let html = first_runs::Show { ctx, values: first_runs::FormValues::default(), reload_frame: false }.render().unwrap();
+        assert!(html.contains(&format!("src=\"{}\"", ctx.asset("ember-icon.png"))));
+        html
     });
     let tokens = normalize_html(&html);
     let form = tokens.iter().find(|token| token.starts_with("<form ")).unwrap();

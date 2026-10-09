@@ -223,6 +223,7 @@ existing behavior. Multipart setup, optional avatars, and signed sessions retain
 Workspace logos and profile avatars use a single large preview with an overlaid camera picker
 and a separate removal action. Uploads still save immediately, with a submit button available
 without JavaScript. The rail displays the uploaded workspace logo and falls back to the Ember mark.
+Uploaded logos in the rail and welcome card use the current canvas color behind transparent images.
 
 Entering an editable single-line field selects its current value so typing replaces it; a subsequent
 click can position the caret normally. Multiline editors keep their usual behavior, and opening
@@ -237,6 +238,15 @@ Application copy, page titles, sharing prompts, the web app manifest, installati
 and documentation use **Ember**. New workspaces default to Ember. Existing workspace names exactly
 equal to `Campfire` or `Matchbox` display as Ember without rewriting the stored name; custom names
 and message contents retain their values.
+
+The supplied Ember flame artwork is the default workspace mark, browser favicon, Home Screen/PWA
+icon, setup/sign-in branding, and the startup page. The original PNG is saved as
+`crates/assets/overrides/ember-icon.png`; the stock account-logo endpoint serves 512- and 192-pixel
+versions from `overrides/logos/`. Fresh installs use these assets without adding an uploaded logo
+to the account. Existing custom workspace
+logos keep precedence, and removing a custom logo restores the Ember artwork.
+Account-logo ETags include the bundled artwork digest and requested size so an upgrade invalidates
+cached stock icons without rewriting account data; conditional requests retain their behavior.
 
 The executable is `ember`, with `matchbox` retained as a compatibility alias. Scripts that invoke
 the upstream `campfire` executable must use `ember`; there is no `campfire` executable alias.

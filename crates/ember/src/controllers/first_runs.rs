@@ -85,6 +85,7 @@ async fn prevent_repeats(c: &mut Ctx) -> Result<()> {
 mod tests {
     use axum::body::{Body, to_bytes};
     use axum::http::{Request, StatusCode};
+    use sha2::{Digest, Sha256};
     use tower::ServiceExt;
 
     use crate::app::{Booted, boot};
@@ -116,6 +117,76 @@ mod tests {
             .header("accept", "text/vnd.turbo-stream.html, text/html, application/xhtml+xml")
             .body(Body::from(body))
             .unwrap()
+    }
+
+    #[tokio::test]
+    async fn new_installs_use_ember_icons_before_and_after_setup() {
+        let (app, _dir) = empty_app().await;
+        let icons = [
+            ("192x192", include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/../assets/overrides/logos/app-icon-192.png")).as_slice()),
+            ("512x512", include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/../assets/overrides/logos/app-icon.png")).as_slice()),
+        ];
+        for installed in [false, true] {
+            let response = app
+                .router
+                .clone()
+                .oneshot(Request::builder().uri("/webmanifest.json").header("host", "campfire.test").body(Body::empty()).unwrap())
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            let manifest: serde_json::Value = serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
+            assert_eq!(manifest["name"], "Ember");
+            let legacy_etag = app
+                .app
+                .db
+                .read(|conn| {
+                    Ok(ember_db::Account::first(conn)?.map(|account| {
+                        let key = crate::controllers::presenters::cache_key_with_version("accounts", account.id, account.updated_at.jiff());
+                        format!("W/\"{}\"", hex::encode(&Sha256::digest(key.as_bytes())[..16]))
+                    }))
+                })
+                .await
+                .unwrap();
+            for (icon, (size, expected)) in manifest["icons"].as_array().unwrap().iter().zip(icons) {
+                assert_eq!(icon["sizes"], size);
+                let url = icon["src"].as_str().unwrap();
+                let response = app
+                    .router
+                    .clone()
+                    .oneshot(
+                        Request::builder()
+                            .uri(url)
+                            .header("host", "campfire.test")
+                            .header("if-none-match", legacy_etag.as_deref().unwrap_or_default())
+                            .body(Body::empty())
+                            .unwrap(),
+                    )
+                    .await
+                    .unwrap();
+                assert_eq!(response.status(), StatusCode::OK);
+                assert_eq!(response.headers()["content-type"], "image/png");
+                let etag = response.headers()["etag"].clone();
+                assert_eq!(to_bytes(response.into_body(), usize::MAX).await.unwrap().as_ref(), expected);
+                let cached = app
+                    .router
+                    .clone()
+                    .oneshot(
+                        Request::builder()
+                            .uri(url)
+                            .header("host", "campfire.test")
+                            .header("if-none-match", etag)
+                            .body(Body::empty())
+                            .unwrap(),
+                    )
+                    .await
+                    .unwrap();
+                assert_eq!(cached.status(), StatusCode::NOT_MODIFIED);
+            }
+            if !installed {
+                let response = app.router.clone().oneshot(setup_request(Some("12345678"))).await.unwrap();
+                assert_eq!(response.status(), StatusCode::FOUND);
+            }
+        }
     }
 
     #[tokio::test]

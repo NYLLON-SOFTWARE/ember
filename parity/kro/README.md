@@ -42,3 +42,5 @@ This does not change production defaults. Member settings pages retain strict co
 Branding checks require Ember on setup, page titles, the welcome screen, the web app manifest,
 and the static startup page. Rails parity normalizes the deliberate product-name and logo-path
 differences; application text is equalized before screenshots, while chat contents are left alone.
+The stock account-logo responses normalize only the exact reference and Ember icon bytes; uploaded
+workspace logo bytes, response status, and headers remain strict.

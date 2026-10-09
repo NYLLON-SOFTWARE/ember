@@ -56,8 +56,7 @@ body { min-width: 20rem; font-family: var(--font-sans); }
 .ui-card { width: min(100%, var(--ui-card-width)); min-width: 0; }
 .ui-setup-card { display: block; padding: 0; overflow: hidden; border-radius: 1rem; border: 1px solid var(--border); box-shadow: none; }
 .ui-setup-card > header { display: flex; flex-direction: column; align-items: center; gap: 0; padding: 1.25rem 1.25rem 0; text-align: center; }
-.ui-brand-mark { display: grid; place-items: center; width: 3rem; height: 3rem; margin-bottom: 1rem; border-radius: 0.8rem; background: var(--primary); color: var(--primary-foreground); }
-.ui-brand-mark .ui-icon { width: 1.5rem; height: 1.5rem; }
+.ui-brand-mark { display: block; width: 3rem; height: 3rem; margin-bottom: 1rem; object-fit: contain; }
 .ui-card > header h1 { font-size: 1.5rem; line-height: 1.3; font-weight: 550; letter-spacing: -0.025em; }
 .ui-card > header p { margin-top: 0.5rem; color: var(--muted-foreground); font-size: 1rem; line-height: 1.5; }
 .ui-setup-form { margin: 0; }

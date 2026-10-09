@@ -1,10 +1,9 @@
-{% import "components/icons.html" as icons %}
   <div id="system_welcome" class="mb-welcome-card">
     <div class="mb-welcome-heading">
 {% if ctx.account.has_logo %}
       {{ h::account_logo_tag(ctx, Some("mb-welcome-logo")) }}
 {% else %}
-      <span class="mb-welcome-logo mb-brand-mark">{% call icons::icon("flame") %}</span>
+      {{ h::image_tag(ctx, "ember-icon.png", h::attrs().class("mb-welcome-logo mb-brand-mark").alt("Ember").size(44)) }}
 {% endif %}
       <div>
         <h2>Welcome to Ember</h2>

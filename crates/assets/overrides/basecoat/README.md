@@ -33,7 +33,7 @@ Generated sizes for the first-run delivery, measured on 2026-10-09 with Node 24.
 
 | Asset | Minified bytes | Gzip bytes |
 | --- | ---: | ---: |
-| `app.css` | 156,949 | 16,215 |
+| `app.css` | 156,821 | 16,191 |
 | `app.js` | 6,786 | 2,754 |
 | `theme-init.js` | 545 | 308 |
 
