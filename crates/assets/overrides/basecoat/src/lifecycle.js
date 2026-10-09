@@ -53,7 +53,10 @@ export function install(window, document) {
   });
   media.addEventListener("change", () => { if (mode === "system") appearance(); });
   window.addEventListener("storage", event => {
-    if (event.key === preferenceKey || event.key === null) { mode = readMode(window); appearance(); }
+    if (event.key === preferenceKey || event.key === "matchbox:appearance" || event.key === "campfire:appearance" || event.key === null) {
+      mode = readMode(window);
+      appearance();
+    }
   });
   window.addEventListener("pageshow", start);
   document.addEventListener("turbo:before-cache", stop);

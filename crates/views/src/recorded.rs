@@ -15,7 +15,7 @@ use askama::Template;
 use crate::fragment_cache::Fragment;
 
 /// Shorter writes are copied without looking for a fragment: the kit keeps fragments under 1 KB
-/// in the text around them anyway (`matchbox_kit::deflater::splice`), and checking every short
+/// in the text around them anyway (`ember_kit::deflater::splice`), and checking every short
 /// write would cost more than copying it.
 const MIN_RECORDED: usize = 1024;
 

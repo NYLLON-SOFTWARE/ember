@@ -1,5 +1,5 @@
 # The action callback chains the reference actually runs (order, kind, conditions), for the
-# before-action order in crates/matchbox/src/concerns.rs.
+# before-action order in crates/ember/src/concerns.rs.
 #
 #   parity/bin/reference runner reference-tools/campfire/callbacks.rb
 Rails.application.eager_load!

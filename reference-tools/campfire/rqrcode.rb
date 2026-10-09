@@ -1,8 +1,8 @@
-# Golden vectors for the Rust port of rqrcode (crates/matchbox/src/controllers/qr_code/rqrcode.rs):
+# Golden vectors for the Rust port of rqrcode (crates/ember/src/controllers/qr_code/rqrcode.rs):
 # QrCodeController#show renders `RQRCode::QRCode.new(url).as_svg(viewbox: true, fill: :white, color: :black)`.
 #
 #   docker run --rm -v "$PWD:/work" -w /rails campfire-reference \
-#     ruby /work/reference-tools/campfire/rqrcode.rb > crates/matchbox/src/controllers/qr_code/testdata/rqrcode.json
+#     ruby /work/reference-tools/campfire/rqrcode.rb > crates/ember/src/controllers/qr_code/testdata/rqrcode.json
 require "bundler/setup"
 require "rqrcode"
 require "json"

@@ -5,8 +5,8 @@ const media = window.matchMedia("(prefers-color-scheme: dark)");
 let mode = readMode(window);
 applyMode(document, mode, media.matches);
 
-if (!window.matchboxAppearance) {
-  window.matchboxAppearance = true;
+if (!window.emberAppearance) {
+  window.emberAppearance = true;
   const active = () => document.body?.classList.contains("mb-app");
   const menu = () => document.querySelector("#appearance-menu");
   const nativePopover = typeof HTMLElement.prototype.showPopover === "function";
@@ -76,7 +76,7 @@ if (!window.matchboxAppearance) {
   });
   media.addEventListener("change", () => { if (mode === "system") refresh(); });
   window.addEventListener("storage", event => {
-    if (event.key === preferenceKey || event.key === "campfire:appearance" || event.key === null) {
+    if (event.key === preferenceKey || event.key === "matchbox:appearance" || event.key === "campfire:appearance" || event.key === null) {
       mode = readMode(window);
       refresh();
     }

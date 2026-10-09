@@ -155,6 +155,7 @@ class App:
     def __init__(self, config, proc=None):
         self.config = config
         self.proc = proc
+        # Process roles become result JSON keys; retain the historical `matchbox` role for Ember.
         self.pids = {}
         self.base = f"http://127.0.0.1:{PORT}"
 

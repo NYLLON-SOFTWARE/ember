@@ -7,8 +7,8 @@ path.
 
 | File | Differs from the reference by |
 |---|---|
-| `zz-matchbox.css` | Shared neutral workspace styling, responsive navigation, forms, chat, and system light/dark colors |
-| `matchbox/shell.js` | Turbo-aware mobile drawer, conversation filtering, active navigation, unread activity, and select-on-entry single-line inputs |
+| `zz-ember.css` | Shared neutral workspace styling, responsive navigation, forms, chat, and system light/dark colors |
+| `ember/shell.js` | Turbo-aware mobile drawer, conversation filtering, active navigation, unread activity, and select-on-entry single-line inputs |
 | `controllers/channel_order_controller.js` | Staged admin room ordering with Save/Cancel, and personal starred-room ordering by hold-and-drag or keyboard, with save rollback |
 | `controllers/icon_picker_controller.js` | Searchable, staged Lucide icon selection, a lazy cached catalog, keyboard navigation, and a native select fallback |
 | `controllers/message_actions_controller.js` | Compact message bar and shared reaction tray for hover and inline controls, viewport-aware placement, Escape/focus behavior, and cleanup before Turbo caching |
@@ -23,7 +23,7 @@ path.
 | `lib/autocomplete/base_autocomplete_handler.js` | Asks for JSON (`Accept: application/json`). The reference passes `{ as: "json" }`, a `@rails/request.js` option, to plain `fetch`, gets HTML and never shows the new-ping suggestions |
 | `install-edge.svg` | New: a copy of `external/install-edge.svg` where `pwa/_install_instructions` looks for it. Rails can't find it, so Edge gets a 500 on profile and room pages |
 
-Ember branding adds `matchbox-icon.png` (the original artwork under a new logical name),
+Ember branding adds `ember-icon.png` (the original artwork under a new logical name),
 `controllers/web_share_controller.js` (shared filenames use Ember), and `public/502.html`
 (the startup page title). The `public/` directory shadows static pages and is excluded from the
 digested asset manifest. The reference submodule remains unchanged.

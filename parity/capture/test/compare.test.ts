@@ -18,14 +18,14 @@ const presentation = new Allowlist([{ state: "**", layers: ["server"], reason: "
 
 for (const kind of ["page", "fragment"]) {
   test(`${kind} HTTP status mismatches cannot be hidden by a presentation exception`, (t) => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "matchbox-parity-status-"))
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ember-parity-status-"))
     t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
-    for (const [target, status] of [["rails", 200], ["matchbox", 500]] as const) {
+    for (const [target, status] of [["rails", 200], ["ember", 500]] as const) {
       const base = artifactBase(dir, target, job)
       fs.mkdirSync(path.dirname(base), { recursive: true })
       fs.writeFileSync(base + ".json", JSON.stringify({ kind, status }))
     }
-    const result = compareJob(job, dir, "rails", "matchbox", presentation)
+    const result = compareJob(job, dir, "rails", "ember", presentation)
     assert.equal(result.status, "fail")
     assert.equal(result.layers.length, 1)
     assert.equal(result.layers[0].equal, false)
@@ -34,15 +34,15 @@ for (const kind of ["page", "fragment"]) {
 }
 
 test("a reviewed HTML exception still applies when HTTP status matches", (t) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "matchbox-parity-html-"))
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ember-parity-html-"))
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
-  for (const target of ["rails", "matchbox"]) {
+  for (const target of ["rails", "ember"]) {
     const base = artifactBase(dir, target, job)
     fs.mkdirSync(path.dirname(base), { recursive: true })
     fs.writeFileSync(base + ".json", JSON.stringify({ kind: "fragment", status: 200 }))
     fs.writeFileSync(base + ".server.norm.html", `<h1>${target}</h1>`)
   }
-  assert.equal(compareJob(job, dir, "rails", "matchbox", presentation).status, "allowed")
+  assert.equal(compareJob(job, dir, "rails", "ember", presentation).status, "allowed")
 })
 
 test("workspace presentation entries keep network, Cable, and protocol fragments strict", () => {

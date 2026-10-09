@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Runs matchbox_db's differential tests against the campfire-reference image (built by
+# Runs ember_db's differential tests against the campfire-reference image (built by
 # `parity/bin/reference build`):
 #
 #   1. schema identity: the sqlite_master of a fresh reference `db:prepare`, of crates/db/src/schema.sql
@@ -39,11 +39,11 @@ reference '
   bin/rails runner /tools/scenario.rb
   sqlite3 $db "PRAGMA wal_checkpoint(TRUNCATE)" >/dev/null && cp $db /out/scenario_ruby.sqlite3'
 
-echo "== matchbox_db differential tests"
+echo "== ember_db differential tests"
 CAMPFIRE_RUBY_FIXTURES_DB=$OUT/fixtures_ruby.sqlite3 \
 CAMPFIRE_RUBY_SCENARIO_DB=$OUT/scenario_ruby.sqlite3 \
 CAMPFIRE_EXPORT_DB=$OUT/rust_export.sqlite3 \
-  cargo test -p matchbox_db -- --ignored --test-threads=2
+  cargo test -p ember_db -- --ignored --test-threads=2
 
 echo "== schema identity"
 sqlite3 "$OUT/rust_export.sqlite3" "$SCHEMA_QUERY" > "$OUT/schema_rust.sql"

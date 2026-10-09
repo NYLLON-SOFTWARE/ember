@@ -16,16 +16,16 @@ import argparse, bisect, collections, json, os, re, shutil, struct, subprocess, 
 CATEGORIES = [
     ("gzip (miniz_oxide/crc32)", r"miniz_oxide|crc32fast|flate2|deflater::"),
     ("sqlite (C)", r"^sqlite3|rusqlite::|libsqlite3_sys::"),
-    ("askama render / view helpers", r"askama|matchbox_views::"),
-    ("rich text (Action Text pipeline)", r"matchbox_richtext|html5ever|ammonia|markup5ever|lol_html|scraper"),
+    ("askama render / view helpers", r"askama|(?:ember|matchbox)_views::"),
+    ("rich text (Action Text pipeline)", r"(?:ember|matchbox)_richtext|html5ever|ammonia|markup5ever|lol_html|scraper"),
     ("json (serde_json)", r"serde_json"),
     ("crypto / signing (rails_compat)", r"rails_compat|hmac|sha1|sha2|aes|pbkdf2|base64"),
     ("websocket (tungstenite)", r"tungstenite"),
     ("hyper / http", r"^hyper|^http::|h1::"),
     ("tokio runtime / scheduling", r"^tokio::"),
-    ("db models / queries", r"matchbox_db::"),
-    ("cable", r"matchbox_cable::"),
-    ("kit (request/response plumbing)", r"matchbox_kit::"),
+    ("db models / queries", r"(?:ember|matchbox)_db::"),
+    ("cable", r"(?:ember|matchbox)_cable::"),
+    ("kit (request/response plumbing)", r"(?:ember|matchbox)_kit::"),
     ("app (controllers/channels/jobs)", r"^(?:ember|matchbox)::"),
 ]
 LEAF_CATEGORIES = [
@@ -129,13 +129,14 @@ def crate_of(path):
         return m.group(1).replace("-", "_")
     m = re.search(r"/crates/([A-Za-z0-9_\-]+)/src/", path)
     if m:
-        return {"matchbox": "matchbox", "kit": "matchbox_kit", "db": "matchbox_db", "views": "matchbox_views", "cable": "matchbox_cable",
-                "richtext": "matchbox_richtext", "storage": "matchbox_storage", "assets": "matchbox_assets", "routes": "matchbox_routes"}.get(m.group(1), m.group(1))
+        # Old source paths and profiles still resolve after the crate rename.
+        return {"matchbox": "ember", "kit": "ember_kit", "db": "ember_db", "views": "ember_views", "cable": "ember_cable",
+                "richtext": "ember_richtext", "storage": "ember_storage", "assets": "ember_assets", "routes": "ember_routes"}.get(m.group(1), m.group(1))
     m = re.search(r"/(?:rustc/[0-9a-f]+/)?library/(std|core|alloc)/", path)
     if m:
         return m.group(1)
     if "askama" in path:
-        return "matchbox_views"
+        return "ember_views"
     return ""
 
 

@@ -1,5 +1,5 @@
 //! Rows of `active_storage_blobs` and `active_storage_attachments`, for the models that
-//! have attachments. Uploading, analysis and variants belong to `matchbox_storage`.
+//! have attachments. Uploading, analysis and variants belong to `ember_storage`.
 
 use rusqlite::{Connection, Row, params};
 

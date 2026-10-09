@@ -174,7 +174,7 @@ async function shell(page) {
   assert.equal(await page.locator("aside#sidebar.mb-sidebar").count(), 1)
   assert.equal(await page.locator("#main-content.mb-main").count(), 1)
   const sheets = await page.locator('link[rel="stylesheet"]').evaluateAll((links) => links.map((link) => link.href))
-  assert.equal(sheets.filter((href) => href.includes("zz-matchbox")).length, 1, "workspace stylesheet loads once")
+  assert.equal(sheets.filter((href) => href.includes("zz-ember")).length, 1, "workspace stylesheet loads once")
 }
 
 async function submitMessage(page, roomPath, text) {
@@ -200,10 +200,10 @@ test("workspace navigation, global search, and room creation use the real applic
     return { x, width }
   }))
   assert.ok(boxes[0].x < boxes[1].x && boxes[1].x < boxes[2].x, "rail, conversations, and content are arranged left to right")
-  await page.locator("nav.mb-rail [data-matchbox-activity]").click()
-  assert.equal(await page.locator("[data-matchbox-activity]").getAttribute("aria-pressed"), "true")
-  await page.locator("[data-matchbox-room-empty]").getByText("You’re all caught up. No unread conversations.", { exact: true }).waitFor()
-  await page.locator("nav.mb-rail [data-matchbox-activity]").click()
+  await page.locator("nav.mb-rail [data-ember-activity]").click()
+  assert.equal(await page.locator("[data-ember-activity]").getAttribute("aria-pressed"), "true")
+  await page.locator("[data-ember-room-empty]").getByText("You’re all caught up. No unread conversations.", { exact: true }).waitFor()
+  await page.locator("nav.mb-rail [data-ember-activity]").click()
   assert.equal(await page.locator('#sidebar a[href="/rooms/opens/new"]').count(), 0)
   await page.locator('nav.mb-rail').getByRole('link', { name: 'Admin', exact: true }).click()
   await page.locator('#channel-settings').getByRole('link', { name: 'New room', exact: true }).click()
@@ -212,7 +212,7 @@ test("workspace navigation, global search, and room creation use the real applic
   await page.locator("#composer").waitFor()
   const designPath = new URL(page.url()).pathname
   assert.notEqual(designPath, roomPath)
-  assert.equal(await page.locator("[data-matchbox-room-filter]").count(), 0)
+  assert.equal(await page.locator("[data-ember-room-filter]").count(), 0)
   assert.equal(await page.locator('.mb-workspace-heading a[href="/rooms/opens/new"]').count(), 0)
   assert.equal(await page.getByRole('heading', { name: 'Rooms', exact: true }).count(), 0)
   const railLabels = await page.locator('.mb-rail__link span:first-of-type').allTextContents()
@@ -443,7 +443,7 @@ test("chat sends, edits, reacts, uploads, and searches without losing its contro
   await page.locator("#composer").waitFor()
   await submitMessage(page, roomPath, "Back navigation keeps the composer working.")
   assert.equal(await page.locator("nav.mb-rail").count(), 1)
-  assert.equal(await page.locator("[data-matchbox-room-filter]").count(), 0)
+  assert.equal(await page.locator("[data-ember-room-filter]").count(), 0)
 })
 
 test("mobile and tablet navigation keep the conversation and settings usable", { timeout: 90_000 }, async (t) => {
@@ -462,11 +462,11 @@ test("mobile and tablet navigation keep the conversation and settings usable", {
     const imageBounds = await page.locator('.message img.message__attachment').first().boundingBox()
     assert.ok(imageBounds.x >= -1 && imageBounds.x + imageBounds.width <= width + 1, `${width}px uploaded image fits the conversation`)
     if (width <= 900) {
-      const toggle = page.locator("[data-matchbox-sidebar-toggle]").filter({ visible: true }).first()
+      const toggle = page.locator("[data-ember-sidebar-toggle]").filter({ visible: true }).first()
       await toggle.waitFor()
       assert.equal(await toggle.getAttribute("aria-expanded"), "false")
       await toggle.click()
-      await page.waitForFunction(() => document.querySelector('[data-matchbox-sidebar-toggle][aria-expanded="true"]'))
+      await page.waitForFunction(() => document.querySelector('[data-ember-sidebar-toggle][aria-expanded="true"]'))
       await page.waitForFunction(() => document.querySelector("#sidebar").getBoundingClientRect().x >= 0)
       const sidebar = page.locator("#sidebar")
       const bounds = await sidebar.boundingBox()
@@ -480,14 +480,14 @@ test("mobile and tablet navigation keep the conversation and settings usable", {
       assert.equal(await toggle.getAttribute("aria-expanded"), "false")
       assert.equal(await toggle.evaluate((node) => node === document.activeElement), true, "Escape restores focus to the menu toggle")
       await toggle.click()
-      await page.locator(".mb-sidebar-close[data-matchbox-sidebar-close]").click()
+      await page.locator(".mb-sidebar-close[data-ember-sidebar-close]").click()
       assert.equal(await toggle.getAttribute("aria-expanded"), "false")
       await toggle.click()
-      await page.locator(".mb-sidebar-backdrop[data-matchbox-sidebar-close]").click({ position: { x: width - 4, y: 420 } })
+      await page.locator(".mb-sidebar-backdrop[data-ember-sidebar-close]").click({ position: { x: width - 4, y: 420 } })
       assert.equal(await toggle.getAttribute("aria-expanded"), "false", "backdrop closes the drawer")
       await toggle.click()
       await page.locator(`#shared_rooms a[href="${roomPath}"]`).click()
-      await page.waitForFunction(() => !document.querySelector('[data-matchbox-sidebar-toggle][aria-expanded="true"]'))
+      await page.waitForFunction(() => !document.querySelector('[data-ember-sidebar-toggle][aria-expanded="true"]'))
       await page.waitForFunction(() => getComputedStyle(document.querySelector("#sidebar")).visibility === "hidden")
     } else {
       assert.equal(await page.locator("#sidebar").isVisible(), true, "tablet conversations remain visible alongside the chat")
@@ -948,14 +948,14 @@ test("starred room ordering persists, remains isolated, and rejects unstarred ro
   }
   await page.locator('#shared_rooms a[data-sorted-list-name="Alpha"].unread').waitFor()
   await page.locator('#shared_rooms a[data-sorted-list-name="Zulu"].unread').waitFor()
-  await page.locator('[data-matchbox-activity]').click()
+  await page.locator('[data-ember-activity]').click()
   assert.equal(await page.locator('#shared_rooms a[data-sorted-list-name="All Talk"]').isVisible(), false)
   const filteredSave = page.waitForResponse(response => response.request().method() === 'PUT' && new URL(response.url()).pathname === '/users/me/sidebar/order')
   await page.locator('#shared_rooms a[data-sorted-list-name="Alpha"]').press('Alt+ArrowUp')
   const filteredResponse = await filteredSave
   assert.equal(filteredResponse.status(), 204)
   assert.equal(filteredResponse.request().postDataJSON().room_ids.length, 3, 'hidden favorites remain in the saved order')
-  await page.locator('[data-matchbox-activity]').click()
+  await page.locator('[data-ember-activity]').click()
 
   // A failed reorder must not undo an unstar completed while the request was pending.
   let releaseFailure
@@ -1737,7 +1737,7 @@ test('channel guard retains access, icon and membership edits and protects brows
   await page.locator('#room_icon').selectOption('coffee', { force: true })
   await page.locator('label[for="room_type"]').click()
   await page.waitForURL(`**/rooms/closeds/${id}/edit`)
-  await page.locator(`form[data-matchbox-settings][action="/rooms/closeds/${id}"]`).waitFor()
+  await page.locator(`form[data-ember-settings][action="/rooms/closeds/${id}"]`).waitFor()
   assert.equal(await page.locator('#room_name').inputValue(), 'Working draft')
   assert.equal(await page.locator('#room_icon').inputValue(), 'coffee')
   const member = page.locator('input[name="user_ids[]"]').first()
@@ -1745,10 +1745,10 @@ test('channel guard retains access, icon and membership edits and protects brows
   assert.equal(await member.isChecked(), false)
   await page.locator('label[for="room_type"]').click()
   await page.waitForURL(`**${editPath}`)
-  await page.locator(`form[data-matchbox-settings][action="/rooms/opens/${id}"]`).waitFor()
+  await page.locator(`form[data-ember-settings][action="/rooms/opens/${id}"]`).waitFor()
   await page.locator('label[for="room_type"]').click()
   await page.waitForURL(`**/rooms/closeds/${id}/edit`)
-  await page.locator(`form[data-matchbox-settings][action="/rooms/closeds/${id}"]`).waitFor()
+  await page.locator(`form[data-ember-settings][action="/rooms/closeds/${id}"]`).waitFor()
   assert.equal(await member.isChecked(), false, 'switching access forms preserves membership edits')
   await page.evaluate(() => history.back())
   await modal.waitFor()
@@ -1957,6 +1957,146 @@ test('DM picker searches full names and @names, keeps recipients, and handles mo
   assert.equal(await dialog.isVisible(), true)
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
   assert.equal(await page.locator('#room_name').inputValue(), 'Keep this draft')
+})
+
+test('tabs left open across the Ember rename retain Activity and shared room-order updates', { timeout: 90_000 }, async t => {
+  const { context: admin, roomPath, joinURL, server } = await setUp(t, { viewport: { width: 1200, height: 900 } })
+  for (const name of ['Alpha', 'Zulu']) {
+    assert.equal((await admin.request.post('/rooms/opens', { headers: sameOrigin, form: { 'room[name]': name } })).status(), 200)
+  }
+  const { page, context } = await newPage(t, server, { viewport: { width: 1200, height: 900 } })
+  // Intercepted documents have no network address, so Chromium requires this for loopback Cable.
+  await context.grantPermissions(['local-network-access'], { origin: server.origin })
+  assert.equal((await context.request.post(joinURL, { headers: sameOrigin,
+    multipart: { 'user[name]': 'Upgrade Member', 'user[email_address]': 'upgrade@example.test', 'user[password]': password },
+  })).status(), 200)
+
+  // Keep the actual previous shell and order controller in memory, just as an open tab does.
+  // Only the initial document/frame gets legacy markup; later frames and Cable are untouched.
+  const fixtures = path.join(repo, 'parity/kro/fixtures/pre-ember-rename')
+  const [oldShell, oldOrderController] = await Promise.all([
+    fs.readFile(path.join(fixtures, 'shell.js'), 'utf8'),
+    fs.readFile(path.join(fixtures, 'channel_order_controller.js'), 'utf8'),
+  ])
+  const loadedFixtures = new Set()
+  await page.route('**/assets/**', async route => {
+    const pathname = new URL(route.request().url()).pathname
+    if (/\/ember\/shell-[^/]+\.js$/.test(pathname)) {
+      loadedFixtures.add('shell')
+      return route.fulfill({ contentType: 'text/javascript', body: oldShell })
+    }
+    if (/\/controllers\/channel_order_controller-[^/]+\.js$/.test(pathname)) {
+      loadedFixtures.add('order')
+      return route.fulfill({ contentType: 'text/javascript', body: oldOrderController })
+    }
+    return route.continue()
+  })
+  let legacyMarkup = true
+  const initialMarkup = async route => {
+    if (!legacyMarkup) return route.continue()
+    const response = await route.fetch()
+    await route.fulfill({ response, body: (await response.text()).replaceAll('data-ember-', 'data-matchbox-') })
+  }
+  await page.route(`${server.origin}${roomPath}`, initialMarkup)
+  await page.route(`${server.origin}/users/me/sidebar`, initialMarkup)
+  await page.goto(roomPath)
+  await page.locator('#shared_rooms a').nth(2).waitFor()
+  await page.waitForFunction(() => [...document.querySelectorAll('turbo-cable-stream-source')].every(node => node.hasAttribute('connected')))
+  assert.deepEqual([...loadedFixtures].sort(), ['order', 'shell'])
+  assert.equal(await page.evaluate(() => window.matchboxWorkspace && !window.emberWorkspace), true, 'the previous shell is the only workspace runtime')
+  assert.equal(await page.locator('#shared_rooms [data-ember-room-row]').count(), 0, 'the initial sidebar uses the previous hooks')
+  const ids = await page.locator('#shared_rooms a').evaluateAll(rows => Object.fromEntries(rows.map(row => [row.dataset.sortedListName, Number(row.dataset.roomId)])))
+  const postMessage = async name => {
+    assert.equal((await admin.request.post(`/rooms/${ids[name]}/messages`, {
+      headers: { ...sameOrigin, Accept: 'text/vnd.turbo-stream.html' }, form: { 'message[body]': `Upgrade unread in ${name}` },
+    })).status(), 200)
+  }
+  const badge = page.locator('[data-matchbox-unread-count]')
+  const activity = page.locator('[data-matchbox-activity]')
+  const allTalk = page.locator('#shared_rooms a[data-sorted-list-name="All Talk"]')
+  await postMessage('Alpha')
+  await badge.filter({ hasText: '1' }).waitFor()
+  await activity.click()
+  assert.equal(await allTalk.isVisible(), false, 'the previous runtime filters read rooms before the upgrade')
+
+  legacyMarkup = false
+  const currentSidebar = page.waitForResponse(response => new URL(response.url()).pathname === '/users/me/sidebar')
+  await page.evaluate(async () => {
+    window.upgradeDocument = true
+    const { cable } = await import('@hotwired/turbo-rails')
+    const consumer = await cable.getConsumer()
+    consumer.disconnect()
+  })
+  await page.waitForFunction(() => [...document.querySelectorAll('turbo-cable-stream-source')].every(node => !node.hasAttribute('connected')))
+  await page.evaluate(async () => {
+    const { cable } = await import('@hotwired/turbo-rails')
+    ;(await cable.getConsumer()).connect()
+  })
+  assert.equal((await currentSidebar).status(), 200)
+  await page.locator('#shared_rooms [data-ember-room-row]').nth(2).waitFor({ state: 'attached' })
+  assert.equal(await allTalk.isVisible(), false, 'Activity still filters read rooms in the upgraded sidebar')
+  assert.equal(await badge.isVisible(), true, 'the unread count survives the new sidebar markup')
+  assert.equal(await badge.textContent(), '1')
+  assert.equal(await activity.getAttribute('aria-pressed'), 'true')
+
+  await postMessage('Zulu')
+  await badge.filter({ hasText: '2' }).waitFor()
+  assert.equal(await page.locator('#shared_rooms a:visible').count(), 2, 'new unread notifications still update Activity')
+  const order = [ids.Zulu, ids['All Talk'], ids.Alpha]
+  assert.equal((await admin.request.put('/account/room_order', { headers: sameOrigin, data: { room_ids: order } })).status(), 204)
+  await page.waitForFunction(order => JSON.stringify([...document.querySelectorAll('#shared_rooms a')].map(row => Number(row.dataset.roomId))) === JSON.stringify(order), order)
+  assert.equal(await allTalk.isVisible(), false, 'the order broadcast preserves the active unread filter')
+  assert.equal(await badge.textContent(), '2')
+  assert.equal(await page.evaluate(() => window.upgradeDocument && window.matchboxWorkspace && !window.emberWorkspace), true, 'no document reload or new workspace runtime was needed')
+})
+
+test('the Ember shell deduplicates legacy hooks and room-order stream aliases', { timeout: 90_000 }, async t => {
+  const { context: admin, roomPath, joinURL, server } = await setUp(t, { viewport: { width: 1200, height: 900 } })
+  for (const name of ['Alpha', 'Zulu']) {
+    assert.equal((await admin.request.post('/rooms/opens', { headers: sameOrigin, form: { 'room[name]': name } })).status(), 200)
+  }
+  const { page, context } = await newPage(t, server, { viewport: { width: 1200, height: 900 } })
+  assert.equal((await context.request.post(joinURL, { headers: sameOrigin,
+    multipart: { 'user[name]': 'Current Member', 'user[email_address]': 'current-upgrade@example.test', 'user[password]': password },
+  })).status(), 200)
+  await page.goto(roomPath)
+  await page.locator('#shared_rooms a').nth(2).waitFor()
+  await page.waitForFunction(() => [...document.querySelectorAll('turbo-cable-stream-source')].every(node => node.hasAttribute('connected')))
+  assert.equal(await page.evaluate(() => window.emberWorkspace && !window.matchboxWorkspace), true)
+  const ids = await page.locator('#shared_rooms a').evaluateAll(rows => Object.fromEntries(rows.map(row => [row.dataset.sortedListName, Number(row.dataset.roomId)])))
+  assert.equal((await admin.request.post(`/rooms/${ids.Alpha}/messages`, {
+    headers: { ...sameOrigin, Accept: 'text/vnd.turbo-stream.html' }, form: { 'message[body]': 'Unread with both row hooks' },
+  })).status(), 200)
+  const badge = page.locator('[data-ember-unread-count]')
+  await badge.filter({ hasText: '1' }).waitFor()
+  assert.equal(await page.locator('#shared_rooms [data-ember-room-row][data-matchbox-room-row]').count(), 3)
+  assert.equal(await badge.textContent(), '1', 'dual row hooks count each unread conversation once')
+  await page.locator('[data-ember-activity]').click()
+  assert.equal(await page.locator('#shared_rooms a:visible').count(), 1)
+  await page.evaluate(() => {
+    window.upgradeOrderEvents = 0
+    window.addEventListener('ember:room-order-changed', () => window.upgradeOrderEvents++)
+  })
+  const order = [ids.Zulu, ids['All Talk'], ids.Alpha]
+  assert.equal((await admin.request.put('/account/room_order', { headers: sameOrigin, data: { room_ids: order } })).status(), 204)
+  await page.waitForFunction(order => JSON.stringify([...document.querySelectorAll('#shared_rooms a')].map(row => Number(row.dataset.roomId))) === JSON.stringify(order), order)
+  assert.equal(await page.evaluate(() => window.upgradeOrderEvents), 1, 'one server broadcast emits one local refresh event')
+
+  // A new shell can also encounter older cached/sidebar markup during a deployment.
+  await page.route(`${server.origin}/users/me/sidebar`, async route => {
+    const response = await route.fetch()
+    await route.fulfill({ response, body: (await response.text()).replaceAll('data-ember-', 'data-matchbox-') })
+  })
+  for (const [index, action] of ['matchbox_room_order_changed', 'ember_room_order_changed'].entries()) {
+    const refreshed = page.waitForResponse(response => new URL(response.url()).pathname === '/users/me/sidebar')
+    await page.evaluate(action => window.Turbo.renderStreamMessage(`<turbo-stream action="${action}"></turbo-stream>`), action)
+    assert.equal((await refreshed).status(), 200)
+    await page.waitForFunction(() => document.querySelectorAll('#shared_rooms [data-ember-room-row]').length === 0)
+    await page.evaluate(async () => { await document.querySelector('#user_sidebar').loaded })
+    assert.equal(await page.evaluate(() => window.upgradeOrderEvents), index + 2, `${action} emits exactly one local refresh event`)
+    assert.equal(await badge.textContent(), '1', 'legacy-only rows retain the unread count')
+    assert.equal(await page.locator('#shared_rooms a:visible').count(), 1, 'legacy-only rows retain Activity filtering')
+  }
 })
 
 test('admin settings stage the shared room order and preserve only personal starred ordering', { timeout: 90_000 }, async t => {

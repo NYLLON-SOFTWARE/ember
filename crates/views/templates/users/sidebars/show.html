@@ -28,7 +28,7 @@
     <section class="mb-sidebar-section" aria-labelledby="directs-heading">
       <div class="mb-sidebar-section-heading">
         <h3 id="directs-heading">DMs</h3>
-        {% filter link_to(h::routes::new_rooms_direct(), h::attrs().class("btn mb-sidebar-action").data("matchbox_new_direct", "").aria("label", "New direct message").title("New direct message")) %}
+        {% filter link_to(h::routes::new_rooms_direct(), h::attrs().class("btn mb-sidebar-action").data("ember_new_direct", "").data("matchbox_new_direct", "").aria("label", "New direct message").title("New direct message")) %}
           {{ h::image_tag(ctx, "messages-add.svg", h::attrs().size(18).aria_hidden().class("colorize--black")) }}
         {% endfilter %}
       </div>
@@ -45,6 +45,6 @@
         </div>
       </turbo-frame>
     </section>
-    <p class="mb-sidebar-empty" data-matchbox-room-empty hidden>No conversations found.</p>
+    <p class="mb-sidebar-empty" data-ember-room-empty data-matchbox-room-empty hidden>No conversations found.</p>
   </div>
 {% endfilter %}{% endblock %}

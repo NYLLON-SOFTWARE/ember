@@ -8,7 +8,7 @@ import { buildLucideCatalog } from "./build-lucide.mjs";
 
 const root = fileURLToPath(new URL(".", import.meta.url));
 const checking = process.argv.includes("--check");
-const temporary = await mkdtemp(join(tmpdir(), "matchbox-basecoat-"));
+const temporary = await mkdtemp(join(tmpdir(), "ember-basecoat-"));
 const license = `/*!\n${await readFile(join(root, "LICENSES.txt"), "utf8")}\n*/\n`;
 const generated = new Map();
 
@@ -29,10 +29,10 @@ try {
       write: false,
       // Turbo retains head scripts. Also tolerate reexecution without reinstalling listeners
       // or replacing Basecoat's registry while live components still use it.
-      banner: { js: entry === "app" ? `${license}(()=>{if(window.__matchboxBasecoatLoaded)return;window.__matchboxBasecoatLoaded=true;` : "" },
+      banner: { js: entry === "app" ? `${license}(()=>{if(window.__emberBasecoatLoaded)return;window.__emberBasecoatLoaded=true;` : "" },
       footer: { js: entry === "app" ? "})();" : "" },
     });
-    generated.set(entry === "workspace-appearance" ? "../matchbox/appearance.js" : `${entry}.js`, output.outputFiles[0].text);
+    generated.set(entry === "workspace-appearance" ? "../ember/appearance.js" : `${entry}.js`, output.outputFiles[0].text);
   }
 
   const lucide = join(root, "node_modules/lucide-static");

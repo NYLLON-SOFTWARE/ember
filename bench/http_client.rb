@@ -1,2 +1,2 @@
 require_relative "verification"
-MatchboxVerification.load("http_client.rb", __FILE__)
+EmberVerification.load("http_client.rb", __FILE__)
