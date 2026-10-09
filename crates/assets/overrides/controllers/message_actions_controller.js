@@ -14,6 +14,20 @@ export default class extends Controller {
     const message = this.element.closest(".message")
     message?.addEventListener("pointerenter", (event) => this.hover(event), options)
     message?.addEventListener("pointerleave", () => this.leave(), options)
+    // Delegate so the inline control still works after Turbo replaces the boosts frame.
+    message?.addEventListener("click", (event) => {
+      const trigger = event.target.closest(".message__boost-inline .boost__action")
+      if (!trigger || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+      event.preventDefault()
+      this.boostTrigger = trigger
+      this.hoverOpened = false
+      clearTimeout(this.closeTimer)
+      this.element.open = true
+      this.trayTarget.hidden = false
+      this.moreTarget.setAttribute("aria-expanded", "true")
+      this.toggle()
+      this.trayTarget.querySelector("button, a")?.focus({ preventScroll: true })
+    }, options)
     // Keep the overlapping bar and its expanded reaction tray part of the same hover region.
     this.menuTarget.addEventListener("pointerenter", () => clearTimeout(this.closeTimer), options)
     this.menuTarget.addEventListener("pointerleave", () => this.leave(), options)
@@ -54,6 +68,7 @@ export default class extends Controller {
     this.stopObserving()
     if (!this.element.open) {
       this.hoverOpened = false
+      this.boostTrigger = undefined
       this.trayTarget.hidden = true
       this.moreTarget.setAttribute("aria-expanded", "false")
       return
@@ -65,7 +80,7 @@ export default class extends Controller {
     this.events = new AbortController()
     const options = { signal: this.events.signal }
     document.addEventListener("click", (event) => {
-      if (!this.element.contains(event.target)) this.close()
+      if (!this.element.contains(event.target) && !this.boostTrigger?.contains(event.target)) this.close()
     }, options)
     document.addEventListener("keydown", (event) => this.keydown(event), options)
     document.addEventListener("focusin", (event) => {
@@ -81,6 +96,7 @@ export default class extends Controller {
   }
 
   close(event) {
+    this.boostTrigger = undefined
     clearTimeout(this.closeTimer)
     this.hoverOpened = false
     this.element.open = false
@@ -88,6 +104,7 @@ export default class extends Controller {
     this.trayTarget.hidden = true
     this.moreTarget.setAttribute("aria-expanded", "false")
     this.stopObserving()
+    // The response replaces the inline boost link; the message-options control survives it.
     if (event?.type === "submit") this.triggerTarget.focus({ preventScroll: true })
   }
 
@@ -100,7 +117,11 @@ export default class extends Controller {
   keydown(event) {
     if (event.key !== "Escape") return
     event.preventDefault()
-    if (!this.trayTarget.hidden) {
+    if (this.boostTrigger) {
+      const trigger = this.boostTrigger
+      this.close()
+      trigger.focus({ preventScroll: true })
+    } else if (!this.trayTarget.hidden) {
       this.trayTarget.hidden = true
       this.moreTarget.setAttribute("aria-expanded", "false")
       this.moreTarget.focus({ preventScroll: true })

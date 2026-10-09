@@ -15,19 +15,13 @@
     <section id="sidebar_channels" class="mb-sidebar-section" aria-label="Rooms"
         data-controller="channel-order" data-channel-order-order-value="{{ channel_order }}"
         data-channel-order-favorites-value="{{ favorite_channels }}"
-        data-channel-order-default-order-value="{{ default_room_order }}"
-        data-channel-order-customized-value="{{ custom_room_order }}"
-        data-channel-order-workspace-value="{{ ctx.can_administer() }}"
-        data-channel-order-url-value="{% if ctx.can_administer() %}{{ h::routes::account_room_order() }}{% else %}{{ h::routes::user_sidebar_order() }}{% endif %}">
-      <p id="channel-order-help" class="for-screen-reader">Hold a room to drag it, or press Alt and the up or down arrow to reorder it. {% if ctx.can_administer() %}Your changes set the default room order for everyone.{% else %}Your changes only affect your own room order.{% endif %}</p>
+        data-channel-order-url-value="{{ h::routes::user_sidebar_order() }}">
+      <p id="channel-order-help" class="for-screen-reader">Hold a starred room to drag it, or press Alt and the up or down arrow to reorder your favorites. Other rooms follow the workspace order.</p>
       <div id="shared_rooms" class="rooms mb-room-list" data-channel-order-target="list">
 {% for room in other_memberships %}
         {% include "users/sidebars/rooms/_shared.html" %}
 {% endfor %}
       </div>
-      <button type="button" class="btn mb-sidebar-action mb-channel-order-reset" hidden
-          data-channel-order-target="reset" data-action="channel-order#reset"
-          aria-label="{% if ctx.can_administer() %}Reset default room order to alphabetical{% else %}Use default room order{% endif %}" title="{% if ctx.can_administer() %}Reset workspace default{% else %}Use workspace default{% endif %}">Reset</button>
       <p class="mb-channel-order-status" data-channel-order-target="status" role="status" aria-live="polite" hidden></p>
     </section>
 

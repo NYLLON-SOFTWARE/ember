@@ -1,5 +1,6 @@
 {% filter link_to_room(room.id, h::attrs().id(h::dom_id(room.param_key.as_str(), room.id, Some("list"))).data("sorted_list_name", room.name.as_str()).data("matchbox_room_row", "").data("channel_order_target", "room").attr("draggable", "false").aria("describedby", "channel-order-help").aria("keyshortcuts", "Alt+ArrowUp Alt+ArrowDown").class(room.class_names())) %}
   <span class="mb-room-kind" aria-hidden="true" data-channel-icon="{{ h::channel_icon_name(room.icon.as_deref()) }}">{{ h::channel_icon(room.icon.as_deref()) }}</span>
   <span class="mb-room-name overflow-ellipsis">{{ room.name }}</span>
+  <span class="mb-room-drag-handle" aria-hidden="true" hidden>{{ h::lucide_icon("grip-vertical") }}</span>
   <span class="mb-room-status" aria-hidden="true"></span>
 {% endfilter %}

@@ -121,7 +121,7 @@
     }
   })
   document.addEventListener('keydown', event => {
-    if (!isOpen() || event.target.closest('dialog[open]') || document.querySelector('#appearance-menu:popover-open')) return
+    if (!isOpen() || event.target.closest('dialog[open]') || document.querySelector('.mb-appearance-toggle[aria-expanded="true"]')) return
     if (event.key === 'Escape') {
       event.preventDefault()
       setDrawer(false, true)

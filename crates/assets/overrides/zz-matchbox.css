@@ -54,18 +54,18 @@ html[data-appearance].dark {
 
 /* Ember workspace. Keep behavior hooks in the original styles; presentation lives here. */
 body.mb-app {
-  --mb-canvas: light-dark(#fff, #171717);
-  --mb-surface: light-dark(#fafafa, #1c1c1c);
-  --mb-hover: light-dark(#f2f2f2, #282828);
-  --mb-border: light-dark(#e5e5e5, #343434);
-  --mb-muted: light-dark(#737373, #a3a3a3);
-  --mb-ink: light-dark(#171717, #f5f5f5);
-  --mb-message-ink: light-dark(#1d1c1d, #f5f5f5);
-  --mb-message-muted: light-dark(#616061, #a3a3a3);
-  --mb-message-border: light-dark(#dedede, #343434);
-  --mb-message-divider: light-dark(#ddd, #343434);
-  --mb-message-hover: light-dark(#f8f8f8, #202020);
-  --mb-rail-width: 72px;
+  --mb-canvas: #fff;
+  --mb-surface: #fafafa;
+  --mb-hover: #f2f2f2;
+  --mb-border: #e5e5e5;
+  --mb-muted: #737373;
+  --mb-ink: #171717;
+  --mb-message-ink: #1d1c1d;
+  --mb-message-muted: #616061;
+  --mb-message-border: #dedede;
+  --mb-message-divider: #ddd;
+  --mb-message-hover: #f8f8f8;
+  --mb-rail-width: 80px;
   --mb-sidebar-width: 280px;
   --mb-header-height: 60px;
   --color-bg: var(--mb-canvas);
@@ -76,7 +76,7 @@ body.mb-app {
   --color-border-dark: var(--mb-border);
   --color-border-darker: var(--mb-muted);
   --color-selected: var(--mb-hover);
-  --color-selected-dark: light-dark(#a3a3a3, #737373);
+  --color-selected-dark: #a3a3a3;
   --hover-size: 0;
   --hover-filter: none;
   --btn-border-radius: 9px;
@@ -99,6 +99,38 @@ body.mb-app {
   min-inline-size: 0;
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
+}
+
+/* Solid palettes also support browsers predating light-dark(). */
+html.dark body.mb-app {
+  --mb-canvas: #171717;
+  --mb-surface: #1c1c1c;
+  --mb-hover: #282828;
+  --mb-border: #343434;
+  --mb-muted: #a3a3a3;
+  --mb-ink: #f5f5f5;
+  --mb-message-ink: #f5f5f5;
+  --mb-message-muted: #a3a3a3;
+  --mb-message-border: #343434;
+  --mb-message-divider: #343434;
+  --mb-message-hover: #202020;
+  --color-selected-dark: #737373;
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-appearance]) body.mb-app {
+    --mb-canvas: #171717;
+    --mb-surface: #1c1c1c;
+    --mb-hover: #282828;
+    --mb-border: #343434;
+    --mb-muted: #a3a3a3;
+    --mb-ink: #f5f5f5;
+    --mb-message-ink: #f5f5f5;
+    --mb-message-muted: #a3a3a3;
+    --mb-message-border: #343434;
+    --mb-message-divider: #343434;
+    --mb-message-hover: #202020;
+    --color-selected-dark: #737373;
+  }
 }
 
 body.mb-app.mb-authenticated {
@@ -138,7 +170,7 @@ body.mb-app.mb-authenticated {
   gap: 12px;
   grid-area: rail;
   min-block-size: 0;
-  padding: 12px 8px max(12px, env(safe-area-inset-bottom));
+  padding: 16px 12px max(16px, env(safe-area-inset-bottom));
   z-index: 6;
 }
 
@@ -159,17 +191,19 @@ body.mb-app.mb-authenticated {
 .mb-app .mb-rail__brand svg { block-size: 25px; inline-size: 25px; }
 .mb-app .mb-rail__link {
   align-items: center;
+  block-size: 56px;
   border-radius: 10px;
   background: transparent;
   border: 0;
   color: var(--mb-muted);
   display: flex;
+  flex: 0 0 56px;
   flex-direction: column;
   font-size: 11px;
   gap: 5px;
   inline-size: 56px;
   justify-content: center;
-  min-block-size: 58px;
+  min-block-size: 56px;
   padding: 6px 3px;
   position: relative;
   text-decoration: none;
@@ -185,10 +219,13 @@ body.mb-app.mb-authenticated {
 .mb-app .mb-appearance { margin-block-start: auto; }
 .mb-app .mb-appearance[hidden], .mb-app [data-appearance-icon][hidden] { display: none; }
 .mb-app .mb-appearance-toggle { align-items: center; background: transparent; block-size: 36px; border: 1px solid var(--mb-border); border-radius: 50%; color: var(--mb-muted); display: flex; inline-size: 36px; justify-content: center; padding: 0; }
-.mb-app .mb-appearance-toggle:hover, .mb-app .mb-appearance:has(:popover-open) .mb-appearance-toggle { background: var(--mb-hover); color: var(--mb-ink); }
+.mb-app .mb-appearance-toggle:hover, .mb-app .mb-appearance-toggle[aria-expanded="true"] { background: var(--mb-hover); color: var(--mb-ink); }
 .mb-app .mb-appearance-toggle span { display: flex; }
 .mb-app .mb-appearance-toggle svg { block-size: 18px; inline-size: 18px; }
-.mb-app .mb-appearance-menu { background: var(--mb-canvas); border: 1px solid var(--mb-border); border-radius: 12px; box-shadow: 0 8px 24px #0002; color: var(--mb-ink); inline-size: 190px; inset: auto auto max(64px, env(safe-area-inset-bottom)) calc(var(--mb-rail-width) + 8px); margin: 0; padding: 8px; }
+.mb-app .mb-appearance-menu { display: none; background: var(--mb-canvas); border: 1px solid var(--mb-border); border-radius: 12px; box-shadow: 0 8px 24px #0002; color: var(--mb-ink); inline-size: 190px; inset: auto auto max(64px, env(safe-area-inset-bottom)) calc(var(--mb-rail-width) + 8px); margin: 0; padding: 8px; }
+.mb-app .mb-appearance-menu:popover-open { display: block; }
+.mb-app .mb-appearance-menu[data-appearance-fallback] { display: none; position: fixed; z-index: 24; }
+.mb-app .mb-appearance-menu[data-appearance-fallback][data-open] { display: block; }
 .mb-app .mb-appearance-menu fieldset { border: 0; margin: 0; padding: 0; }
 .mb-app .mb-appearance-menu legend { color: var(--mb-muted); font-size: 12px; font-weight: 600; padding: 4px 8px 8px; }
 .mb-app .mb-appearance-menu label { align-items: center; border-radius: 7px; cursor: pointer; display: flex; gap: 10px; min-block-size: 40px; padding: 8px; position: relative; }
@@ -672,8 +709,7 @@ html[data-appearance] .mb-app :is(.btn.btn--negative img:not(.avatar), .flash__i
 .mb-app .message:focus-within .message__options-btn { opacity: 1; }
 
 @media (max-width: 1100px) and (min-width: 901px) {
-  body.mb-app { --mb-rail-width: 64px; --mb-sidebar-width: 230px; }
-  .mb-app .mb-rail { padding-inline: 4px; }
+  body.mb-app { --mb-sidebar-width: 230px; }
   .mb-app .mb-conversations { padding-inline: 8px; }
   .mb-app #nav.mb-header { padding-inline: 18px; }
   .mb-app #system_welcome.mb-welcome-card { margin-inline: 18px; max-inline-size: calc(100% - 36px); padding: 18px; }
@@ -688,14 +724,13 @@ html[data-appearance] .mb-app :is(.btn.btn--negative img:not(.avatar), .flash__i
   .mb-app .mb-appearance-menu label { min-block-size: 44px; }
   body.mb-app, body.mb-app.mb-authenticated {
     --mb-header-height: 56px;
-    --mb-rail-width: 64px;
-    --mb-sidebar-width: min(280px, calc(100dvw - 80px));
+    --mb-sidebar-width: min(280px, calc(100dvw - var(--mb-rail-width) - 16px));
     --btn-size: 44px;
     grid-template-areas: "nav" "main";
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: calc(var(--mb-header-height) + env(safe-area-inset-top)) minmax(0, 1fr);
   }
-  .mb-app .mb-rail { block-size: 100dvh; inline-size: var(--mb-rail-width); inset: 0 auto 0 0; padding-block-start: max(12px, env(safe-area-inset-top)); position: fixed; transform: translateX(-110%); visibility: hidden; z-index: 22; }
+  .mb-app .mb-rail { block-size: 100dvh; inline-size: var(--mb-rail-width); inset: 0 auto 0 0; padding-block-start: max(16px, env(safe-area-inset-top)); position: fixed; transform: translateX(-110%); visibility: hidden; z-index: 22; }
   .mb-app #sidebar.mb-sidebar { block-size: 100dvh; inline-size: var(--mb-sidebar-width); inset: 0 auto 0 var(--mb-rail-width); padding-block-start: env(safe-area-inset-top); position: fixed; transform: translateX(calc(-100% - var(--mb-rail-width))); visibility: hidden; z-index: 21; }
   .mb-app.mb-sidebar-open :is(.mb-rail, #sidebar.mb-sidebar) { transform: none; visibility: visible; }
   .mb-app.mb-sidebar-open .mb-sidebar-backdrop { background: #0006; border: 0; display: block; inset: 0; position: fixed; z-index: 20; }
@@ -902,3 +937,35 @@ html[data-appearance] .mb-app :is(.btn.btn--negative img:not(.avatar), .flash__i
   .mb-app .mb-dm-footer { padding: 16px; }
   .mb-app .mb-dm-footer .btn { min-block-size: 44px; }
 }
+
+/* Shared room ordering is staged in settings; sidebar handles only move favorites. */
+.mb-app .mb-admin-room-order { border-block-start: 1px solid var(--mb-border); margin-block-start: 16px; padding-block-start: 4px; }
+.mb-app .mb-admin-room-list { border: 1px solid var(--mb-border); border-radius: 10px; background: var(--mb-canvas); max-block-size: 360px; overflow-y: auto; overscroll-behavior: contain; }
+.mb-app .mb-admin-room-row { align-items: center; display: flex; gap: 10px; min-block-size: 52px; padding: 4px 12px 4px 4px; }
+.mb-app .mb-admin-room-row + .mb-admin-room-row { border-block-start: 1px solid var(--mb-border); }
+.mb-app .mb-admin-room-row:focus-visible { outline: 2px solid var(--mb-muted); outline-offset: -2px; }
+.mb-app .mb-room-order-handle { align-items: center; background: transparent; border: 0; border-radius: 6px; color: var(--mb-muted); cursor: grab; display: inline-flex; justify-content: center; min-block-size: 44px; min-inline-size: 36px; padding: 8px; touch-action: none; }
+.mb-app .mb-room-order-handle svg { width: 18px; height: 18px; }
+.mb-app .mb-room-order-handle:hover { background: var(--mb-hover); color: var(--mb-ink); }
+.mb-app .mb-admin-room-row.mb-channel-dragging { background: var(--mb-hover); box-shadow: inset 3px 0 var(--mb-ink); }
+.mb-app .mb-admin-room-order-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; margin-block-start: 14px; }
+.mb-app .mb-admin-room-order-actions .btn { min-block-size: 40px; padding: 8px 14px; }
+.mb-app .mb-admin-room-order-actions .mb-channel-order-status { color: var(--mb-muted); flex: 1 0 100%; margin: 0; }
+.mb-app .mb-admin-room-order-actions .mb-order-error { color: var(--color-negative); }
+.mb-app .mb-room-drag-handle { color: var(--mb-muted); display: inline-flex; margin-inline-start: auto; }
+.mb-app .mb-room-drag-handle svg { height: 14px; width: 14px; }
+.mb-app .mb-room-reorderable { cursor: grab; }
+
+/* Real transfer progress stays visible until the server replaces the pending message. */
+.mb-app .mb-upload { background: var(--mb-surface); border: 1px solid var(--mb-border); border-radius: 12px; display: grid; gap: 10px; inline-size: min(380px, 100%); margin-block: 6px; padding: 14px 16px; }
+.mb-app .mb-upload-heading { align-items: baseline; display: flex; gap: 12px; min-inline-size: 0; }
+.mb-app .mb-upload-name { flex: 1; font-size: 14px; font-weight: 600; min-inline-size: 0; overflow-wrap: anywhere; }
+.mb-app .mb-upload-size, .mb-app .mb-upload-status { color: var(--mb-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.mb-app .mb-upload-size { flex-shrink: 0; }
+.mb-app .mb-upload progress { appearance: none; background: var(--mb-border); border: 0; border-radius: 99px; block-size: 6px; color: var(--mb-ink); display: block; inline-size: 100%; overflow: hidden; }
+.mb-app .mb-upload progress::-webkit-progress-bar { background: var(--mb-border); border-radius: 99px; }
+.mb-app .mb-upload progress::-webkit-progress-value { background: var(--mb-ink); border-radius: 99px; }
+.mb-app .mb-upload progress::-moz-progress-bar { background: var(--mb-ink); border-radius: 99px; }
+.mb-app .mb-upload-error { color: var(--color-negative); font-size: 13px; inline-size: 100%; line-height: 1.5; margin: 0; overflow-wrap: anywhere; }
+.mb-app .composer__filelist > .mb-upload-error { padding: 10px 12px; }
+.mb-app .mb-upload--failed { border-color: var(--color-negative); }

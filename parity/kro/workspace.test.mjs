@@ -294,6 +294,90 @@ test("workspace navigation, global search, and room creation use the real applic
   assert.equal((await context.request.get(designPath)).status(), 200)
 })
 
+test("uploads show progress and processing, reject oversized files, and recover from failures", { timeout: 90_000 }, async t => {
+  const { page, roomPath } = await setUp(t, { viewport: { width: 1200, height: 900 } })
+  // Hold uploads at the network boundary to inspect progress without depending on loopback speed.
+  await page.evaluate(() => {
+    const NativeRequest = window.XMLHttpRequest
+    window.uploadRequests = []
+    window.XMLHttpRequest = class extends NativeRequest {
+      send(body) { window.uploadRequests.push(this); super.send(body) }
+    }
+  })
+  let release
+  const held = new Promise(resolve => { release = resolve })
+  await page.route(`**${roomPath}/messages`, async route => {
+    await held
+    await route.continue()
+  })
+  await page.locator('#composer input[type="file"]').setInputFiles({ name: 'project-video.mov', mimeType: 'video/quicktime', buffer: await fs.readFile(path.join(repo, 'reference/test/fixtures/files/alpha-centuri.mov')) })
+  await page.getByRole('button', { name: 'Send Message', exact: true }).click()
+  const card = page.locator('.mb-upload').filter({ hasText: 'project-video.mov' })
+  await card.waitFor()
+  await page.waitForFunction(() => window.uploadRequests.length === 1)
+  await page.evaluate(() => window.uploadRequests[0].upload.dispatchEvent(new ProgressEvent('progress', { lengthComputable: true, loaded: 420, total: 1000 })))
+  await page.waitForFunction(() => document.querySelector('.mb-upload progress')?.value === 42)
+  assert.match(await card.textContent(), /Uploading · 42%/)
+  await noOverflow(page, 'desktop upload progress')
+  await capture(page, { path: path.join(artifacts, 'workspace-upload-progress.png'), fullPage: true })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await noOverflow(page, 'mobile upload progress')
+  await capture(page, { path: path.join(artifacts, 'workspace-upload-progress-mobile.png'), fullPage: true })
+  await page.evaluate(() => window.uploadRequests[0].upload.dispatchEvent(new ProgressEvent('progress', { lengthComputable: true, loaded: 1000, total: 1000 })))
+  await card.getByText('Processing…', { exact: true }).waitFor()
+  const response = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === `${roomPath}/messages`)
+  release()
+  assert.equal((await response).status(), 200)
+  await page.locator('.message[data-message-id] video[controls]').waitFor()
+  assert.equal(await card.count(), 0)
+  await page.unroute(`**${roomPath}/messages`)
+
+  // File metadata is enough to reject it; never allocate or transmit a huge browser fixture.
+  await page.evaluate(() => {
+    const file = new File(['x'], 'too-large.mp4', { type: 'video/mp4' })
+    Object.defineProperty(file, 'size', { value: 250_000_001 })
+    window.dispatchEvent(new CustomEvent('drop-target:drop', { detail: { files: [file] } }))
+  })
+  await page.locator('#composer [role="alert"]').getByText(/250 MB or smaller/).waitFor()
+  assert.equal(await page.locator('#composer .composer__file').count(), 0)
+  assert.equal(await page.evaluate(() => window.uploadRequests.length), 1)
+
+  let requests = 0
+  await page.route(`**${roomPath}/messages`, route => {
+    if (++requests === 1) return route.fulfill({ status: 413, body: '' })
+    return route.continue()
+  })
+  await page.locator('#composer input[type="file"]').setInputFiles([
+    { name: 'a-rejected.txt', mimeType: 'text/plain', buffer: Buffer.from('refused') },
+    { name: 'b-successful.txt', mimeType: 'text/plain', buffer: Buffer.from('accepted') },
+  ])
+  await page.getByRole('button', { name: 'Send Message', exact: true }).click()
+  await page.locator('.mb-upload--failed').getByText('Files must be 250 MB or smaller.', { exact: true }).waitFor()
+  await page.locator('.message[data-message-id]').filter({ hasText: 'b-successful.txt' }).waitFor()
+  assert.equal(requests, 2)
+})
+
+test("the server rejects files over 250 MB even without browser validation", { timeout: 90_000 }, async t => {
+  const { page, context, server, roomPath } = await setUp(t)
+  const boundary = 'EmberUploadBoundary'
+  const chunk = Buffer.alloc(1_000_000, 'x')
+  async function* body() {
+    yield `--${boundary}\r\nContent-Disposition: form-data; name="message[attachment]"; filename="too-large.bin"\r\nContent-Type: application/octet-stream\r\n\r\n`
+    for (let i = 0; i < 250; i++) yield chunk
+    yield `x\r\n--${boundary}--\r\n`
+  }
+  const cookies = (await context.cookies()).map(cookie => `${cookie.name}=${cookie.value}`).join('; ')
+  const response = await fetch(`${server.origin}${roomPath}/messages`, {
+    method: 'POST', body: body(), duplex: 'half',
+    headers: { ...sameOrigin, Cookie: cookies, 'Content-Type': `multipart/form-data; boundary=${boundary}`, Accept: 'text/vnd.turbo-stream.html' },
+  })
+  assert.equal(response.status, 413)
+  await response.arrayBuffer()
+  await page.reload()
+  assert.equal(await page.locator('.message[data-message-id]').filter({ hasText: 'too-large.bin' }).count(), 0)
+})
+
 test("chat sends, edits, reacts, uploads, and searches without losing its controllers", { timeout: 90_000 }, async (t) => {
   const { page, context, roomPath } = await setUp(t, { viewport: { width: 1440, height: 1000 } })
   const firstMessage = await submitMessage(page, roomPath, "A quieter space for our team.")
@@ -436,8 +520,19 @@ test("mobile and tablet navigation keep the conversation and settings usable", {
   await noOverflow(page, "short mobile conversation")
 })
 
-test("workspace appearance persists, follows the system, and remains accessible on mobile", { timeout: 60_000 }, async (t) => {
+for (const nativePopover of [true, false]) {
+test(`workspace appearance persists, follows the system, and remains accessible on mobile (${nativePopover ? "native" : "fallback"})`, { timeout: 60_000 }, async (t) => {
   const { server, page, context, roomPath, joinURL } = await setUp(t, { viewport: { width: 1280, height: 900 } })
+  if (!nativePopover) await context.addInitScript(() => {
+    delete HTMLElement.prototype.showPopover
+    delete HTMLElement.prototype.hidePopover
+    delete HTMLElement.prototype.togglePopover
+    const query = Document.prototype.querySelector
+    Document.prototype.querySelector = function(selector) {
+      if (selector.includes(':popover-open')) throw new SyntaxError('Unsupported popover selector')
+      return query.call(this, selector)
+    }
+  })
   await page.goto(roomPath)
   const surface = () => page.locator("#main-content").evaluate((node) => getComputedStyle(node).backgroundColor)
   const light = await surface()
@@ -451,6 +546,18 @@ test("workspace appearance persists, follows the system, and remains accessible 
 
   const trigger = page.locator('.mb-appearance-toggle')
   const menu = page.getByRole('dialog', { name: 'Appearance', exact: true })
+  const tabOutOfFallback = async () => {
+    if (nativePopover) return
+    for (const [key, destination] of [
+      ['Tab', page.locator('.mb-rail__profile')],
+      ['Shift+Tab', page.locator('.mb-rail').getByRole('link', { name: 'Admin', exact: true })],
+    ]) {
+      await trigger.click()
+      await page.keyboard.press(key)
+      assert.equal(await menu.isVisible(), false, `${key} closes the fallback appearance menu`)
+      assert.equal(await destination.evaluate(node => node === document.activeElement), true, `${key} continues through workspace controls`)
+    }
+  }
   const select = async mode => {
     if (!await menu.isVisible()) await trigger.click()
     await menu.getByText(mode, { exact: true }).click()
@@ -466,6 +573,7 @@ test("workspace appearance persists, follows the system, and remains accessible 
   await page.keyboard.press('Escape')
   assert.equal(await menu.isVisible(), false)
   assert.equal(await trigger.evaluate(node => node === document.activeElement), true)
+  await tabOutOfFallback()
   await page.locator('.mb-rail__profile').click()
   await page.locator('#user_name').waitFor()
   assert.equal(await surface(), dark, 'preference survives Turbo navigation')
@@ -500,6 +608,7 @@ test("workspace appearance persists, follows the system, and remains accessible 
   await page.keyboard.press('Escape')
   assert.equal(await menu.isVisible(), false)
   assert.equal(await page.locator('body').evaluate(node => node.classList.contains('mb-sidebar-open')), true, 'Escape closes appearance before the mobile drawer')
+  await tabOutOfFallback()
   await page.keyboard.press('Escape')
 
   await page.addInitScript(() => {
@@ -529,6 +638,8 @@ test("workspace appearance persists, follows the system, and remains accessible 
   await shell(guest)
   await noOverflow(guest, "320px signed-in conversation")
 })
+
+}
 
 test("new rooms return to settings and profile saves show one centered confirmation", { timeout: 60_000 }, async (t) => {
   const { page } = await setUp(t, { viewport: { width: 1311, height: 900 } })
@@ -765,7 +876,7 @@ test("SVG attachments preview as isolated images and keep safe downloads", { tim
   assert.equal(await plain.locator('.mb-svg-attachment img[data-svg-preview-target="image"]').first().isVisible(), false)
 })
 
-test("personal channel ordering persists, remains isolated, and can reset", { timeout: 90_000 }, async (t) => {
+test("starred room ordering persists, remains isolated, and rejects unstarred rooms", { timeout: 90_000 }, async (t) => {
   const { context: admin, roomPath, joinURL, server } = await setUp(t, { viewport: { width: 1311, height: 900 } })
   for (const name of ["Zulu", "Alpha"]) {
     const response = await admin.request.post("/rooms/opens", { headers: sameOrigin, form: { "room[name]": name } })
@@ -780,6 +891,10 @@ test("personal channel ordering persists, remains isolated, and can reset", { ti
   await page.waitForFunction(() => document.querySelectorAll('#shared_rooms [data-channel-order-target="room"]').length === 3)
   const alphabetic = await names()
   assert.deepEqual(alphabetic, ["All Talk", "Alpha", "Zulu"])
+  const ids = await page.locator('#shared_rooms a').evaluateAll(rows => rows.map(row => Number(row.dataset.roomId)))
+  assert.equal((await context.request.put('/users/me/sidebar/order', { headers: sameOrigin, data: { room_ids: ids } })).status(), 403, 'unstarred rooms cannot be reordered')
+  for (const id of ids) assert.equal((await context.request.put(`/rooms/${id}/favorite`, { headers: { ...sameOrigin, Accept: 'application/json' }, form: { favorite: 'true' } })).status(), 200)
+  await page.reload()
   const zulu = page.locator('#shared_rooms [data-sorted-list-name="Zulu"]')
   await page.waitForFunction(() => window.Stimulus?.getControllerForElementAndIdentifier(document.querySelector('#sidebar_channels'), 'channel-order'))
   const first = await page.locator('#shared_rooms a').first().boundingBox()
@@ -825,14 +940,46 @@ test("personal channel ordering persists, remains isolated, and can reset", { ti
   await page.getByText("Couldn’t save room order. Please try again.", { exact: true }).waitFor()
   assert.deepEqual(await names(), ["All Talk", "Zulu", "Alpha"], "failed saves restore the last saved order")
   await context.unroute('**/users/me/sidebar/order')
-  const reset = page.waitForResponse((response) => response.request().method() === "PUT" && new URL(response.url()).pathname === "/users/me/sidebar/order")
-  await page.getByRole("button", { name: "Use default room order" }).click()
-  assert.equal((await reset).status(), 204)
-  assert.deepEqual(await names(), alphabetic)
+
+  // Activity filters read favorites out of view, but ordering must submit all favorites.
+  const byName = await page.locator('#shared_rooms a').evaluateAll(rows => Object.fromEntries(rows.map(row => [row.dataset.sortedListName, Number(row.dataset.roomId)])))
+  for (const name of ['Alpha', 'Zulu']) {
+    assert.equal((await admin.request.post(`/rooms/${byName[name]}/messages`, { headers: { ...sameOrigin, Accept: 'text/vnd.turbo-stream.html' }, form: { 'message[body]': `Unread in ${name}` } })).status(), 200)
+  }
+  await page.locator('#shared_rooms a[data-sorted-list-name="Alpha"].unread').waitFor()
+  await page.locator('#shared_rooms a[data-sorted-list-name="Zulu"].unread').waitFor()
+  await page.locator('[data-matchbox-activity]').click()
+  assert.equal(await page.locator('#shared_rooms a[data-sorted-list-name="All Talk"]').isVisible(), false)
+  const filteredSave = page.waitForResponse(response => response.request().method() === 'PUT' && new URL(response.url()).pathname === '/users/me/sidebar/order')
+  await page.locator('#shared_rooms a[data-sorted-list-name="Alpha"]').press('Alt+ArrowUp')
+  const filteredResponse = await filteredSave
+  assert.equal(filteredResponse.status(), 204)
+  assert.equal(filteredResponse.request().postDataJSON().room_ids.length, 3, 'hidden favorites remain in the saved order')
+  await page.locator('[data-matchbox-activity]').click()
+
+  // A failed reorder must not undo an unstar completed while the request was pending.
+  let releaseFailure
+  let requestArrived
+  const pending = new Promise(resolve => { requestArrived = resolve })
+  const failure = new Promise(resolve => { releaseFailure = resolve })
+  await page.route('**/users/me/sidebar/order', async route => { requestArrived(); await failure; await route.fulfill({ status: 503 }) })
+  await zulu.press('Alt+ArrowUp')
+  await pending
+  await page.getByRole('button', { name: 'Favorite room', exact: true }).click()
+  await page.waitForFunction(() => document.querySelector('.mb-favorite-button').getAttribute('aria-pressed') === 'false')
+  releaseFailure()
+  await page.getByText("Couldn’t save room order. Please try again.", { exact: true }).waitFor()
+  assert.equal(await page.locator('#shared_rooms a[data-sorted-list-name="All Talk"] .mb-room-favorite-marker').isVisible(), false)
+  assert.equal(await page.locator('#shared_rooms .mb-room-favorite-marker:visible').count(), 2)
+  await page.unroute('**/users/me/sidebar/order')
+  const recovered = page.waitForResponse(response => response.request().method() === 'PUT' && new URL(response.url()).pathname === '/users/me/sidebar/order')
+  await zulu.press('Alt+ArrowUp')
+  assert.equal((await recovered).status(), 204, 'the next reorder uses the newer favorite set')
+  for (const id of ids) assert.equal((await context.request.put(`/rooms/${id}/favorite`, { headers: { ...sameOrigin, Accept: 'application/json' }, form: { favorite: 'false' } })).status(), 200)
   await page.reload()
   await zulu.waitFor()
   assert.deepEqual(await names(), alphabetic)
-  assert.equal(await page.getByRole("button", { name: "Use default room order" }).count(), 0)
+  assert.equal(await page.locator('#shared_rooms .mb-room-drag-handle:visible').count(), 0)
 })
 
 test('channel favorites persist per user, update the sidebar, and recover from failed saves', { timeout: 90_000 }, async (t) => {
@@ -896,12 +1043,15 @@ test('channel favorites persist per user, update the sidebar, and recover from f
   assert.equal(await plain.getByRole('button', { name: 'Favorite room', exact: true }).getAttribute('aria-pressed'), 'true', 'ordinary form works without JavaScript')
 })
 
-test('mobile channel ordering supports real touch holds and cancellation', { timeout: 60_000 }, async (t) => {
+test('mobile starred room ordering supports real touch holds and cancellation', { timeout: 60_000 }, async (t) => {
   const { context, roomPath, server } = await setUp(t)
   for (const name of ['Zulu', 'Alpha']) {
     const response = await context.request.post('/rooms/opens', { headers: sameOrigin, form: { 'room[name]': name } })
     assert.equal(response.status(), 200)
   }
+  const sidebar = await context.request.get('/users/me/sidebar')
+  const roomIds = [...(await sidebar.text()).matchAll(/data-room-id="(\d+)"/g)].map(match => Number(match[1]))
+  for (const id of roomIds) await context.request.put(`/rooms/${id}/favorite`, { headers: { ...sameOrigin, Accept: 'application/json' }, form: { favorite: 'true' } })
   const { page: phone, context: phoneContext } = await newPage(t, server, {
     viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, storageState: await context.storageState(),
   })
@@ -935,7 +1085,7 @@ test('mobile channel ordering supports real touch holds and cancellation', { tim
   })
   assert.equal(await phoneZulu.evaluate(row => row.classList.contains('mb-channel-dragging')), true, 'a sidebar refresh preserves an active native touch hold')
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [phoneFirst] })
-  const touchSaved = phone.waitForResponse(response => response.request().method() === 'PUT' && new URL(response.url()).pathname === '/account/room_order')
+  const touchSaved = phone.waitForResponse(response => response.request().method() === 'PUT' && new URL(response.url()).pathname === '/users/me/sidebar/order')
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
   assert.equal((await touchSaved).status(), 204)
   const phoneNames = () => phone.locator('#shared_rooms a').evaluateAll(rows => rows.map(row => row.dataset.sortedListName))
@@ -944,7 +1094,7 @@ test('mobile channel ordering supports real touch holds and cancellation', { tim
 
   let cancelWrites = 0
   phone.on('request', request => {
-    if (request.method() === 'PUT' && new URL(request.url()).pathname === '/account/room_order') cancelWrites++
+    if (request.method() === 'PUT' && new URL(request.url()).pathname === '/users/me/sidebar/order') cancelWrites++
   })
   const alphaStart = touchPoint(await phone.locator('#shared_rooms [data-sorted-list-name="Alpha"]').boundingBox())
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [alphaStart] })
@@ -962,7 +1112,7 @@ test('mobile channel ordering supports real touch holds and cancellation', { tim
   await capture(phone, { path: path.join(artifacts, 'workspace-channel-ordering-mobile.png'), fullPage: true })
 })
 
-test('channel ordering scrolls long lists and updates the drop position at a stationary edge', { timeout: 60_000 }, async (t) => {
+test('starred room ordering scrolls long lists and updates the drop position at a stationary edge', { timeout: 60_000 }, async (t) => {
   const { page, context, roomPath } = await setUp(t, { viewport: { width: 1311, height: 500 } })
   for (let index = 1; index <= 24; index++) {
     const response = await context.request.post('/rooms/opens', {
@@ -970,6 +1120,9 @@ test('channel ordering scrolls long lists and updates the drop position at a sta
     })
     assert.equal(response.status(), 200)
   }
+  const sidebar = await context.request.get('/users/me/sidebar')
+  const roomIds = [...(await sidebar.text()).matchAll(/data-room-id="(\d+)"/g)].map(match => Number(match[1]))
+  for (const id of roomIds) await context.request.put(`/rooms/${id}/favorite`, { headers: { ...sameOrigin, Accept: 'application/json' }, form: { favorite: 'true' } })
   await page.reload()
   await page.waitForFunction(() => document.querySelectorAll('#shared_rooms a').length === 25 &&
     window.Stimulus?.getControllerForElementAndIdentifier(document.querySelector('#sidebar_channels'), 'channel-order'))
@@ -997,7 +1150,7 @@ test('channel ordering scrolls long lists and updates the drop position at a sta
   }, firstDropIndex)
   const beforeDrop = await first.evaluate(row => [...row.parentElement.children].indexOf(row))
   assert.ok(beforeDrop >= firstDropIndex + 4, 'stationary pointer advances through channels as the list scrolls')
-  const saved = page.waitForResponse(response => response.request().method() === 'PUT' && new URL(response.url()).pathname === '/account/room_order')
+  const saved = page.waitForResponse(response => response.request().method() === 'PUT' && new URL(response.url()).pathname === '/users/me/sidebar/order')
   await page.mouse.up()
   assert.equal((await saved).status(), 204)
   assert.equal(new URL(page.url()).pathname, roomPath)
@@ -1766,10 +1919,12 @@ test('DM picker searches full names and @names, keeps recipients, and handles mo
   assert.equal(await dialog.locator('input[name="user_ids[]"]').count(), 0)
   await search.fill('Grace')
   await dialog.getByRole('option', { name: 'Grace Hopper', exact: true }).click()
-  await page.route('**/rooms/directs', route => route.fulfill({ status: 503 }))
+  await page.route('**/rooms/directs', route => route.fulfill({ status: 503, contentType: 'text/html', body: '<html><body>Service unavailable</body></html>' }))
   await dialog.getByRole('button', { name: 'Start conversation' }).click()
   await dialog.getByText('Couldn’t start the conversation. Please try again.', { exact: true }).waitFor()
   assert.equal(await dialog.getByRole('button', { name: 'Start conversation' }).isEnabled(), true)
+  assert.equal(await dialog.locator('input[name="user_ids[]"]').count(), 1, 'HTML errors preserve the selected recipient')
+  assert.equal(new URL(page.url()).pathname, roomPath, 'HTML errors do not replace the workspace')
   await page.unroute('**/rooms/directs')
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
   await page.setViewportSize({ width: 390, height: 844 })
@@ -1804,52 +1959,82 @@ test('DM picker searches full names and @names, keeps recipients, and handles mo
   assert.equal(await page.locator('#room_name').inputValue(), 'Keep this draft')
 })
 
-test('admin room ordering updates workspace defaults live without overwriting personal orders', { timeout: 90_000 }, async t => {
-  const { page, context, roomPath, joinURL, server } = await setUp(t, { viewport: { width: 1200, height: 900 } })
+test('admin settings stage the shared room order and preserve only personal starred ordering', { timeout: 90_000 }, async t => {
+  const { page, context, roomPath, joinURL, server } = await setUp(t, { viewport: { width: 1200, height: 1000 } })
   for (const name of ['Alpha', 'Zulu']) {
     assert.equal((await context.request.post('/rooms/opens', { headers: sameOrigin, form: { 'room[name]': name } })).status(), 200)
   }
-  await page.reload()
-  await page.locator('#shared_rooms a').nth(2).waitFor()
-  const ids = await page.locator('#shared_rooms a').evaluateAll(rows => rows.map(row => Number(row.dataset.roomId)))
-  const join = async (email, name) => {
-    const client = await newPage(t, server, { viewport: { width: 1200, height: 900 } })
-    assert.equal((await client.context.request.post(joinURL, { headers: sameOrigin,
-      multipart: { 'user[name]': name, 'user[email_address]': email, 'user[password]': password },
-    })).status(), 200)
-    await client.page.goto(roomPath)
-    await client.page.locator('#shared_rooms a').nth(2).waitFor()
-    await client.page.waitForFunction(() => [...document.querySelectorAll('turbo-cable-stream-source')].every(node => node.hasAttribute('connected')))
-    return client
-  }
-  const member = await join('default@example.test', 'Default Member')
-  const personal = await join('custom@example.test', 'Custom Member')
-  assert.equal((await personal.context.request.put('/users/me/sidebar/order', { headers: sameOrigin, data: { room_ids: [ids[1], ids[0], ids[2]] } })).status(), 204)
-  await personal.page.reload()
+  const member = await newPage(t, server, { viewport: { width: 1200, height: 900 } })
+  assert.equal((await member.context.request.post(joinURL, { headers: sameOrigin,
+    multipart: { 'user[name]': 'Room Member', 'user[email_address]': 'room-order@example.test', 'user[password]': password },
+  })).status(), 200)
+  await member.page.goto(roomPath)
+  await member.page.locator('#shared_rooms a').nth(2).waitFor()
+  await member.page.waitForFunction(() => [...document.querySelectorAll('turbo-cable-stream-source')].every(node => node.hasAttribute('connected')))
   const names = p => p.locator('#shared_rooms a').evaluateAll(rows => rows.map(row => row.dataset.sortedListName))
   const waitNames = (p, expected) => p.waitForFunction(expected => JSON.stringify([...document.querySelectorAll('#shared_rooms a')].map(row => row.dataset.sortedListName)) === JSON.stringify(expected), expected)
-  await waitNames(personal.page, ['Alpha', 'All Talk', 'Zulu'])
-  const zulu = page.locator('#shared_rooms a[data-sorted-list-name="Zulu"]')
-  await zulu.focus()
-  const saved = page.waitForResponse(response => response.request().method() === 'PUT' && new URL(response.url()).pathname === '/account/room_order')
+  const alpha = member.page.locator('#shared_rooms a[data-sorted-list-name="Alpha"]')
+  await alpha.focus()
+  await member.page.keyboard.press('Alt+ArrowUp')
+  assert.deepEqual(await names(member.page), ['All Talk', 'Alpha', 'Zulu'], 'unstarred rooms do not respond to personal reorder shortcuts')
+  const ids = await member.page.locator('#shared_rooms a').evaluateAll(rows => rows.map(row => Number(row.dataset.roomId)))
+  assert.equal((await member.context.request.put('/users/me/sidebar/order', { headers: sameOrigin, data: { room_ids: ids } })).status(), 403)
+  assert.equal((await member.context.request.put('/account/room_order', { headers: sameOrigin, data: { room_ids: ids } })).status(), 403)
+
+  await page.goto('/account/edit')
+  const editor = page.locator('.mb-admin-room-order')
+  const rows = editor.locator('[data-channel-order-target="room"]')
+  const rowNames = () => rows.evaluateAll(rows => rows.map(row => row.dataset.sortedListName))
+  assert.deepEqual(await rowNames(), ['All Talk', 'Alpha', 'Zulu'])
+  const zulu = rows.filter({ hasText: 'Zulu' })
+  const handle = zulu.getByRole('button', { name: 'Move Zulu', exact: true })
+  const from = await handle.boundingBox()
+  const top = await rows.first().boundingBox()
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2)
+  await page.mouse.down()
+  await zulu.locator('xpath=self::*[contains(@class,"mb-channel-dragging")]').waitFor()
+  await page.mouse.move(top.x + 18, top.y + 2, { steps: 8 })
+  await page.mouse.up()
+  assert.deepEqual(await rowNames(), ['Zulu', 'All Talk', 'Alpha'])
+  assert.deepEqual(await names(member.page), ['All Talk', 'Alpha', 'Zulu'], 'dragging only stages the order')
+  await editor.getByRole('button', { name: 'Cancel', exact: true }).click()
+  assert.deepEqual(await rowNames(), ['All Talk', 'Alpha', 'Zulu'])
+  await handle.focus()
   await page.keyboard.press('Alt+ArrowUp')
+  await page.route('**/account/room_order', route => route.fulfill({ status: 503 }))
+  await editor.getByRole('button', { name: 'Save order', exact: true }).click()
+  await editor.getByText('Couldn’t save room order. Please try again.', { exact: true }).waitFor()
+  assert.deepEqual(await rowNames(), ['All Talk', 'Zulu', 'Alpha'], 'save failure retains the draft')
+  await page.unroute('**/account/room_order')
+  const saved = page.waitForResponse(response => response.request().method() === 'PUT' && new URL(response.url()).pathname === '/account/room_order')
+  await editor.getByRole('button', { name: 'Save order', exact: true }).click()
   assert.equal((await saved).status(), 204)
-  await waitNames(page, ['All Talk', 'Zulu', 'Alpha'])
+  await editor.getByText('Room order saved for everyone.', { exact: true }).waitFor()
   await waitNames(member.page, ['All Talk', 'Zulu', 'Alpha'])
-  await waitNames(personal.page, ['Alpha', 'All Talk', 'Zulu'])
-  assert.equal((await member.context.request.put('/account/room_order', { headers: sameOrigin, data: { room_ids: [] } })).status(), 403)
-  assert.equal((await context.request.put('/account/room_order', { headers: sameOrigin, data: { room_ids: [999999] } })).status(), 403)
-  assert.equal((await context.request.put('/account/room_order', { headers: { 'Sec-Fetch-Site': 'cross-site' }, data: { room_ids: [] } })).status(), 422)
-  await personal.page.getByRole('button', { name: 'Use default room order', exact: true }).click()
-  await waitNames(personal.page, ['All Talk', 'Zulu', 'Alpha'])
-  const newcomer = await join('newcomer@example.test', 'New Member')
-  assert.deepEqual(await names(newcomer.page), ['All Talk', 'Zulu', 'Alpha'])
   await page.reload()
-  await waitNames(page, ['All Talk', 'Zulu', 'Alpha'])
-  await page.getByRole('button', { name: 'Reset default room order to alphabetical', exact: true }).click()
-  await waitNames(member.page, ['All Talk', 'Alpha', 'Zulu'])
-  await waitNames(personal.page, ['All Talk', 'Alpha', 'Zulu'])
-  await waitNames(newcomer.page, ['All Talk', 'Alpha', 'Zulu'])
+  assert.deepEqual(await rowNames(), ['All Talk', 'Zulu', 'Alpha'])
+  const alphaId = ids[1]
+  const zuluId = ids[2]
+  for (const id of [alphaId, zuluId]) await member.context.request.put(`/rooms/${id}/favorite`, { headers: { ...sameOrigin, Accept: 'application/json' }, form: { favorite: 'true' } })
+  await member.page.reload()
+  await waitNames(member.page, ['Alpha', 'Zulu', 'All Talk'])
+  const starredSaved = member.page.waitForResponse(response => response.request().method() === 'PUT' && new URL(response.url()).pathname === '/users/me/sidebar/order')
+  await member.page.locator('#shared_rooms a[data-sorted-list-name="Zulu"]').focus()
+  await member.page.keyboard.press('Alt+ArrowUp')
+  assert.equal((await starredSaved).status(), 204)
+  await waitNames(member.page, ['Zulu', 'Alpha', 'All Talk'])
+  await rows.filter({ hasText: 'Alpha' }).focus()
+  await page.keyboard.press('Alt+ArrowUp')
+  await editor.getByRole('button', { name: 'Save order', exact: true }).click()
+  await waitNames(member.page, ['Zulu', 'Alpha', 'All Talk'])
+  assert.equal((await context.request.put('/account/room_order', { headers: sameOrigin, data: { room_ids: [999999] } })).status(), 403)
+  assert.equal((await context.request.put('/account/room_order', { headers: { 'Sec-Fetch-Site': 'cross-site' }, data: { room_ids: ids } })).status(), 422)
+  await page.setViewportSize({ width: 390, height: 844 })
+  await editor.scrollIntoViewIfNeeded()
+  await noOverflow(page, 'mobile admin room ordering')
+  await capture(page, { path: path.join(artifacts, 'workspace-admin-room-order.png'), fullPage: true })
+  await member.page.goto('/account/edit')
+  assert.equal(await member.page.locator('.mb-admin-room-order').count(), 0)
 })
 
 test('custom reactions use a spaced form with validation, cancel, and mobile layouts', { timeout: 90_000 }, async t => {
@@ -1914,4 +2099,44 @@ test('custom reactions use a spaced form with validation, cancel, and mobile lay
       await message.locator('.boost-item').filter({ hasText: 'Lovely!' }).waitFor()
     }
   }
+})
+
+
+test('inline Add a boost opens the shared emoji tray and survives reaction-frame replacement', { timeout: 90_000 }, async t => {
+  const { page, context, roomPath, server } = await setUp(t, { viewport: { width: 1200, height: 900 } })
+  const message = await submitMessage(page, roomPath, 'React from either control.')
+  await message.hover()
+  await message.getByRole('button', { name: 'Thumbs up', exact: true }).click()
+  await message.locator('.boost-item').first().waitFor()
+  const inline = message.getByRole('link', { name: 'Add a boost', exact: true })
+  const tray = message.locator('.mb-message-reaction-tray')
+  await page.locator('#nav').hover()
+  await inline.focus()
+  await page.keyboard.press('Enter')
+  await tray.waitFor()
+  assert.equal(await message.locator('.input--boost').count(), 0, 'the inline action opens emoji choices, not the custom-text form')
+  assert.equal(await tray.evaluate(node => node.contains(document.activeElement)), true)
+  await page.keyboard.press('Escape')
+  await tray.waitFor({ state: 'hidden' })
+  assert.equal(await inline.evaluate(node => node === document.activeElement), true)
+  await inline.click()
+  await tray.getByRole('button', { name: 'Fire', exact: true }).click()
+  await message.locator('.boost-item').filter({ hasText: '🔥' }).waitFor()
+  assert.equal(await message.locator('[data-message-actions-target="trigger"]').evaluate(node => node === document.activeElement), true, 'submission keeps focus on a control that survives the response')
+  await inline.click()
+  await tray.waitFor()
+  await tray.getByRole('link', { name: 'New boost', exact: true }).click()
+  await message.getByRole('textbox', { name: 'Custom reaction', exact: true }).waitFor()
+  await message.getByRole('link', { name: 'Cancel', exact: true }).click()
+  await inline.waitFor()
+  await inline.click()
+  await tray.waitFor()
+  await page.locator('#nav').click({ position: { x: 120, y: 20 } })
+  await tray.waitFor({ state: 'hidden' })
+  const mobile = await newPage(t, server, { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, storageState: await context.storageState() })
+  await mobile.page.goto(roomPath)
+  await mobile.page.getByRole('link', { name: 'Add a boost', exact: true }).tap()
+  await mobile.page.locator('.mb-message-reaction-tray').waitFor()
+  await noOverflow(mobile.page, 'inline mobile emoji picker')
+  await capture(mobile.page, { path: path.join(artifacts, 'workspace-inline-emoji-picker.png') })
 })

@@ -34,6 +34,8 @@ pub struct Edit<'a> {
     pub restrict_room_creation_to_administrators: bool,
     pub administrators: Vec<UserSummary>,
     pub members: Vec<UserSummary>,
+    pub rooms: Vec<crate::users::SidebarRoom>,
+    pub room_order: String,
     /// `@page.next_param` unless `@page.last?`.
     pub next_page: Option<String>,
 }

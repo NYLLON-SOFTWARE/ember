@@ -276,10 +276,8 @@ pub struct SidebarShow<'a> {
     pub other_memberships: Vec<SidebarRoom>,
     /// JSON array of the current user's starred shared channels.
     pub favorite_channels: String,
-    /// JSON array of shared room IDs in the current user's custom ordering (empty: alphabetic).
+    /// JSON array of shared room IDs in the workspace order (empty: alphabetic).
     pub channel_order: String,
-    pub default_room_order: String,
-    pub custom_room_order: bool,
 }
 
 impl Page for SidebarShow<'_> {}

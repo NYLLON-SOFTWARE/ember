@@ -119,53 +119,38 @@ fn accounts_can_reset_join_code() {
 }
 
 #[test]
-fn channel_orders_are_personal_and_reset_without_touching_account_caches() {
+fn favorite_orders_are_personal_and_preserve_account_caches() {
     let t = TestDb::new();
     let before = signal(&t);
-    assert!(before.settings().channel_order(id("david")).is_empty());
-    assert!(t.write(|tx| Account::set_channel_order(tx, id("david"), &[id("hq"), id("pets")])));
-    assert!(t.write(|tx| Account::set_channel_order(tx, id("jason"), &[id("pets"), id("hq")])));
-
+    for user in [id("david"), id("jason")] {
+        for room in [id("hq"), id("pets")] {
+            assert!(t.write(move |tx| Account::set_channel_favorite(tx, user, room, true)).is_some());
+        }
+    }
+    assert!(t.write(|tx| Account::set_favorite_order(tx, id("david"), &[id("pets"), id("hq")])));
     let settings = signal(&t).settings();
-    assert_eq!(settings.channel_order(id("david")), vec![id("hq"), id("pets")]);
-    assert_eq!(settings.channel_order(id("jason")), vec![id("pets"), id("hq")]);
-    assert!(settings.channel_order(id("kevin")).is_empty());
-    assert_eq!(signal(&t).updated_at, before.updated_at, "personal ordering does not invalidate account/asset caches");
-
-    assert!(t.write(|tx| Account::set_channel_order(tx, id("david"), &[])));
-    assert!(signal(&t).settings().channel_order(id("david")).is_empty());
-    assert_eq!(signal(&t).settings().channel_order(id("jason")), vec![id("pets"), id("hq")]);
+    assert_eq!(settings.favorite_channels(id("david")), vec![id("pets"), id("hq")]);
+    assert_eq!(settings.favorite_channels(id("jason")), vec![id("hq"), id("pets")]);
+    assert!(settings.favorite_channels(id("kevin")).is_empty());
+    assert_eq!(signal(&t).updated_at, before.updated_at);
+    assert_eq!(t.write(|tx| Account::set_channel_favorite(tx, id("david"), id("pets"), true)), Some(vec![id("pets"), id("hq")]));
 }
 
 #[test]
-fn channel_orders_reject_duplicates_direct_rooms_and_inaccessible_channels() {
+fn favorite_orders_reject_unstarred_missing_duplicate_hidden_and_direct_rooms() {
     let t = TestDb::new();
-    assert!(t.write(|tx| Account::set_channel_order(tx, id("kevin"), &[id("hq")])));
+    assert!(t.write(|tx| Account::set_channel_favorite(tx, id("david"), id("hq"), true)).is_some());
     let before = signal(&t).settings_json;
-    for ids in [vec![id("pets")], vec![id("david_and_kevin")], vec![id("hq"), id("hq")], vec![0], vec![-1]] {
-        assert!(!t.write(move |tx| Account::set_channel_order(tx, id("kevin"), &ids)));
+    for ids in [vec![], vec![id("pets")], vec![id("hq"), id("pets")], vec![id("david_and_kevin")], vec![id("hq"), id("hq")], vec![0]] {
+        assert!(!t.write(move |tx| Account::set_favorite_order(tx, id("david"), &ids)));
         assert_eq!(signal(&t).settings_json, before);
     }
     t.write(|tx| {
-        let mut membership = crate::Membership::find_by_room_and_user(tx.conn(), id("hq"), id("kevin"))?.unwrap();
+        let mut membership = crate::Membership::find_by_room_and_user(tx.conn(), id("hq"), id("david"))?.unwrap();
         membership.update_involvement(tx, crate::Involvement::Invisible)
     });
-    assert!(!t.write(|tx| Account::set_channel_order(tx, id("kevin"), &[id("hq")])));
+    assert!(!t.write(|tx| Account::set_favorite_order(tx, id("david"), &[id("hq")])));
     assert_eq!(signal(&t).settings_json, before);
-}
-
-#[test]
-fn personal_channel_order_survives_an_admin_update_from_an_older_account_snapshot() {
-    let t = TestDb::new();
-    let mut stale_account = signal(&t);
-    assert!(t.write(|tx| Account::set_channel_order(tx, id("david"), &[id("hq"), id("pets")])));
-    t.write(move |tx| stale_account.update(tx, None, None, Some(&[("hide_translation_buttons", "false")])));
-    let settings = signal(&t).settings();
-    assert!(!settings.hide_translation_buttons());
-    assert_eq!(settings.channel_order(id("david")), vec![id("hq"), id("pets")]);
-
-    assert!(t.write(|tx| Account::set_channel_order(tx, id("david"), &[])));
-    assert!(!signal(&t).settings().hide_translation_buttons(), "reset does not affect workspace settings");
 }
 
 #[test]
@@ -173,7 +158,6 @@ fn channel_favorites_are_personal_and_preserve_other_settings_and_caches() {
     let t = TestDb::new();
     let mut stale_account = signal(&t);
     let updated_at = stale_account.updated_at;
-    assert!(t.write(|tx| Account::set_channel_order(tx, id("david"), &[id("pets"), id("hq")])));
     assert_eq!(t.write(|tx| Account::set_channel_favorite(tx, id("david"), id("hq"), true)), Some(vec![id("hq")]));
     assert_eq!(t.write(|tx| Account::set_channel_favorite(tx, id("david"), id("hq"), true)), Some(vec![id("hq")]));
     assert_eq!(t.write(|tx| Account::set_channel_favorite(tx, id("jason"), id("pets"), true)), Some(vec![id("pets")]));
@@ -183,7 +167,6 @@ fn channel_favorites_are_personal_and_preserve_other_settings_and_caches() {
     assert_eq!(settings.favorite_channels(id("david")), vec![id("hq")]);
     assert_eq!(settings.favorite_channels(id("jason")), vec![id("pets")]);
     assert!(settings.favorite_channels(id("kevin")).is_empty());
-    assert_eq!(settings.channel_order(id("david")), vec![id("pets"), id("hq")]);
     assert!(!settings.hide_translation_buttons());
     assert_eq!(t.write(|tx| Account::set_channel_favorite(tx, id("david"), id("hq"), false)), Some(vec![]));
     assert_eq!(signal(&t).settings().favorite_channels(id("jason")), vec![id("pets")]);
@@ -213,18 +196,26 @@ impl Account {
 }
 
 #[test]
-fn default_room_order_requires_an_admin_and_preserves_preferences_and_caches() {
+fn default_room_order_replaces_legacy_orders_and_preserves_stars_and_caches() {
     let t = TestDb::new();
     let mut stale_account = signal(&t);
     let updated_at = stale_account.updated_at;
     assert!(!t.write(|tx| Account::set_default_room_order(tx, id("kevin"), &[id("hq")])));
-    assert!(t.write(|tx| Account::set_channel_order(tx, id("kevin"), &[id("hq")])));
+    t.write(|tx| {
+        tx.conn().execute(
+            "UPDATE accounts SET settings = json_set(settings, '$.matchbox_channel_order', json(?))",
+            [serde_json::json!({ id("kevin").to_string(): [id("hq")] }).to_string()],
+        )?;
+        Ok(())
+    });
+    assert!(t.write(|tx| Account::set_channel_favorite(tx, id("kevin"), id("hq"), true)).is_some());
     assert!(t.write(|tx| Account::set_default_room_order(tx, id("david"), &[id("pets"), id("hq")])));
     assert_eq!(signal(&t).updated_at, updated_at);
     t.write(move |tx| stale_account.update(tx, None, None, Some(&[("hide_translation_buttons", "false")])));
     let settings = signal(&t).settings();
     assert_eq!(settings.default_room_order(), vec![id("pets"), id("hq")]);
-    assert_eq!(settings.channel_order(id("kevin")), vec![id("hq")]);
+    assert!(settings.get("matchbox_channel_order").is_none());
+    assert_eq!(settings.favorite_channels(id("kevin")), vec![id("hq")]);
     assert!(!settings.hide_translation_buttons());
     for ids in [vec![id("hq"), id("hq")], vec![id("david_and_kevin")], vec![0], vec![i64::MAX]] {
         assert!(!t.write(move |tx| Account::set_default_room_order(tx, id("david"), &ids)));
@@ -232,7 +223,7 @@ fn default_room_order_requires_an_admin_and_preserves_preferences_and_caches() {
     }
     assert!(t.write(|tx| Account::set_default_room_order(tx, id("david"), &[])));
     assert!(signal(&t).settings().default_room_order().is_empty());
-    assert_eq!(signal(&t).settings().channel_order(id("kevin")), vec![id("hq")]);
+    assert_eq!(signal(&t).settings().favorite_channels(id("kevin")), vec![id("hq")]);
 }
 
 #[test]
