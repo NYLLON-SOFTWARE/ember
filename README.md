@@ -123,12 +123,12 @@ unread activity, and the mobile drawer live in
 [`matchbox/shell.js`](crates/assets/overrides/matchbox/shell.js). Edit these two files for shared
 workspace behavior and appearance; page markup remains in `crates/views/templates/`.
 
-The workspace bundle contains 67,502 bytes of CSS (12,329 gzip) and 7,356 bytes of shell JavaScript
-(2,357 gzip), measured with gzip level 9. Room ordering, icon selection, and SVG previews use separate Stimulus
+The workspace bundle contains 68,368 bytes of CSS (12,477 gzip) and 7,370 bytes of shell JavaScript
+(2,359 gzip), measured with gzip level 9. Room ordering, icon selection, and SVG previews use separate Stimulus
 controllers, discovered through the digested importmap alongside the inherited controllers.
-The compact message-actions controller adds 8,522 bytes (2,270 gzip).
+The compact message-actions controller adds 8,566 bytes (2,298 gzip).
 The composer upload override is 7,703 bytes (2,636 gzip), with a 1,814-byte uploader (734 gzip).
-The shared appearance adapter adds 1,981 bytes (824 gzip),
+The shared appearance adapter adds 3,227 bytes (1,171 gzip),
 built from `basecoat/src/workspace-appearance.js` with the shared preference helpers.
 Assets use the existing digested URLs and compression pipeline. Message fragment recording and
 content-addressed response caches retain their existing mechanisms; the message presentation digest
@@ -240,7 +240,8 @@ behavior changes and compatibility limits are listed below.
   Message options use a compact bar with three quick reactions, reply or attachment actions, copy
   link, and edit. More reactions opens a small tray with the other reactions and custom boost.
   The inline **Add a boost** control opens that same tray, including after Turbo replaces the
-  reactions; Escape returns focus to the inline control. Its original link remains the no-JS fallback.
+  reactions; Escape returns focus to the inline control, while submission focuses the stable toolbar
+  control so replacing the reactions does not lose keyboard focus. Its original link remains the no-JS fallback.
   On desktop the native options disclosure sits inside the bar, giving ordinary editable text
   messages a 266×42px toolbar, 16px from the pane edge and 17px above the row. Hovering opens the
   bar across the row's top edge while keeping a continuous hover area.
@@ -289,6 +290,7 @@ behavior changes and compatibility limits are listed below.
   or Alt + Up/Down, then explicitly **Save order** for everyone. **Cancel** discards the draft;
   failed saves retain it for retry. Saving removes legacy personal overrides for unstarred rooms.
   Members can reorder only their starred rooms, using hold-and-drag or Alt + Up/Down in the sidebar.
+  Activity-filtered favorites remain in saved orders; failed saves preserve newer favorite changes.
   Favorites and their personal order survive shared-order changes; starring an existing favorite
   does not move it. New/unranked shared rooms follow the saved order alphabetically.
   Preferences use the existing account settings JSON with no schema migration or account cache
@@ -300,7 +302,7 @@ behavior changes and compatibility limits are listed below.
   Search matches full names; a leading `@` is accepted as a convenience, not a unique username.
   Select one or more people to start or reopen a conversation through the existing direct-room
   endpoint. The modal supports keyboard selection, pagination, mobile layouts, retry after a failed
-  search, and retains recipients across background sidebar updates. The original direct-message
+  search, and retains recipients across background sidebar updates and HTML submission errors. The original direct-message
   page remains the link destination when the modal enhancement is unavailable.
 - **Room icons:** room creators and administrators can choose a Lucide icon when creating or
   editing open or restricted rooms. A searchable, keyboard-accessible picker stages the choice;

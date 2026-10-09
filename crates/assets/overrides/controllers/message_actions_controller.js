@@ -96,7 +96,6 @@ export default class extends Controller {
   }
 
   close(event) {
-    const trigger = this.boostTrigger || this.triggerTarget
     this.boostTrigger = undefined
     clearTimeout(this.closeTimer)
     this.hoverOpened = false
@@ -105,7 +104,8 @@ export default class extends Controller {
     this.trayTarget.hidden = true
     this.moreTarget.setAttribute("aria-expanded", "false")
     this.stopObserving()
-    if (event?.type === "submit") trigger.focus({ preventScroll: true })
+    // The response replaces the inline boost link; the message-options control survives it.
+    if (event?.type === "submit") this.triggerTarget.focus({ preventScroll: true })
   }
 
   more() {

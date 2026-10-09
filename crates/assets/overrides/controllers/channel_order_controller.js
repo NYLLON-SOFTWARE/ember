@@ -158,8 +158,12 @@ export default class extends Controller {
     this.resetTarget.disabled = this.#saving || unchanged
   }
 
+  #orderedRows() {
+    return this.roomTargets.filter(row => this.stagedValue || this.favoritesValue.includes(Number(row.dataset.roomId)))
+  }
+
   #movableRows() {
-    return this.roomTargets.filter(row => !row.hidden && (this.stagedValue || this.favoritesValue.includes(Number(row.dataset.roomId))))
+    return this.#orderedRows().filter(row => !row.hidden)
   }
 
   #stageOrSave(order) {
@@ -204,7 +208,7 @@ export default class extends Controller {
     const after = otherRows.find(row => point.clientY < row.getBoundingClientRect().top + row.getBoundingClientRect().height / 2)
     if (after) this.listTarget.insertBefore(candidate.row, after)
     else {
-      const firstFixed = this.roomTargets.find(row => !this.#movableRows().includes(row))
+      const firstFixed = this.roomTargets.find(row => !this.#orderedRows().includes(row))
       this.listTarget.insertBefore(candidate.row, firstFixed || null)
     }
   }
@@ -308,8 +312,9 @@ export default class extends Controller {
   }
 
   #ids() {
-    const movable = new Set(this.#movableRows())
-    return Array.from(this.listTarget.children).filter(row => movable.has(row)).map(row => Number(row.dataset.roomId))
+    // Activity hides read rooms, but the server still needs the full favorite set.
+    const ordered = new Set(this.#orderedRows())
+    return Array.from(this.listTarget.children).filter(row => ordered.has(row)).map(row => Number(row.dataset.roomId))
   }
 
   async #save(order) {
@@ -325,7 +330,7 @@ export default class extends Controller {
       window.Turbo?.cache.clear()
       this.#announce(this.stagedValue ? "Room order saved for everyone." : "Starred room order saved.")
     } catch {
-      if (!this.stagedValue) this.favoritesValue = previous
+      if (!this.stagedValue && JSON.stringify(this.favoritesValue) === JSON.stringify(order)) this.favoritesValue = previous
       this.sort()
       this.#announce("Couldn’t save room order. Please try again.", true)
     } finally {

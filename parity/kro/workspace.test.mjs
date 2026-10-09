@@ -520,8 +520,19 @@ test("mobile and tablet navigation keep the conversation and settings usable", {
   await noOverflow(page, "short mobile conversation")
 })
 
-test("workspace appearance persists, follows the system, and remains accessible on mobile", { timeout: 60_000 }, async (t) => {
+for (const nativePopover of [true, false]) {
+test(`workspace appearance persists, follows the system, and remains accessible on mobile (${nativePopover ? "native" : "fallback"})`, { timeout: 60_000 }, async (t) => {
   const { server, page, context, roomPath, joinURL } = await setUp(t, { viewport: { width: 1280, height: 900 } })
+  if (!nativePopover) await context.addInitScript(() => {
+    delete HTMLElement.prototype.showPopover
+    delete HTMLElement.prototype.hidePopover
+    delete HTMLElement.prototype.togglePopover
+    const query = Document.prototype.querySelector
+    Document.prototype.querySelector = function(selector) {
+      if (selector.includes(':popover-open')) throw new SyntaxError('Unsupported popover selector')
+      return query.call(this, selector)
+    }
+  })
   await page.goto(roomPath)
   const surface = () => page.locator("#main-content").evaluate((node) => getComputedStyle(node).backgroundColor)
   const light = await surface()
@@ -613,6 +624,8 @@ test("workspace appearance persists, follows the system, and remains accessible 
   await shell(guest)
   await noOverflow(guest, "320px signed-in conversation")
 })
+
+}
 
 test("new rooms return to settings and profile saves show one centered confirmation", { timeout: 60_000 }, async (t) => {
   const { page } = await setUp(t, { viewport: { width: 1311, height: 900 } })
@@ -913,6 +926,41 @@ test("starred room ordering persists, remains isolated, and rejects unstarred ro
   await page.getByText("Couldn’t save room order. Please try again.", { exact: true }).waitFor()
   assert.deepEqual(await names(), ["All Talk", "Zulu", "Alpha"], "failed saves restore the last saved order")
   await context.unroute('**/users/me/sidebar/order')
+
+  // Activity filters read favorites out of view, but ordering must submit all favorites.
+  const byName = await page.locator('#shared_rooms a').evaluateAll(rows => Object.fromEntries(rows.map(row => [row.dataset.sortedListName, Number(row.dataset.roomId)])))
+  for (const name of ['Alpha', 'Zulu']) {
+    assert.equal((await admin.request.post(`/rooms/${byName[name]}/messages`, { headers: { ...sameOrigin, Accept: 'text/vnd.turbo-stream.html' }, form: { 'message[body]': `Unread in ${name}` } })).status(), 200)
+  }
+  await page.locator('#shared_rooms a[data-sorted-list-name="Alpha"].unread').waitFor()
+  await page.locator('#shared_rooms a[data-sorted-list-name="Zulu"].unread').waitFor()
+  await page.locator('[data-matchbox-activity]').click()
+  assert.equal(await page.locator('#shared_rooms a[data-sorted-list-name="All Talk"]').isVisible(), false)
+  const filteredSave = page.waitForResponse(response => response.request().method() === 'PUT' && new URL(response.url()).pathname === '/users/me/sidebar/order')
+  await page.locator('#shared_rooms a[data-sorted-list-name="Alpha"]').press('Alt+ArrowUp')
+  const filteredResponse = await filteredSave
+  assert.equal(filteredResponse.status(), 204)
+  assert.equal(filteredResponse.request().postDataJSON().room_ids.length, 3, 'hidden favorites remain in the saved order')
+  await page.locator('[data-matchbox-activity]').click()
+
+  // A failed reorder must not undo an unstar completed while the request was pending.
+  let releaseFailure
+  let requestArrived
+  const pending = new Promise(resolve => { requestArrived = resolve })
+  const failure = new Promise(resolve => { releaseFailure = resolve })
+  await page.route('**/users/me/sidebar/order', async route => { requestArrived(); await failure; await route.fulfill({ status: 503 }) })
+  await zulu.press('Alt+ArrowUp')
+  await pending
+  await page.getByRole('button', { name: 'Favorite room', exact: true }).click()
+  await page.waitForFunction(() => document.querySelector('.mb-favorite-button').getAttribute('aria-pressed') === 'false')
+  releaseFailure()
+  await page.getByText("Couldn’t save room order. Please try again.", { exact: true }).waitFor()
+  assert.equal(await page.locator('#shared_rooms a[data-sorted-list-name="All Talk"] .mb-room-favorite-marker').isVisible(), false)
+  assert.equal(await page.locator('#shared_rooms .mb-room-favorite-marker:visible').count(), 2)
+  await page.unroute('**/users/me/sidebar/order')
+  const recovered = page.waitForResponse(response => response.request().method() === 'PUT' && new URL(response.url()).pathname === '/users/me/sidebar/order')
+  await zulu.press('Alt+ArrowUp')
+  assert.equal((await recovered).status(), 204, 'the next reorder uses the newer favorite set')
   for (const id of ids) assert.equal((await context.request.put(`/rooms/${id}/favorite`, { headers: { ...sameOrigin, Accept: 'application/json' }, form: { favorite: 'false' } })).status(), 200)
   await page.reload()
   await zulu.waitFor()
@@ -1857,10 +1905,12 @@ test('DM picker searches full names and @names, keeps recipients, and handles mo
   assert.equal(await dialog.locator('input[name="user_ids[]"]').count(), 0)
   await search.fill('Grace')
   await dialog.getByRole('option', { name: 'Grace Hopper', exact: true }).click()
-  await page.route('**/rooms/directs', route => route.fulfill({ status: 503 }))
+  await page.route('**/rooms/directs', route => route.fulfill({ status: 503, contentType: 'text/html', body: '<html><body>Service unavailable</body></html>' }))
   await dialog.getByRole('button', { name: 'Start conversation' }).click()
   await dialog.getByText('Couldn’t start the conversation. Please try again.', { exact: true }).waitFor()
   assert.equal(await dialog.getByRole('button', { name: 'Start conversation' }).isEnabled(), true)
+  assert.equal(await dialog.locator('input[name="user_ids[]"]').count(), 1, 'HTML errors preserve the selected recipient')
+  assert.equal(new URL(page.url()).pathname, roomPath, 'HTML errors do not replace the workspace')
   await page.unroute('**/rooms/directs')
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
   await page.setViewportSize({ width: 390, height: 844 })
@@ -2058,6 +2108,7 @@ test('inline Add a boost opens the shared emoji tray and survives reaction-frame
   await inline.click()
   await tray.getByRole('button', { name: 'Fire', exact: true }).click()
   await message.locator('.boost-item').filter({ hasText: '🔥' }).waitFor()
+  assert.equal(await message.locator('[data-message-actions-target="trigger"]').evaluate(node => node === document.activeElement), true, 'submission keeps focus on a control that survives the response')
   await inline.click()
   await tray.waitFor()
   await tray.getByRole('link', { name: 'New boost', exact: true }).click()

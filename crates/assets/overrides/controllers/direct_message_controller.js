@@ -37,6 +37,10 @@ export default class extends Controller {
       this.element.close()
       this.#reset()
     }, options)
+    this.element.addEventListener("turbo:before-fetch-response", event => {
+      // Keep recipients and the retry message when an HTML error would replace the workspace.
+      if (!event.detail.fetchResponse.succeeded) event.preventDefault()
+    }, options)
   }
 
   disconnect() {

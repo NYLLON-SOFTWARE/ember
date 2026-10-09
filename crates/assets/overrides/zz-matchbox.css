@@ -54,17 +54,17 @@ html[data-appearance].dark {
 
 /* Ember workspace. Keep behavior hooks in the original styles; presentation lives here. */
 body.mb-app {
-  --mb-canvas: light-dark(#fff, #171717);
-  --mb-surface: light-dark(#fafafa, #1c1c1c);
-  --mb-hover: light-dark(#f2f2f2, #282828);
-  --mb-border: light-dark(#e5e5e5, #343434);
-  --mb-muted: light-dark(#737373, #a3a3a3);
-  --mb-ink: light-dark(#171717, #f5f5f5);
-  --mb-message-ink: light-dark(#1d1c1d, #f5f5f5);
-  --mb-message-muted: light-dark(#616061, #a3a3a3);
-  --mb-message-border: light-dark(#dedede, #343434);
-  --mb-message-divider: light-dark(#ddd, #343434);
-  --mb-message-hover: light-dark(#f8f8f8, #202020);
+  --mb-canvas: #fff;
+  --mb-surface: #fafafa;
+  --mb-hover: #f2f2f2;
+  --mb-border: #e5e5e5;
+  --mb-muted: #737373;
+  --mb-ink: #171717;
+  --mb-message-ink: #1d1c1d;
+  --mb-message-muted: #616061;
+  --mb-message-border: #dedede;
+  --mb-message-divider: #ddd;
+  --mb-message-hover: #f8f8f8;
   --mb-rail-width: 80px;
   --mb-sidebar-width: 280px;
   --mb-header-height: 60px;
@@ -76,7 +76,7 @@ body.mb-app {
   --color-border-dark: var(--mb-border);
   --color-border-darker: var(--mb-muted);
   --color-selected: var(--mb-hover);
-  --color-selected-dark: light-dark(#a3a3a3, #737373);
+  --color-selected-dark: #a3a3a3;
   --hover-size: 0;
   --hover-filter: none;
   --btn-border-radius: 9px;
@@ -99,6 +99,38 @@ body.mb-app {
   min-inline-size: 0;
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
+}
+
+/* Solid palettes also support browsers predating light-dark(). */
+html.dark body.mb-app {
+  --mb-canvas: #171717;
+  --mb-surface: #1c1c1c;
+  --mb-hover: #282828;
+  --mb-border: #343434;
+  --mb-muted: #a3a3a3;
+  --mb-ink: #f5f5f5;
+  --mb-message-ink: #f5f5f5;
+  --mb-message-muted: #a3a3a3;
+  --mb-message-border: #343434;
+  --mb-message-divider: #343434;
+  --mb-message-hover: #202020;
+  --color-selected-dark: #737373;
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-appearance]) body.mb-app {
+    --mb-canvas: #171717;
+    --mb-surface: #1c1c1c;
+    --mb-hover: #282828;
+    --mb-border: #343434;
+    --mb-muted: #a3a3a3;
+    --mb-ink: #f5f5f5;
+    --mb-message-ink: #f5f5f5;
+    --mb-message-muted: #a3a3a3;
+    --mb-message-border: #343434;
+    --mb-message-divider: #343434;
+    --mb-message-hover: #202020;
+    --color-selected-dark: #737373;
+  }
 }
 
 body.mb-app.mb-authenticated {
@@ -187,10 +219,13 @@ body.mb-app.mb-authenticated {
 .mb-app .mb-appearance { margin-block-start: auto; }
 .mb-app .mb-appearance[hidden], .mb-app [data-appearance-icon][hidden] { display: none; }
 .mb-app .mb-appearance-toggle { align-items: center; background: transparent; block-size: 36px; border: 1px solid var(--mb-border); border-radius: 50%; color: var(--mb-muted); display: flex; inline-size: 36px; justify-content: center; padding: 0; }
-.mb-app .mb-appearance-toggle:hover, .mb-app .mb-appearance:has(:popover-open) .mb-appearance-toggle { background: var(--mb-hover); color: var(--mb-ink); }
+.mb-app .mb-appearance-toggle:hover, .mb-app .mb-appearance-toggle[aria-expanded="true"] { background: var(--mb-hover); color: var(--mb-ink); }
 .mb-app .mb-appearance-toggle span { display: flex; }
 .mb-app .mb-appearance-toggle svg { block-size: 18px; inline-size: 18px; }
-.mb-app .mb-appearance-menu { background: var(--mb-canvas); border: 1px solid var(--mb-border); border-radius: 12px; box-shadow: 0 8px 24px #0002; color: var(--mb-ink); inline-size: 190px; inset: auto auto max(64px, env(safe-area-inset-bottom)) calc(var(--mb-rail-width) + 8px); margin: 0; padding: 8px; }
+.mb-app .mb-appearance-menu { display: none; background: var(--mb-canvas); border: 1px solid var(--mb-border); border-radius: 12px; box-shadow: 0 8px 24px #0002; color: var(--mb-ink); inline-size: 190px; inset: auto auto max(64px, env(safe-area-inset-bottom)) calc(var(--mb-rail-width) + 8px); margin: 0; padding: 8px; }
+.mb-app .mb-appearance-menu:popover-open { display: block; }
+.mb-app .mb-appearance-menu[data-appearance-fallback] { display: none; position: fixed; z-index: 24; }
+.mb-app .mb-appearance-menu[data-appearance-fallback][data-open] { display: block; }
 .mb-app .mb-appearance-menu fieldset { border: 0; margin: 0; padding: 0; }
 .mb-app .mb-appearance-menu legend { color: var(--mb-muted); font-size: 12px; font-weight: 600; padding: 4px 8px 8px; }
 .mb-app .mb-appearance-menu label { align-items: center; border-radius: 7px; cursor: pointer; display: flex; gap: 10px; min-block-size: 40px; padding: 8px; position: relative; }
