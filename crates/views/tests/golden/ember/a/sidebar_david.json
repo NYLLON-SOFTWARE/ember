@@ -649,7 +649,7 @@
   "<div class=\"mb-sidebar-section-heading\">",
   "\" \"",
   "<h3 id=\"directs-heading\">",
-  "\"Direct messages\"",
+  "\"DMs\"",
   "</h3>",
   "\" \"",
   "<a aria-label=\"New direct message\" class=\"btn mb-sidebar-action\" data-ember-new-direct=\"\" data-matchbox-new-direct=\"\" href=\"/rooms/directs/new\" title=\"New direct message\">",

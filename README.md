@@ -54,7 +54,7 @@ Navigation uses actual room memberships. **Activity** filters the existing sideb
 conversations and shows an unread conversation count. **Search** opens the inherited full message
 search, with recent searches shown once above the results.
 
-Rooms appear directly beneath the workspace name, followed by direct messages. Room creation lives
+Rooms appear directly beneath the workspace name, followed by the **DMs** section. Room creation lives
 in **Workspace settings**, alongside the existing administrator-only room-creation permission
 control. That permission still determines who can create rooms. The new-room back button returns
 to workspace settings, including after switching room access types. Ember uses “rooms” consistently
@@ -223,10 +223,13 @@ existing behavior. Multipart setup, optional avatars, and signed sessions retain
 Workspace logos and profile avatars use a single large preview with an overlaid camera picker
 and a separate removal action. Uploads still save immediately, with a submit button available
 without JavaScript. The rail displays the uploaded workspace logo and falls back to the Ember mark.
+Uploaded logos in the rail and welcome card use the current canvas color behind transparent images.
 
 Entering an editable single-line field selects its current value so typing replaces it; a subsequent
-click can position the caret normally. Multiline editors keep their usual behavior, and opening
-your profile does not autofocus the name field. Save confirmations show one checkmark centered
+click can position the caret normally. Multiline editors keep their usual behavior. Opening your
+profile or workspace settings does not autofocus the name field. The workspace name also keeps
+normal caret selection and uses a subtle border change instead of an outer focus ring.
+Save confirmations show one checkmark centered
 in the content pane; errors and descriptive notices keep their text. Immediate account switches
 save without success flashes. Custom CSS saves use a full page navigation so the stylesheet reload
 does not consume the confirmation. Membership badges use the shared control styling.

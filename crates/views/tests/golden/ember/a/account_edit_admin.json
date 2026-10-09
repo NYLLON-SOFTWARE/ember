@@ -659,7 +659,7 @@
   "\" \"",
   "</div>",
   "\" \"",
-  "<input autocomplete=\"off\" autofocus=\"autofocus\" class=\"input\" data-action=\"keydown.enter->form#submit\" id=\"account_name\" name=\"account[name]\" placeholder=\"Name this account\" type=\"text\" value=\"37signals\">",
+  "<input autocomplete=\"off\" class=\"input\" data-action=\"keydown.enter->form#submit\" data-ember-preserve-selection=\"true\" id=\"account_name\" name=\"account[name]\" placeholder=\"Name this account\" type=\"text\" value=\"37signals\">",
   "\" \"",
   "</div>",
   "\" \"",

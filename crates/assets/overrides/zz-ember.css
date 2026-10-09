@@ -486,6 +486,7 @@ html[data-appearance] .mb-app :is(.btn.btn--negative img:not(.avatar), .flash__i
 .mb-app .mb-page-heading h1 { font-size: 24px; font-weight: 650; line-height: 1.3; margin: 0 0 6px; }
 .mb-app .mb-page-heading p { color: var(--mb-muted); font-size: 14px; margin: 0; }
 .mb-app .mb-settings-panel { text-align: start; }
+.mb-app #account_name:focus { box-shadow: none; outline: none; }
 .mb-app .mb-settings-panel > .avatar__form { margin-block: 0 24px; }
 .mb-app .mb-settings-panel .avatar__form .avatar { --avatar-size: 72px; }
 .mb-app .mb-logo-upload { display: grid; gap: 12px; justify-items: center; margin-block: 8px 16px; }
@@ -632,6 +633,7 @@ html[data-appearance] .mb-app :is(.btn.btn--negative img:not(.avatar), .flash__i
 .mb-app #system_welcome .mb-welcome-logo svg { block-size: 23px; inline-size: 23px; }
 .mb-app .mb-welcome-heading { align-items: flex-start; display: flex; gap: 14px; margin-block-end: 20px; }
 .mb-app .mb-welcome-heading > :is(svg, .mb-welcome-icon, .avatar, .account-logo) { --avatar-size: 44px; background: var(--mb-ink); block-size: 44px; border-radius: 11px; color: var(--mb-canvas); flex: 0 0 44px; inline-size: 44px; margin: 0; }
+.mb-app #system_welcome .account-logo { background: var(--mb-canvas); }
 .mb-app .mb-welcome-icon { align-items: center; display: flex; justify-content: center; }
 .mb-app .mb-welcome-icon svg { block-size: 23px; inline-size: 23px; }
 .mb-app .mb-welcome-heading h2 { font-size: 17px; font-weight: 650; margin: 0 0 3px; }

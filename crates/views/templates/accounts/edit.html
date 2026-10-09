@@ -41,7 +41,7 @@
           <label for="{{ form.field_id("name") }}">Workspace name</label>
           {{ h::translation_button(ctx, "account_name") }}
         </div>
-        {{ form.text_field("name", Some(ctx.account.name.as_str()), h::attrs().class("input").autocomplete("off").placeholder("Name this account").autofocus().data("action", "keydown.enter->form#submit")) }}
+        {{ form.text_field("name", Some(ctx.account.name.as_str()), h::attrs().class("input").autocomplete("off").placeholder("Name this account").data("ember-preserve-selection", true).data("action", "keydown.enter->form#submit")) }}
       </div>
       <button type="submit" class="btn btn--reversed mb-primary-button">Save changes</button>
 {% endfilter %}
