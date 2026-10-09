@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Run the candidate (Rust) app for the parity harness. Same interface as parity/bin/reference.
 #
-#   parity/bin/candidate build                      build matchbox-rust:app (/Dockerfile) and the
-#                                                   matchbox-candidate parity image on top of it
+#   parity/bin/candidate build                      build ember-rust:app (/Dockerfile) and the
+#                                                   ember-candidate parity image on top of it
 #   parity/bin/candidate up   [--seed NAME] [--port N] [--time ISO8601 [--freeze]] [-e K=V]
 #   parity/bin/candidate down [--port N | --all [--everyone]]
 #   parity/bin/candidate logs [--port N] [-f]
@@ -14,7 +14,7 @@
 # 127.0.0.1:N (default 3200), with the reference's environment (parity/.env.reference), CPU cap
 # (PARITY_CPUS, default 2) and storage layout (/rails/storage/{db,files}). --time starts the server
 # clock at that instant through libfaketime and lets it tick, exactly as for the reference; with
-# --freeze it stays there (FAKETIME frozen, and MATCHBOX_FROZEN_TIME for the app's own clock).
+# --freeze it stays there (FAKETIME frozen, and EMBER_FROZEN_TIME for the app's own clock).
 #
 # `reset` starts a fresh instance on port N from the seed with a frozen clock: a reference with
 # `--app reference` (or `expected`), a candidate otherwise. It's the --reset-host hook for
@@ -43,8 +43,8 @@ ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 PARITY=$ROOT/parity
 SEEDS=${PARITY_SEED_DIR:-$PARITY/.seed}
 INSTANCES=$SEEDS/.candidates
-APP_IMAGE=${PARITY_CANDIDATE_APP_IMAGE:-matchbox-rust:app}
-IMAGE=${PARITY_CANDIDATE_IMAGE:-matchbox-candidate}
+APP_IMAGE=${PARITY_CANDIDATE_APP_IMAGE:-ember-rust:app}
+IMAGE=${PARITY_CANDIDATE_IMAGE:-ember-candidate}
 ENV_FILE=$PARITY/.env.reference
 DEFAULT_PORT=3200
 OWNER=${PARITY_OWNER:-${CLAUDE_CODE_SESSION_ID:-$(id -un)}}
@@ -89,18 +89,44 @@ copy_seed_into() {
   cp -a --reflink=auto "$SEEDS/$seed/storage/." "$dir/storage/"
 }
 
-container() { echo "matchbox-candidate-$1"; }
+container() { echo "ember-candidate-$1"; }
 instance_dir() { echo "$INSTANCES/$1"; }
-alive() { [ "$(docker inspect -f '{{.State.Running}}' "$(container "$1")" 2>/dev/null)" = "true" ]; }
+
+# Labels also find Matchbox containers started before the rename.
+containers_on_port() {
+  docker ps -a --filter "label=parity.candidate.port=$1" --format '{{.Names}}'
+}
+
+existing_container() {
+  local names name first=""
+  names=$(containers_on_port "$1") || die "can't list candidate containers on port $1"
+  for name in $names; do
+    [ -n "$first" ] || first=$name
+    if [ "$(docker inspect -f '{{.State.Running}}' "$name" 2>/dev/null)" = "true" ]; then
+      echo "$name"; return
+    fi
+  done
+  echo "${first:-$(container "$1")}"
+}
+
+stop_containers() {
+  local names name
+  names=$(containers_on_port "$1") || die "can't list candidate containers on port $1"
+  for name in $names; do
+    docker rm -f "$name" >/dev/null || die "can't remove candidate container $name"
+  done
+}
+
+alive() { [ "$(docker inspect -f '{{.State.Running}}' "$(existing_container "$1")" 2>/dev/null)" = "true" ]; }
 
 wait_until_up() {
   local port=$1
   for _ in $(seq 1 240); do
     curl -fsS -o /dev/null "http://127.0.0.1:$port/up" 2>/dev/null && return 0
-    alive "$port" || { docker logs "$(container "$port")" 2>&1 | tail -n 40 >&2; die "instance on port $port exited during boot"; }
+    alive "$port" || { docker logs "$(existing_container "$port")" 2>&1 | tail -n 40 >&2; die "instance on port $port exited during boot"; }
     sleep 0.25
   done
-  docker logs "$(container "$port")" 2>&1 | tail -n 40 >&2
+  docker logs "$(existing_container "$port")" 2>&1 | tail -n 40 >&2
   die "instance on port $port didn't come up within 60s"
 }
 
@@ -109,14 +135,14 @@ env_args() {
   printf '%s\n' --env-file "$ENV_FILE"
   if [ -n "$spec" ]; then printf '%s\n' -e "FAKETIME=$spec"; fi
   if [ -n "$FREEZE" ] && [ -n "$TIME" ]; then
-    printf '%s\n' -e "MATCHBOX_FROZEN_TIME=$(date -u -d "$TIME" '+%Y-%m-%dT%H:%M:%SZ')"
+    printf '%s\n' -e "EMBER_FROZEN_TIME=$(date -u -d "$TIME" '+%Y-%m-%dT%H:%M:%SZ')"
   fi
   local e; for e in "${EXTRA_ENV[@]+"${EXTRA_ENV[@]}"}"; do printf '%s\n' -e "$e"; done
 }
 
 up() {
   local port=$1 seed=$2 dir; dir=$(instance_dir "$port")
-  docker rm -f "$(container "$port")" >/dev/null 2>&1 || true
+  stop_containers "$port"
   rm -rf "$dir"; copy_seed_into "$seed" "$dir"
   local args=(); mapfile -t args < <(env_args)
   # Labelled parity.candidate.port (not parity.port) so `reference down --all` leaves it alone.
@@ -132,7 +158,7 @@ up() {
 }
 
 down() {
-  docker rm -f "$(container "$1")" >/dev/null 2>&1 || true
+  stop_containers "$1"
   rm -rf "$(instance_dir "$1")"
 }
 
@@ -248,8 +274,8 @@ case "$cmd" in
       down "${PORT:-$DEFAULT_PORT}"
     fi ;;
   logs)
-    if [ -n "$FOLLOW" ]; then docker logs -f "$(container "${PORT:-$DEFAULT_PORT}")"
-    else docker logs "$(container "${PORT:-$DEFAULT_PORT}")"; fi ;;
+    if [ -n "$FOLLOW" ]; then docker logs -f "$(existing_container "${PORT:-$DEFAULT_PORT}")"
+    else docker logs "$(existing_container "${PORT:-$DEFAULT_PORT}")"; fi ;;
   ps)
     for p in $(ports); do
       if alive "$p"; then echo "$p up"; else echo "$p down"; fi

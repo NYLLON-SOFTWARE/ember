@@ -9,9 +9,9 @@ use super::links::link_to;
 use super::tag::{attrs, builder_tag, content_tag, content_tag_text, legacy_tag};
 use crate::ViewContext;
 
-/// `page_title_tag`: `@page_title || "Matchbox"`.
+/// `page_title_tag`: `@page_title || "Ember"`.
 pub fn page_title_tag(page_title: Option<&str>) -> Html {
-    content_tag_text("title", attrs(), page_title.unwrap_or("Matchbox"))
+    content_tag_text("title", attrs(), page_title.unwrap_or("Ember"))
 }
 
 /// `current_user_meta_tags`.

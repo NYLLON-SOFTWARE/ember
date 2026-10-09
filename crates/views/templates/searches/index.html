@@ -23,7 +23,7 @@
     <figure class="center pad">
       <img aria-hidden="true" class="colorize--black translucent" src="{{ ctx.asset("search.svg") }}" />
     </figure>
-    {% if index.query.is_some() %}<h2>No messages found</h2><p>Try a different word or phrase.</p>{% else %}<h2>Find a conversation</h2><p>Search messages across your channels and direct messages.</p>{% endif %}
+    {% if index.query.is_some() %}<h2>No messages found</h2><p>Try a different word or phrase.</p>{% else %}<h2>Find a conversation</h2><p>Search messages across your rooms and direct messages.</p>{% endif %}
   </div>
 
   <div id="search-results" class="messages searches__results" data-controller="search-results" data-search-results-target="messages" data-search-results-me-class="message--me" data-search-results-threaded-class="message--threaded" data-search-results-mentioned-class="message--mentioned" data-search-results-formatted-class="message--formatted">
@@ -34,7 +34,7 @@
 {%- endblock %}
 
 {%- block footer %}
-  <div class="composer flex align-end gap">
+  <div class="composer flex align-center gap">
     <a class="btn flex-item-no-shrink margin-block-end" style="view-transition-name: input-switcher; --btn-border-radius: 0.5em" href="{{ h::routes::room(index.return_to_room_id) }}">
       <img aria-hidden="true" src="{{ ctx.asset("arrow-left.svg") }}" />
       <span class="for-screen-reader">Exit search </span>

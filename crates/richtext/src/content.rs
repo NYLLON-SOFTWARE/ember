@@ -76,7 +76,7 @@ impl Content {
     }
 
     /// `Content#to_s`: the content partial inside `layouts/action_text/contents/_content.html.erb`,
-    /// which Matchbox overrides with a `lexxy-content` wrapper.
+    /// which Ember overrides with a `lexxy-content` wrapper.
     pub fn to_rendered_html_with_layout(&self, ctx: &RenderContext) -> Result<String, Error> {
         Ok(format!("<div class=\"lexxy-content\">\n  {}\n</div>\n", self.render(ctx)?))
     }
@@ -206,7 +206,7 @@ fn node_with_full_attributes(dom: &mut Dom, node: NodeId, attachable: &Attachabl
 
 /// How deep content attachments render inside one another. Each level parses and sanitizes
 /// everything nested below it again, so Rails' unbounded nesting makes rendering quadratic in the
-/// body's size; deeper content attachments render empty. Nothing Matchbox's composer makes nests
+/// body's size; deeper content attachments render empty. Nothing Ember's composer makes nests
 /// them at all.
 pub const MAX_CONTENT_ATTACHMENT_DEPTH: usize = 8;
 

@@ -25,7 +25,7 @@ pub struct Show<'a> {
 
 impl Page for Show<'_> {
     fn page_title(&self) -> Option<String> {
-        Some("Set up Matchbox".into())
+        Some("Set up Ember".into())
     }
     fn body_class(&self) -> Option<&str> {
         Some("signup")

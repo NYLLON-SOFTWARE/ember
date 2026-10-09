@@ -196,7 +196,7 @@ async fn index_fresh(c: &mut Ctx) -> Result {
 fn kit_with(config: KitConfig) -> Kit {
     static SECRETS: LazyLock<Arc<Secrets>> = LazyLock::new(|| Arc::new(Secrets::new("test-secret")));
     let clock: SharedClock = Arc::new(TestClock::frozen_at("2024-06-01T12:00:00Z".parse().unwrap()));
-    Kit::new(config, SECRETS.clone(), clock, AppState { name: "Matchbox" })
+    Kit::new(config, SECRETS.clone(), clock, AppState { name: "Ember" })
 }
 
 fn app_with(config: KitConfig) -> Router {
@@ -283,7 +283,7 @@ fn form_post(uri: &str, body: &str) -> HttpRequest<AxumBody> {
 async fn renders_html_with_rails_headers() {
     let reply = send(&app(), get("/rooms/5").body(AxumBody::empty()).unwrap()).await;
     assert_eq!(reply.status, StatusCode::OK);
-    assert_eq!(reply.text(), "<p>Matchbox room 5</p>");
+    assert_eq!(reply.text(), "<p>Ember room 5</p>");
     assert_eq!(reply.header("content-type"), Some("text/html; charset=utf-8"));
     assert_eq!(reply.header("x-frame-options"), Some("SAMEORIGIN"));
     assert_eq!(reply.header("x-content-type-options"), Some("nosniff"));
@@ -318,7 +318,7 @@ async fn head_requests_drop_the_body() {
     let reply = send(&app(), get("/rooms/5").method("HEAD").body(AxumBody::empty()).unwrap()).await;
     assert_eq!(reply.status, StatusCode::OK);
     assert!(reply.body.is_empty());
-    assert_eq!(reply.header("content-length"), Some("22"));
+    assert_eq!(reply.header("content-length"), Some("19"));
 }
 
 #[tokio::test]
@@ -401,7 +401,7 @@ async fn missing_required_param_is_400() {
     assert_eq!(reply.status, StatusCode::BAD_REQUEST);
 }
 
-/// The test app as Matchbox runs it in production: behind TLS (`assume_ssl`) with `force_ssl`.
+/// The test app as Ember runs it in production: behind TLS (`assume_ssl`) with `force_ssl`.
 fn ssl_app() -> Router {
     let error_pages = ErrorPages::new([(422, "<h1>Unprocessable</h1>".into())]);
     let mut config = KitConfig { error_pages, force_ssl: true, ..KitConfig::default() };

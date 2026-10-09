@@ -1,21 +1,26 @@
-# Matchbox page DOM snapshots
+# Ember page DOM snapshots
 
-Matchbox owns the application-page design. The `a/` and `b/` directories contain reviewed normalized
+Ember owns the application-page design. The `a/` and `b/` directories contain reviewed normalized
 DOM tokens rendered from the frozen Rails fixture inputs in the neighboring `a/` and `b/` golden
 directories. They are presentation expectations for this fork, not replacement upstream evidence.
 Historical Rails HTML, JSON facts, and assets remain unchanged.
 
-`parity_a.rs` selects Matchbox snapshots for application-layout pages and redesigned sidebar
+`parity_a.rs` selects Ember snapshots for application-layout pages and redesigned sidebar
 fragments. The view-B tests select them for page renders. Unchanged message, rich-text, and protocol
 fragments still compare with the original Rails goldens. Message show/index/create renders use
-Matchbox snapshots for the compact actions bar, as do room refresh streams; their routes and Turbo targets retain behavior
-coverage. Existing behavior assertions remain in the
+Ember snapshots for the compact actions bar, as do room refresh streams; their routes and Turbo targets retain behavior
+coverage. The custom-reaction form also has an Ember snapshot; its validation and Turbo targets
+remain covered by native browser checks. Existing behavior assertions remain in the
 tests alongside these presentation snapshots.
+
+Workspace snapshots also cover the appearance selector, new-room return to settings, and the
+single-icon save confirmation. Native browser checks verify saved appearance choices, system
+changes, keyboard/mobile controls, profile focus, and confirmation alignment in the content pane.
 
 After making an intentional UI change, rebuild snapshots explicitly:
 
 ```sh
-MATCHBOX_UPDATE_VIEWS=1 cargo test -p matchbox_views
+EMBER_UPDATE_VIEWS=1 cargo test -p matchbox_views
 cargo test -p matchbox_views
 ```
 

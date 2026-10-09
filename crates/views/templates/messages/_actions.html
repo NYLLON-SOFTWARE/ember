@@ -1,4 +1,4 @@
-{# Matchbox compact actions; retain the reference's boost, reply, file, and edit contracts. #}
+{# Ember compact actions; retain the reference's boost, reply, file, and edit contracts. #}
 <div class="message__actions" data-controller="soft-keyboard">
   <details class="position-relative mb-message-actions" data-controller="message-actions" data-action="toggle->message-actions#toggle">
     <summary class="btn message__action-btn message__options-btn" data-message-actions-target="trigger" aria-controls="{{ message.dom_id("actions") }}">
@@ -13,7 +13,6 @@
             {% if loop.index0 < 3 %}{% include "messages/_reaction.html" %}{% endif %}
           {% endfor %}
         </div>
-        <span class="mb-message-action-divider" aria-hidden="true"></span>
         {% if let Some(attachment) = message.attachment() %}
           <a class="btn message__action-btn hide-in-ios-pwa" title="Download" aria-label="Download" href="{{ attachment.download_path }}">
             {{ crate::helpers::lucide_icon("download") }}

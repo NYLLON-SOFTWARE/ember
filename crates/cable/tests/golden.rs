@@ -11,7 +11,7 @@
 //!
 //! (The fixtures script starts a fresh session each time, because the script signs it out.)
 //!
-//! The replay builds Matchbox's channels over the same fixture values, so every frame must match
+//! The replay builds Ember's channels over the same fixture values, so every frame must match
 //! byte for byte; only ping timestamps are normalized.
 use std::collections::BTreeMap;
 use std::time::Duration;
@@ -323,7 +323,7 @@ async fn replays_reference_frames() {
     }
 }
 
-// Matchbox's channels (reference/app/channels), over the fixture values the reference used.
+// Ember's channels (reference/app/channels), over the fixture values the reference used.
 
 struct User {
     id: u64,

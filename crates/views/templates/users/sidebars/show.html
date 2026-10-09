@@ -8,41 +8,33 @@
       data-controller="badge-dot"
       data-badge-dot-unread-class="unread"
       data-action="rooms-list:unread@window->badge-dot#update rooms-list:read@window->badge-dot#update turbo:submit-start->turbo-frame#unpermanize">
-    <h2 class="mb-workspace-title">{{ ctx.account.name }}</h2>
+    <div class="mb-workspace-heading">
+      <h2 class="mb-workspace-title">{{ ctx.account.name }}</h2>
+    </div>
 
-    <label class="mb-conversation-search">
-      {{ h::image_tag(ctx, "search.svg", h::attrs().size(18).aria_hidden().class("colorize--black")) }}
-      <span class="for-screen-reader">Find a conversation</span>
-      <input type="search" placeholder="Find a conversation" autocomplete="off" data-matchbox-room-filter>
-    </label>
-
-    <section id="sidebar_channels" class="mb-sidebar-section" aria-labelledby="channels-heading"
+    <section id="sidebar_channels" class="mb-sidebar-section" aria-label="Rooms"
         data-controller="channel-order" data-channel-order-order-value="{{ channel_order }}"
-        data-channel-order-url-value="{{ h::routes::user_sidebar_order() }}">
-      <div class="mb-sidebar-section-heading">
-        <h3 id="channels-heading">Channels</h3>
-        <button type="button" class="btn mb-sidebar-action mb-channel-order-reset" hidden
-            data-channel-order-target="reset" data-action="channel-order#reset"
-            aria-label="Reset channels to alphabetical order" title="Reset to alphabetical order">A–Z</button>
-{% if can_create_rooms %}
-        {% filter link_to(h::routes::new_rooms_open(), h::attrs().class("btn mb-sidebar-action").aria("label", "New Chat Room").title("New channel")) %}
-          {{ h::image_tag(ctx, "add.svg", h::attrs().size(18).aria_hidden().class("colorize--black")) }}
-        {% endfilter %}
-{% endif %}
-      </div>
-      <p id="channel-order-help" class="for-screen-reader">Hold a channel to drag it, or press Alt and the up or down arrow to reorder it.</p>
+        data-channel-order-favorites-value="{{ favorite_channels }}"
+        data-channel-order-default-order-value="{{ default_room_order }}"
+        data-channel-order-customized-value="{{ custom_room_order }}"
+        data-channel-order-workspace-value="{{ ctx.can_administer() }}"
+        data-channel-order-url-value="{% if ctx.can_administer() %}{{ h::routes::account_room_order() }}{% else %}{{ h::routes::user_sidebar_order() }}{% endif %}">
+      <p id="channel-order-help" class="for-screen-reader">Hold a room to drag it, or press Alt and the up or down arrow to reorder it. {% if ctx.can_administer() %}Your changes set the default room order for everyone.{% else %}Your changes only affect your own room order.{% endif %}</p>
       <div id="shared_rooms" class="rooms mb-room-list" data-channel-order-target="list">
 {% for room in other_memberships %}
         {% include "users/sidebars/rooms/_shared.html" %}
 {% endfor %}
       </div>
+      <button type="button" class="btn mb-sidebar-action mb-channel-order-reset" hidden
+          data-channel-order-target="reset" data-action="channel-order#reset"
+          aria-label="{% if ctx.can_administer() %}Reset default room order to alphabetical{% else %}Use default room order{% endif %}" title="{% if ctx.can_administer() %}Reset workspace default{% else %}Use workspace default{% endif %}">Reset</button>
       <p class="mb-channel-order-status" data-channel-order-target="status" role="status" aria-live="polite" hidden></p>
     </section>
 
     <section class="mb-sidebar-section" aria-labelledby="directs-heading">
       <div class="mb-sidebar-section-heading">
         <h3 id="directs-heading">Direct messages</h3>
-        {% filter link_to(h::routes::new_rooms_direct(), h::attrs().class("btn mb-sidebar-action").data("turbo_frame", "direct_rooms_control").aria("label", "New direct message").title("New direct message")) %}
+        {% filter link_to(h::routes::new_rooms_direct(), h::attrs().class("btn mb-sidebar-action").data("matchbox_new_direct", "").aria("label", "New direct message").title("New direct message")) %}
           {{ h::image_tag(ctx, "messages-add.svg", h::attrs().size(18).aria_hidden().class("colorize--black")) }}
         {% endfilter %}
       </div>

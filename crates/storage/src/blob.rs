@@ -176,7 +176,7 @@ impl Blob {
         content_types::is_variable(self.content_type())
     }
 
-    /// `previewable?`: only the video previewer can accept in Matchbox's image (no poppler or
+    /// `previewable?`: only the video previewer can accept in Ember's image (no poppler or
     /// mupdf binaries are installed, so the PDF previewers never accept).
     pub fn is_previewable(&self) -> bool {
         self.is_video() && crate::process::ffmpeg_exists()

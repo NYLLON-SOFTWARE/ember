@@ -159,8 +159,8 @@ fn accounts_edit() {
         });
         // Compare the original page outside the added, separately exercised admin control.
         let mut legacy = html;
-        if let Some(start) = legacy.find("    <!-- Matchbox localization setting -->") {
-            let marker = "    <!-- /Matchbox localization setting -->\n";
+        if let Some(start) = legacy.find("    <!-- Ember localization setting -->") {
+            let marker = "    <!-- /Ember localization setting -->\n";
             let end = legacy[start..].find(marker).unwrap() + start + marker.len();
             assert!(legacy[start..end].contains("account[settings][hide_translation_buttons]"));
             legacy.replace_range(start..end, "");
@@ -303,7 +303,7 @@ fn first_runs_show() {
     assert!(html.contains("autofocus=\"autofocus\""));
     assert!(html.contains("data-1p-ignore=\"true\""));
     assert!(html.contains("Continue"));
-    assert!(html.contains("Set up Matchbox"));
+    assert!(html.contains("Set up Ember"));
     assert!(!html.contains("data-controller=\"popup\""));
     assert!(html.contains("data-password-toggle"));
     assert!(!html.contains("data-appearance-control"));
@@ -470,8 +470,10 @@ fn sidebar<'a>(name: &str, ctx: &'a matchbox_views::ViewContext<'a>) -> users::S
                 unread: r["unread"].as_bool().unwrap(),
             })
             .collect(),
-        can_create_rooms: sidebar["can_create_rooms"].as_bool().unwrap(),
+        favorite_channels: "[]".into(),
         channel_order: "[]".into(),
+        default_room_order: "[]".into(),
+        custom_room_order: false,
     }
 }
 
@@ -538,19 +540,22 @@ fn pwa_manifest_and_service_worker() {
 #[test]
 fn pwa_manifest_is_valid_json_whatever_the_account_is_called() {
     let asset_path = |logical: &str| format!("/assets/{logical}");
-    let name = r#"Back\slash "quoted" <b>&amp;</b>"#;
-    let json = pwa::Manifest {
-        account_name: Some(name.into()),
-        logo_path_small: "/account/logo?size=small&v=1".into(),
-        logo_path: "/account/logo?v=1".into(),
-        base_url: "http://campfire.test".into(),
-        asset_path: &asset_path,
+    for name in [None, Some(r#"Back\slash "quoted" <b>&amp;</b>"#), Some("Matchbox")] {
+        let json = pwa::Manifest {
+            account_name: name.map(Into::into),
+            logo_path_small: "/account/logo?size=small&v=1".into(),
+            logo_path: "/account/logo?v=1".into(),
+            base_url: "http://campfire.test".into(),
+            asset_path: &asset_path,
+        }
+        .render()
+        .unwrap();
+        let manifest: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        assert_eq!(manifest["name"], name.unwrap_or("Ember"));
+        assert_eq!(manifest["icons"][0]["src"], "/account/logo?size=small&v=1");
+        assert_eq!(manifest["shortcuts"][0]["description"], "Open Ember and start a new chat room");
+        assert_eq!(manifest["screenshots"][0]["label"], "Ember is an installable, self-hosted group chat system.");
     }
-    .render()
-    .unwrap();
-    let manifest: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
-    assert_eq!(manifest["name"], name);
-    assert_eq!(manifest["icons"][0]["src"], "/account/logo?size=small&v=1");
 }
 
 #[test]

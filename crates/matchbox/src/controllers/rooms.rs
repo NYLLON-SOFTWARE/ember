@@ -9,6 +9,7 @@
 
 pub mod closeds;
 pub mod directs;
+pub mod favorites;
 pub mod involvements;
 pub mod opens;
 pub mod refreshes;
@@ -138,6 +139,16 @@ pub(crate) fn redirect_to_root(c: &mut Ctx) -> Result {
     c.redirect_to(&root)
 }
 
+/// The save-before-leaving dialog needs a write acknowledgment, not the destination page:
+/// revising memberships can remove the editor's own access. Ordinary forms retain their redirect.
+pub(crate) fn room_saved(c: &mut Ctx, room_id: i64) -> Result {
+    if c.request.header("prefer") == Some("return=minimal") {
+        Ok(concerns::head(StatusCode::NO_CONTENT).header("preference-applied", "return=minimal"))
+    } else {
+        redirect_to_room(c, room_id)
+    }
+}
+
 pub(crate) fn redirect_to_room(c: &mut Ctx, room_id: i64) -> Result {
     let url = c.url_for(&matchbox_routes::room(room_id));
     c.redirect_to(&url)
@@ -221,6 +232,7 @@ async fn render_show(c: &mut Ctx, room: Room) -> Result {
             let presenter = Presenter::new(conn, &app, request_host);
             let original = Room::original(conn)?.is_some_and(|original| original.id == room.id);
             let room_gid = crate::channels::room_gid(&room).to_param();
+            let account = Account::first(conn)?;
             Ok(matchbox_views::rooms::ShowView {
                 room: presenter.room_view(&room, &user)?,
                 updated_at: room.updated_at.jiff(),
@@ -228,7 +240,8 @@ async fn render_show(c: &mut Ctx, room: Room) -> Result {
                 // The page's message fragments come from the store the render then uses.
                 messages: matchbox_views::fragment_cache::with(&app.fragment_cache, || presenter.messages(&messages))?,
                 invitation: original && !Message::paged(conn, room.id)?,
-                join_code: Account::first(conn)?.map(|account| account.join_code).unwrap_or_default(),
+                favorite: account.as_ref().is_some_and(|account| account.settings().favorite_channels(user.id).contains(&room.id)),
+                join_code: account.map(|account| account.join_code).unwrap_or_default(),
                 messages_stream_name: rails_compat::turbo::signed_stream_name(&app.secrets, &[&room_gid, "messages"]),
             })
         })

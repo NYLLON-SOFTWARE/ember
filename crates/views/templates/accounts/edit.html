@@ -45,7 +45,37 @@
       </div>
       <button type="submit" class="btn btn--reversed mb-primary-button">Save changes</button>
 {% endfilter %}
-    <div class="margin-block-start pad-block pad-inline-double fill-shade border-radius">
+    <!-- Ember localization setting -->
+    <div id="localization-settings" class="pad-block pad-inline-double fill-shade border-radius">
+{% let form = h::form_with(self.account_action()).model("account").method("put").data("controller", "form").class("flex align-center gap center") %}{% filter form_with(form) %}
+      <div class="flex-item-grow txt-align-start">
+        <div>Hide translation buttons</div>
+        <p id="localization-description" class="txt-small txt-subtle margin-none">Hide language help throughout the app for everyone.</p>
+      </div>
+{% let settings_form = form.fields_for("settings") %}
+      <label class="switch">
+        {{ settings_form.check_box("hide_translation_buttons", h::attrs().class("switch__input").data("action", "change->form#submit").aria("describedby", "localization-description"), "true", "false", ctx.account.hide_translation_buttons.to_string().as_str()) }}
+        <span class="switch__btn round"></span>
+        <span class="for-screen-reader">Hide translation buttons</span>
+      </label>
+      <noscript><button type="submit" class="btn">Save</button></noscript>
+{% endfilter %}
+    </div>
+    <!-- /Ember localization setting -->
+{% else %}    {{ h::account_logo_tag(ctx, Some("txt-xx-large center")) }}
+    <h2 class="flex-item-grow txt-x-large">{{ ctx.account.name }}</h2>
+{% endif %}
+{% if ctx.can_administer() || !restrict_room_creation_to_administrators %}
+  <section id="channel-settings" class="pad-block pad-inline-double fill-shade border-radius" aria-labelledby="channel-settings-heading">
+    <div class="mb-channel-settings-heading">
+      <h2 id="channel-settings-heading" class="mb-section-title">Rooms</h2>
+      {% filter link_to(h::routes::new_rooms_open(), h::attrs().class("btn mb-new-channel")) %}
+        {{ h::image_tag(ctx, "add.svg", h::attrs().size(18).aria_hidden().class("colorize--black")) }}
+        <span>New room</span>
+      {% endfilter %}
+    </div>
+{% if ctx.can_administer() %}
+    <div class="mb-channel-settings-permissions">
 {% let form = h::form_with(self.account_action()).model("account").method("put").data("controller", "form").class("flex align-center gap center") %}      {% filter form_with(form) %}
         <div class="flex-item-grow flex align-center gap txt-align-start">
           {{ h::image_tag(ctx, "crown.svg", h::attrs().class("colorize--black").aria_hidden().size(18)) }} Must be admin to create new rooms
@@ -64,25 +94,8 @@
         </label>
 
 {% endfilter %}    </div>
-    <!-- Matchbox localization setting -->
-    <div id="localization-settings" class="pad-block pad-inline-double fill-shade border-radius">
-{% let form = h::form_with(self.account_action()).model("account").method("put").data("controller", "form").class("flex align-center gap center") %}{% filter form_with(form) %}
-      <div class="flex-item-grow txt-align-start">
-        <div>Hide translation buttons</div>
-        <p id="localization-description" class="txt-small txt-subtle margin-none">Hide language help throughout the app for everyone.</p>
-      </div>
-{% let settings_form = form.fields_for("settings") %}
-      <label class="switch">
-        {{ settings_form.check_box("hide_translation_buttons", h::attrs().class("switch__input").data("action", "change->form#submit").aria("describedby", "localization-description"), "true", "false", ctx.account.hide_translation_buttons.to_string().as_str()) }}
-        <span class="switch__btn round"></span>
-        <span class="for-screen-reader">Hide translation buttons</span>
-      </label>
-      <noscript><button type="submit" class="btn">Save</button></noscript>
-{% endfilter %}
-    </div>
-    <!-- /Matchbox localization setting -->
-{% else %}    {{ h::account_logo_tag(ctx, Some("txt-xx-large center")) }}
-    <h2 class="flex-item-grow txt-x-large">{{ ctx.account.name }}</h2>
+{% endif %}
+  </section>
 {% endif %}
   <div class="margin-block pad-inline pad-block-start fill-shade border-radius">
     {% include "accounts/_invite.html" %}
@@ -101,5 +114,5 @@
   </div>
 </section>
 {% endblock %}
-{% block footer %}  <div class="txt-align-center center margin-block-double txt-subtle">Matchbox&trade; version {{ h::version_badge(ctx) }}</div>
+{% block footer %}  <div class="txt-align-center center margin-block-double txt-subtle">Ember&trade; version {{ h::version_badge(ctx) }}</div>
 {% endblock %}

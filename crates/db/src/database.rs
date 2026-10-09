@@ -211,7 +211,7 @@ impl Database {
         let (sender, mut receiver) = mpsc::channel::<Job>(config.write_queue.max(1));
         let writer_env = env.clone();
         std::thread::Builder::new()
-            .name("matchbox-db-writer".into())
+            .name("ember-db-writer".into())
             .spawn(move || {
                 while let Some(job) = receiver.blocking_recv() {
                     // A panicking write must not take the writer down with it. `run_write`'s
@@ -370,7 +370,7 @@ impl Checkpoints {
         let running = Arc::new(Mutex::new(()));
         let checkpointer_running = running.clone();
         std::thread::Builder::new()
-            .name("matchbox-db-checkpointer".into())
+            .name("ember-db-checkpointer".into())
             .spawn(move || {
                 while woken.recv().is_ok() {
                     let _running = checkpointer_running.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -440,7 +440,7 @@ impl Readers {
             readers.queue.lock().connections.push(open_connection(path, true)?);
             let queue = readers.queue.clone();
             std::thread::Builder::new()
-                .name("matchbox-db-reader".into())
+                .name("ember-db-reader".into())
                 .spawn(move || {
                     let mut finished = None;
                     while let Some((read, conn)) = queue.next(finished.take()) {

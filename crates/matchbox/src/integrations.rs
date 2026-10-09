@@ -1,4 +1,4 @@
-//! Matchbox's outbound HTTP, and its search query preprocessing, each matching the Rails app:
+//! Ember's outbound HTTP, and its search query preprocessing, each matching the Rails app:
 //!
 //! - [`web_push`]: `WebPush::Pool`/`WebPush::Notification` (reference/lib/web_push,
 //!   reference/config/initializers/web_push.rb) and `Room::MessagePusher`'s delivery: permitted

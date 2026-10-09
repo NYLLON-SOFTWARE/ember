@@ -66,7 +66,7 @@ impl TestApp {
             "SECRET_KEY_BASE" => Some(secret.clone()),
             "DISABLE_SSL" => Some("true".into()),
             "APP_VERSION" | "GIT_REVISION" => Some("parity".into()),
-            "MATCHBOX_STORAGE_PATH" => Some(root.clone()),
+            "EMBER_STORAGE_PATH" => Some(root.clone()),
             _ => None,
         })
         .unwrap();

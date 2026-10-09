@@ -2,7 +2,7 @@ import type { Page } from "playwright"
 
 // Keep upstream captures as evidence. Normalize only the deliberate product-name difference.
 export function maskProductBranding(text: string): string {
-  return text.replaceAll("Campfire", "Matchbox")
+  return text.replaceAll("Campfire", "Ember")
     .replace(/\/assets\/(?:campfire|matchbox)-icon-[0-9a-f]{7,64}\.png/g, "/assets/«product-icon».png")
 }
 
@@ -13,7 +13,7 @@ export async function normalizeBrandingForScreenshot(page: Page): Promise<void> 
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
       if (node.parentElement?.closest("script, style, textarea, [contenteditable], #messages, .message")) continue
-      if (node.textContent?.includes("Campfire")) node.textContent = node.textContent.replaceAll("Campfire", "Matchbox")
+      if (node.textContent?.includes("Campfire")) node.textContent = node.textContent.replaceAll("Campfire", "Ember")
     }
   })
 }

@@ -325,211 +325,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
-name = "matchbox"
-version = "1.0.0"
-dependencies = [
- "aes-gcm",
- "anyhow",
- "askama",
- "async-trait",
- "axum",
- "base64 0.22.1",
- "bytes",
- "matchbox_assets",
- "matchbox_cable",
- "matchbox_db",
- "matchbox_kit",
- "matchbox_richtext",
- "matchbox_routes",
- "matchbox_storage",
- "matchbox_views",
- "flate2",
- "futures-util",
- "hex",
- "hkdf",
- "http",
- "http-body-util",
- "hyper",
- "hyper-util",
- "jiff",
- "libc",
- "p256",
- "percent-encoding",
- "rails_compat",
- "rand 0.9.5",
- "regex",
- "ruby_compat",
- "rusqlite",
- "rustls",
- "rustls-native-certs",
- "serde",
- "serde_json",
- "sha2",
- "tempfile",
- "thiserror",
- "tikv-jemalloc-sys",
- "tikv-jemallocator",
- "tokio",
- "tokio-rustls",
- "tokio-tungstenite",
- "tower",
- "tracing",
- "tracing-subscriber",
- "uuid",
-]
-
-[[package]]
-name = "matchbox_assets"
-version = "0.1.0"
-dependencies = [
- "fancy-regex",
- "ruby_compat",
- "serde_json",
- "sha1",
- "sha2",
-]
-
-[[package]]
-name = "matchbox_cable"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "axum",
- "base64 0.22.1",
- "flate2",
- "futures-util",
- "hyper",
- "hyper-util",
- "rails_compat",
- "ruby_compat",
- "serde",
- "serde_json",
- "sha1",
- "tokio",
- "tokio-tungstenite",
- "tracing",
-]
-
-[[package]]
-name = "matchbox_db"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "matchbox_db",
- "crc32fast",
- "hex",
- "jiff",
- "rails_compat",
- "rand 0.9.5",
- "rusqlite",
- "serde_json",
- "serde_yaml",
- "sha1",
- "tempfile",
- "thiserror",
- "tokio",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "matchbox_kit"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "axum",
- "base64 0.22.1",
- "bytes",
- "crc32fast",
- "flate2",
- "foldhash",
- "futures-util",
- "hex",
- "http-body-util",
- "hyper",
- "hyper-util",
- "indexmap",
- "instant-acme",
- "jiff",
- "libc",
- "multer",
- "p256",
- "percent-encoding",
- "rails_compat",
- "rand 0.9.5",
- "rcgen",
- "regex",
- "ruby_compat",
- "rustls",
- "serde",
- "serde_json",
- "sha2",
- "tempfile",
- "thiserror",
- "tokio",
- "tokio-rustls",
- "tokio-tungstenite",
- "tower",
- "tracing",
- "tracing-subscriber",
- "url",
- "uuid",
- "x509-parser",
- "zstd",
-]
-
-[[package]]
-name = "matchbox_richtext"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "html5ever",
- "rails_compat",
- "regex",
- "ruby_compat",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
-name = "matchbox_routes"
-version = "0.1.0"
-
-[[package]]
-name = "matchbox_storage"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "jiff",
- "md-5",
- "rails_compat",
- "rand 0.9.5",
- "ruby_compat",
- "rusqlite",
- "serde",
- "serde_json",
- "sha1",
- "tempfile",
- "thiserror",
-]
-
-[[package]]
-name = "matchbox_views"
-version = "0.1.0"
-dependencies = [
- "askama",
- "matchbox_routes",
- "crc32fast",
- "html5ever",
- "jiff",
- "rails_compat",
- "ruby_compat",
- "serde",
- "serde_json",
- "matchbox_assets",
-]
-
-[[package]]
 name = "cc"
 version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1523,6 +1318,211 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "matchbox"
+version = "1.0.0"
+dependencies = [
+ "aes-gcm",
+ "anyhow",
+ "askama",
+ "async-trait",
+ "axum",
+ "base64 0.22.1",
+ "bytes",
+ "flate2",
+ "futures-util",
+ "hex",
+ "hkdf",
+ "http",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "jiff",
+ "libc",
+ "matchbox_assets",
+ "matchbox_cable",
+ "matchbox_db",
+ "matchbox_kit",
+ "matchbox_richtext",
+ "matchbox_routes",
+ "matchbox_storage",
+ "matchbox_views",
+ "p256",
+ "percent-encoding",
+ "rails_compat",
+ "rand 0.9.5",
+ "regex",
+ "ruby_compat",
+ "rusqlite",
+ "rustls",
+ "rustls-native-certs",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror",
+ "tikv-jemalloc-sys",
+ "tikv-jemallocator",
+ "tokio",
+ "tokio-rustls",
+ "tokio-tungstenite",
+ "tower",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
+name = "matchbox_assets"
+version = "0.1.0"
+dependencies = [
+ "fancy-regex",
+ "ruby_compat",
+ "serde_json",
+ "sha1",
+ "sha2",
+]
+
+[[package]]
+name = "matchbox_cable"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "base64 0.22.1",
+ "flate2",
+ "futures-util",
+ "hyper",
+ "hyper-util",
+ "rails_compat",
+ "ruby_compat",
+ "serde",
+ "serde_json",
+ "sha1",
+ "tokio",
+ "tokio-tungstenite",
+ "tracing",
+]
+
+[[package]]
+name = "matchbox_db"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "crc32fast",
+ "hex",
+ "jiff",
+ "matchbox_db",
+ "rails_compat",
+ "rand 0.9.5",
+ "rusqlite",
+ "serde_json",
+ "serde_yaml",
+ "sha1",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "matchbox_kit"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "base64 0.22.1",
+ "bytes",
+ "crc32fast",
+ "flate2",
+ "foldhash",
+ "futures-util",
+ "hex",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "indexmap",
+ "instant-acme",
+ "jiff",
+ "libc",
+ "multer",
+ "p256",
+ "percent-encoding",
+ "rails_compat",
+ "rand 0.9.5",
+ "rcgen",
+ "regex",
+ "ruby_compat",
+ "rustls",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tokio-rustls",
+ "tokio-tungstenite",
+ "tower",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+ "uuid",
+ "x509-parser",
+ "zstd",
+]
+
+[[package]]
+name = "matchbox_richtext"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "html5ever",
+ "rails_compat",
+ "regex",
+ "ruby_compat",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "matchbox_routes"
+version = "0.1.0"
+
+[[package]]
+name = "matchbox_storage"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "jiff",
+ "md-5",
+ "rails_compat",
+ "rand 0.9.5",
+ "ruby_compat",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sha1",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
+name = "matchbox_views"
+version = "0.1.0"
+dependencies = [
+ "askama",
+ "crc32fast",
+ "html5ever",
+ "jiff",
+ "matchbox_assets",
+ "matchbox_routes",
+ "rails_compat",
+ "ruby_compat",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

@@ -22,7 +22,7 @@ path.
 | `lib/autocomplete/base_autocomplete_handler.js` | Asks for JSON (`Accept: application/json`). The reference passes `{ as: "json" }`, a `@rails/request.js` option, to plain `fetch`, gets HTML and never shows the new-ping suggestions |
 | `install-edge.svg` | New: a copy of `external/install-edge.svg` where `pwa/_install_instructions` looks for it. Rails can't find it, so Edge gets a 500 on profile and room pages |
 
-Matchbox branding adds `matchbox-icon.png` (the original artwork under a new logical name),
-`controllers/web_share_controller.js` (shared filenames use Matchbox), and `public/502.html`
+Ember branding adds `matchbox-icon.png` (the original artwork under a new logical name),
+`controllers/web_share_controller.js` (shared filenames use Ember), and `public/502.html`
 (the startup page title). The `public/` directory shadows static pages and is excluded from the
 digested asset manifest. The reference submodule remains unchanged.

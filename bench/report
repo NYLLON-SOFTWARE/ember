@@ -163,7 +163,7 @@ def procmem(n, phase, what):
 
 if all("process_memory" in c for a in apps for r in runs[a] for c in r["cable"]):
     header("Memory during cable fan-out, by process (MB, peak within the phase)", note=(
-        "App process: Rails' Puma master and workers (Action Cable runs in them), or Rust's one matchbox\n"
+        "App process: Rails' Puma master and workers (Action Cable runs in them), or Rust's one Ember\n"
         "process (its front server included). Pss counts pages shared between forked workers once;\n"
         "RssAnon counts them in every process."))
     for c in first["cable"]:

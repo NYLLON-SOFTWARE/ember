@@ -199,7 +199,7 @@ fn verify_response(status: u16, reason: &str, host: &str) -> Result<u16, Deliver
     }
 }
 
-/// `Users::PushSubscriptions::TestNotificationsController#create`: a "Matchbox Test"
+/// `Users::PushSubscriptions::TestNotificationsController#create`: a "Ember Test"
 /// notification with a random body, delivered inline. `path` is `user_push_subscriptions_url`
 /// (a full URL); `badge` is the subscriber's unread count. Errors propagate, as in Rails.
 pub async fn deliver_test_notification(
@@ -210,7 +210,7 @@ pub async fn deliver_test_notification(
     path: &str,
 ) -> Result<(), DeliveryError> {
     let notification = Notification {
-        title: "Matchbox Test".into(),
+        title: "Ember Test".into(),
         body: uuid::Uuid::new_v4().to_string(),
         path: path.to_string(),
         badge,

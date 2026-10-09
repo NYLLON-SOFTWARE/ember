@@ -26,7 +26,7 @@ LOADGEN = os.environ.get("LOADGEN", os.path.join(VERIFICATION_ROOT, "loadgen", "
 SERVER_CPUS = os.environ.get("SERVER_CPUS", "8-11")
 LOADGEN_CPUS = os.environ.get("LOADGEN_CPUS", "12-15")
 PORT = int(os.environ.get("PORT", "4390"))
-IMAGE = os.environ.get("RUST_IMAGE", "matchbox-rust:app")
+IMAGE = os.environ.get("RUST_IMAGE", "ember-rust:app")
 CONTAINER = f"bench-attrib-{PORT}"
 # BENCH_WORK_DIR puts the app's storage elsewhere (e.g. on tmpfs, to take fsync out of the picture).
 WORK = os.path.join(os.environ.get("BENCH_WORK_DIR", os.path.join(BENCH, ".work")), f"attrib-{PORT}")
@@ -163,12 +163,12 @@ class App:
             self.pids["matchbox"] = self.proc.pid
         else:
             root = int(subprocess.check_output(["docker", "inspect", "-f", "{{.State.Pid}}", CONTAINER]).strip())
-            if comm(root) == "matchbox":
+            if comm(root) in ("ember", "matchbox"):
                 self.pids["matchbox"] = root
             else:
                 self.pids["thrust"] = root
                 for c in children(root):
-                    if comm(c) == "matchbox":
+                    if comm(c) in ("ember", "matchbox"):
                         self.pids["matchbox"] = c
             for i, p in enumerate(docker_proxy_pids(PORT)):
                 self.pids[f"docker-proxy{i or ''}"] = p
@@ -210,7 +210,7 @@ def start(config, seed, extra_env=None):
         penv = {k: v for k, v in os.environ.items() if k in ("PATH", "HOME", "USER", "LANG")}
         penv.update(env)
         # The front server (crates/kit/src/front, what Thruster did) on PORT, the bare app beside it.
-        penv.update(HTTP_PORT=str(PORT), TARGET_PORT=str(PORT + 1), MATCHBOX_STORAGE_PATH=storage)
+        penv.update(HTTP_PORT=str(PORT), TARGET_PORT=str(PORT + 1), EMBER_STORAGE_PATH=storage)
         if preload:
             penv["LD_PRELOAD"] = preload
         logf = open(os.path.join(WORK, "app.log"), "w")
@@ -233,7 +233,7 @@ def start(config, seed, extra_env=None):
             args += ["-e", f"{k}={v}"]
         args.append(IMAGE)
         if entry == "direct":
-            args += ["matchbox", "server"]
+            args += ["ember", "server"]
         subprocess.run(args, check=True, stdout=subprocess.DEVNULL)
         app = App(config)
     try:

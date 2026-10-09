@@ -62,12 +62,14 @@ export function install(window, document) {
   document.addEventListener("turbo:load", start);
   document.addEventListener("turbo:frame-load", start);
   document.addEventListener("turbo:before-fetch-request", event => {
-    if (active()) event.detail.fetchOptions.headers["X-Matchbox-Style-Profile"] = "basecoat";
+    if (active()) event.detail.fetchOptions.headers["X-Ember-Style-Profile"] = "basecoat";
   });
   document.addEventListener("turbo:before-fetch-response", event => {
     if (!active()) return;
     const response = event.detail.fetchResponse.response;
-    const profile = response.headers.get("X-Matchbox-Style-Profile");
+    const profile = response.headers.get("X-Ember-Style-Profile")
+      ?? response.headers.get("X-Matchbox-Style-Profile")
+      ?? response.headers.get("X-Campfire-Style-Profile");
     const frame = event.target.closest?.("turbo-frame");
     if (frame && response.ok && profile && profile !== "basecoat" && response.headers.get("Content-Type")?.includes("text/html")) {
       // Use the final URL, after any POST redirect. Never resubmit a form to change profiles.

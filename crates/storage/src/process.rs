@@ -36,7 +36,7 @@ pub fn transform(input: &Path, variation: &Variation) -> Result<NamedTempFile> {
 }
 
 /// `ImageProcessingTransformer#operations`: every transformation except `format`, skipping blank
-/// arguments. Only `resize_to_limit` is implemented: it's the only one Matchbox defines.
+/// arguments. Only `resize_to_limit` is implemented: it's the only one Ember defines.
 fn operations(variation: &Variation) -> Result<Vec<(Option<i32>, Option<i32>)>> {
     let mut operations = Vec::new();
     for (name, argument) in variation.transformations() {

@@ -193,7 +193,7 @@ impl Request {
         if port == self.standard_port() { self.host() } else { format!("{}:{port}", self.host()) }
     }
 
-    /// `request.base_url`, e.g. `https://matchbox.example.com`.
+    /// `request.base_url`, e.g. `https://ember.example.com`.
     pub fn base_url(&self) -> String {
         format!("{}{}", self.protocol(), self.host_with_port())
     }

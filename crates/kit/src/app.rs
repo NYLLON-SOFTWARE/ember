@@ -45,7 +45,7 @@ impl Default for KitConfig {
 }
 
 impl KitConfig {
-    /// Matchbox's production settings: `assume_ssl` and `force_ssl` unless `DISABLE_SSL` is set
+    /// Ember's production settings: `assume_ssl` and `force_ssl` unless `DISABLE_SSL` is set
     /// (`reference/config/environments/production.rb`).
     pub fn production(disable_ssl: bool) -> Self {
         let mut config = Self::default();

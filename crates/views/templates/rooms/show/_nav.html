@@ -3,6 +3,18 @@
     <h1 class="room__contents overflow-ellipsis">
       {% if room.is_direct() %}<span class="for-screen-reader">Direct message with </span>{% endif %}{{ room.display_name }}
     </h1>
+{% if !room.is_direct() %}
+    <form action="{{ h::routes::room_favorite(room.id) }}" method="post" data-turbo="false" class="mb-room-favorite"
+        data-controller="room-favorite" data-room-favorite-room-id-value="{{ room.id }}" data-action="submit->room-favorite#save">
+      <input type="hidden" name="_method" value="put">
+      <input type="hidden" name="favorite" value="{{ !show.favorite }}" data-room-favorite-target="value">
+      <button type="submit" class="btn mb-favorite-button" aria-label="Favorite room" aria-pressed="{{ show.favorite }}"
+          title="{% if show.favorite %}Remove from favorites{% else %}Add to favorites{% endif %}" data-room-favorite-target="button">
+        {{ h::channel_icon(Some("star")) }}
+      </button>
+      <span class="mb-favorite-status" role="status" data-room-favorite-target="status" hidden></span>
+    </form>
+{% endif %}
   </div>
   <div class="mb-room-actions">
     <a class="btn" href="{{ h::routes::searches() }}" title="Search messages">

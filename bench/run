@@ -22,7 +22,7 @@
 # Images (unmodified production images, not the parity ones: no libfaketime, no pinned cable pool,
 # the reference's own resque-pool.yml):
 #   REFERENCE_IMAGE  campfire-reference:app   (parity/bin/reference build)
-#   RUST_IMAGE       matchbox-rust:app        (parity/bin/candidate build, from /Dockerfile)
+#   RUST_IMAGE       ember-rust:app           (parity/bin/candidate build, from /Dockerfile)
 #
 # Knobs (env): SERVER_CPUS=8-11 LOADGEN_CPUS=12-15 HTTP_SECS=8 HTTP_CONCS="1 16 64"
 #   CABLE_CLIENTS="100 500 1000" CABLE_TPUT_SECS=15 CABLE_POSTERS=4 UPLOAD_REPS=5 PORT=4390
@@ -40,7 +40,7 @@ LABELS=$SEED/labels.json
 ENV_FILE=$ROOT/parity/.env.reference
 
 REFERENCE_IMAGE=${REFERENCE_IMAGE:-campfire-reference:app}
-RUST_IMAGE=${RUST_IMAGE:-matchbox-rust:app}
+RUST_IMAGE=${RUST_IMAGE:-ember-rust:app}
 SERVER_CPUS=${SERVER_CPUS:-8-11}
 LOADGEN_CPUS=${LOADGEN_CPUS:-12-15}
 HTTP_SECS=${HTTP_SECS:-8}
@@ -76,7 +76,7 @@ done
 OUT=${OUT:-$ROOT/tmp/bench/results/$(date +%Y%m%d-%H%M%S)}
 mkdir -p "$OUT"
 WORK=$BENCH/.work
-CONTAINER=bench-matchbox-$PORT
+CONTAINER=bench-ember-$PORT
 
 log() { echo "[$(date +%T)] $*" >&2; }
 label() { python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])' "$LABELS" "$1"; }

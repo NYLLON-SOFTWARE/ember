@@ -1,0 +1,30 @@
+<dialog class="mb-dm-dialog" aria-labelledby="dm-title" aria-describedby="dm-description"
+    data-controller="direct-message" data-direct-message-url-value="{{ h::routes::autocompletable_users() }}"
+    data-action="cancel->direct-message#close click->direct-message#backdrop">
+  <form action="{{ h::routes::rooms_directs() }}" method="post" data-turbo-frame="_top"
+      data-action="submit->direct-message#submit turbo:submit-end->direct-message#submitted">
+    <header class="mb-dm-heading">
+      <div><h2 id="dm-title">New direct message</h2><p id="dm-description">Find people by full name. You can also type @name.</p></div>
+      <button type="button" class="btn mb-icon-dialog-close" aria-label="Close" data-action="direct-message#close">{% call icons::icon("close") %}</button>
+    </header>
+    <div class="mb-dm-recipients" aria-label="Selected people" data-direct-message-target="recipients" hidden></div>
+    <label class="mb-dm-search" for="dm-search">
+      {% call icons::icon("search") %}
+      <span class="for-screen-reader">Search people</span>
+      <input id="dm-search" type="text" placeholder="Search by name or @name" autocomplete="off" autocorrect="off" spellcheck="false"
+          autofocus data-matchbox-preserve-selection data-direct-message-target="search" role="combobox"
+          aria-autocomplete="list" aria-expanded="true" aria-controls="dm-results"
+          data-action="input->direct-message#search keydown->direct-message#navigate">
+    </label>
+    <div class="mb-dm-browse">
+      <p class="mb-dm-status" role="status" data-direct-message-target="status"></p>
+      <div id="dm-results" role="listbox" aria-label="People" data-direct-message-target="results"></div>
+      <button type="button" class="btn mb-dm-more" hidden data-direct-message-target="more" data-action="direct-message#more">Show more people</button>
+      <button type="button" class="btn mb-dm-more" hidden data-direct-message-target="retry" data-action="direct-message#search">Try again</button>
+    </div>
+    <footer class="mb-dm-footer">
+      <button type="button" class="btn" data-action="direct-message#close">Cancel</button>
+      <button type="submit" class="btn btn--reversed" disabled data-direct-message-target="start">Start conversation</button>
+    </footer>
+  </form>
+</dialog>

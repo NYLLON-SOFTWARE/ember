@@ -1,8 +1,8 @@
 {
-  "name": "matchbox-parity",
+  "name": "ember-parity",
   "private": true,
   "type": "module",
-  "description": "Playwright capture/compare harness for Matchbox Rails vs Rust parity",
+  "description": "Playwright capture/compare harness for Ember Rails vs Rust parity",
   "engines": { "node": ">=22.18" },
   "scripts": {
     "capture": "node capture/cli.ts capture",

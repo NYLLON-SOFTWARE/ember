@@ -190,6 +190,7 @@ static ROUTES: LazyLock<Vec<Route>> = LazyLock::new(|| {
         delete("/users/:user_id/ban(.:format)", "users/bans#destroy", users::bans::destroy),
         post("/users/:user_id/ban(.:format)", "users/bans#create", users::bans::create),
         get("/users/:user_id/sidebar(.:format)", "users/sidebars#show", users::sidebars::show).defaults(ME_DEFAULTS),
+        put("/account/room_order(.:format)", "users/sidebars#update_default_order", users::sidebars::update_default_order),
         put("/users/me/sidebar/order(.:format)", "users/sidebars#update_order", users::sidebars::update_order),
         get("/users/:user_id/profile/new(.:format)", "users/profiles#new", action_not_found).defaults(ME_DEFAULTS),
         get("/users/:user_id/profile/edit(.:format)", "users/profiles#edit", action_not_found).defaults(ME_DEFAULTS),
@@ -227,6 +228,7 @@ static ROUTES: LazyLock<Vec<Route>> = LazyLock::new(|| {
         get("/rooms/:room_id/refresh(.:format)", "rooms/refreshes#show", rooms::refreshes::show),
         get("/rooms/:room_id/settings(.:format)", "rooms/settings#show", missing_controller),
         get("/rooms/:room_id/involvement(.:format)", "rooms/involvements#show", rooms::involvements::show),
+        put("/rooms/:room_id/favorite(.:format)", "rooms/favorites#update", rooms::favorites::update),
         patch("/rooms/:room_id/involvement(.:format)", "rooms/involvements#update", rooms::involvements::update),
         put("/rooms/:room_id/involvement(.:format)", "rooms/involvements#update", rooms::involvements::update),
         get("/rooms/:room_id/@:message_id(.:format)", "rooms#show", rooms::show),
@@ -484,7 +486,7 @@ mod turbo_native {
     }
 }
 
-/// Action Mailbox's ingress and conductor routes, which Matchbox doesn't use.
+/// Action Mailbox's ingress and conductor routes, which Ember doesn't use.
 mod mailbox {
     use super::*;
 
@@ -537,7 +539,8 @@ mod tests {
     #[test]
     fn the_table_is_rails_routes_in_order() {
         let rails = vectors().routes;
-        let ours: Vec<_> = routes().iter().filter(|route| route.endpoint != "users/sidebars#update_order").collect();
+        let owned_endpoints = ["users/sidebars#update_default_order", "users/sidebars#update_order", "rooms/favorites#update"];
+        let ours: Vec<_> = routes().iter().filter(|route| !owned_endpoints.contains(&route.endpoint)).collect();
         for (i, (rails, ours)) in rails.iter().zip(&ours).enumerate() {
             let defaults: std::collections::BTreeMap<String, String> =
                 ours.defaults.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
@@ -548,10 +551,14 @@ mod tests {
             );
         }
         assert_eq!(rails.len(), ours.len(), "every inherited Rails route remains in order");
-        let owned: Vec<_> = routes().iter().filter(|route| route.endpoint == "users/sidebars#update_order").collect();
-        assert_eq!(owned.len(), 1);
+        let owned: Vec<_> = routes().iter().filter(|route| owned_endpoints.contains(&route.endpoint)).collect();
+        assert_eq!(owned.len(), 3);
         assert_eq!(owned[0].verb, Method::PUT);
-        assert_eq!(owned[0].pattern, "/users/me/sidebar/order(.:format)");
+        assert_eq!(owned[0].pattern, "/account/room_order(.:format)");
+        assert_eq!(owned[1].verb, Method::PUT);
+        assert_eq!(owned[1].pattern, "/users/me/sidebar/order(.:format)");
+        assert_eq!(owned[2].verb, Method::PUT);
+        assert_eq!(owned[2].pattern, "/rooms/:room_id/favorite(.:format)");
     }
 
     #[test]
@@ -683,7 +690,7 @@ mod tests {
 
     /// Times `recognize` on the paths the page benchmarks request, `/up`, Active Storage URLs and a
     /// 404 (bench/results/routing-20260930):
-    /// `cargo test --release -p matchbox --bin matchbox -- --ignored --nocapture times_recognition`
+    /// `cargo test --release -p matchbox --bin ember -- --ignored --nocapture times_recognition`
     #[test]
     #[ignore = "a timing harness; run it in a release build"]
     fn times_recognition() {

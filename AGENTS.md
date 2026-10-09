@@ -1,6 +1,6 @@
-# Matchbox
+# Ember
 
-Matchbox, a fork of Campfire in Rust. It started as a port that had to be indistinguishable from the Rails app in
+Ember, a fork of Campfire in Rust. It started as a port that had to be indistinguishable from the Rails app in
 `reference/` (a submodule pinned to the SHA it was matched against), and that parity is done: see
 `README.md` and `plans/rust-conversion.md`. The app may now diverge from Rails where that makes it
 faster or better.
@@ -28,7 +28,7 @@ faster or better.
 | `crates/cable` | `matchbox_cable` | Action Cable protocol server, its WebSocket implementation, and in-process pub/sub |
 | `crates/assets` | `matchbox_assets` | Propshaft-compatible digesting, importmap, vendored JS/CSS, port-owned overrides |
 | `crates/views` | `matchbox_views` | Askama templates (at the ERB file's relative path) and view helpers |
-| `crates/matchbox` | `matchbox` (bin) | Controllers, router wiring, channels, jobs, integrations |
+| `crates/matchbox` | `matchbox` (`ember` bin) | Controllers, router wiring, channels, jobs, integrations |
 | `parity/` | — | Playwright parity harness, screen inventory, reference Docker setup |
 | `reference-tools/` | — | Ruby scripts run inside the reference container to produce `vectors/` |
 | `bench/` | — | Load generator, benchmark scripts and recorded results |
@@ -39,7 +39,7 @@ faster or better.
   in `Dockerfile`). The `reference/` submodule must be checked out for `crates/assets` to build.
 - `cargo test --workspace --exclude html5ever` runs everything. The app's integration tests need the
   seed data (`parity/bin/seed build`, which needs Docker); without it they pass without running,
-  with only a note on stderr, so say so when reporting results. `MATCHBOX_REQUIRE_SEED=1` makes a
+  with only a note on stderr, so say so when reporting results. `EMBER_REQUIRE_SEED=1` makes a
   missing seed fail them instead.
 - `cargo clippy --workspace --exclude html5ever --all-targets` should stay clean. (`html5ever` is a
   vendored copy with one backported fix and two small additions for Gumbo's parse limits, all

@@ -1,7 +1,7 @@
-# Contributing to Matchbox
+# Contributing to Ember
 
-Use [Matchbox issues](https://github.com/nyllon-software/matchbox/issues) for bugs, feature requests,
-and questions, and open pull requests against this repository. Matchbox is independently maintained;
+Use [Ember issues](https://github.com/nyllon-software/ember/issues) for bugs, feature requests,
+and questions, and open pull requests against this repository. Ember is independently maintained;
 please report fork-specific behavior here. Contributions are licensed under the [MIT License](MIT-LICENSE).
 
 ## What this means in practice

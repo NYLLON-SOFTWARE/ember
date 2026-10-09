@@ -1,4 +1,4 @@
-//! The Matchbox server: controllers, channels, jobs and integrations wired over the crates.
+// The Ember server: controllers, channels, jobs and integrations wired over the crates.
 
 mod active_storage;
 mod app;

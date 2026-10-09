@@ -1,0 +1,15 @@
+<div class="mb-appearance" data-workspace-appearance hidden>
+  <button type="button" class="mb-appearance-toggle" popovertarget="appearance-menu" aria-label="Appearance: System" title="Appearance: System" aria-haspopup="dialog">
+    <span data-appearance-icon="light" hidden>{{ h::lucide_icon("sun") }}</span>
+    <span data-appearance-icon="dark" hidden>{{ h::lucide_icon("moon") }}</span>
+    <span data-appearance-icon="system">{{ h::lucide_icon("monitor") }}</span>
+  </button>
+  <div id="appearance-menu" class="mb-appearance-menu" popover role="dialog" aria-label="Appearance">
+    <fieldset>
+      <legend>Appearance</legend>
+      <label><input type="radio" name="appearance" value="light">{{ h::lucide_icon("sun") }}<span>Light</span>{{ h::lucide_icon("check") }}</label>
+      <label><input type="radio" name="appearance" value="dark">{{ h::lucide_icon("moon") }}<span>Dark</span>{{ h::lucide_icon("check") }}</label>
+      <label><input type="radio" name="appearance" value="system" checked>{{ h::lucide_icon("monitor") }}<span>System</span>{{ h::lucide_icon("check") }}</label>
+    </fieldset>
+  </div>
+</div>

@@ -152,6 +152,29 @@ async fn open_rooms_are_created_edited_and_updated() {
 }
 
 #[tokio::test]
+async fn saving_a_channel_acknowledges_removing_the_editors_own_membership() {
+    let Some(app) = TestApp::boot().await else { return };
+    let mut david = app.david();
+    let created = david.write(Req::new(Method::POST, "/rooms/opens").form(&[("room[name]", "Handoff")])).await;
+    let room_id: i64 = created.location().unwrap().rsplit('/').next().unwrap().parse().unwrap();
+    let saved = david
+        .write(
+            Req::new(Method::PATCH, &format!("/rooms/closeds/{room_id}"))
+                .header("prefer", "return=minimal")
+                .form(&[("room[name]", "Jason's channel"), ("user_ids[]", &JASON.to_string())]),
+        )
+        .await;
+    assert_eq!(saved.status, StatusCode::NO_CONTENT);
+    assert_eq!(saved.header("preference-applied"), Some("return=minimal"));
+    assert_eq!(saved.location(), None);
+    let room = app.db().read(move |conn| Room::find(conn, room_id)).await.unwrap();
+    assert_eq!(room.name.as_deref(), Some("Jason's channel"));
+    assert_eq!(room.room_type, RoomType::Closed);
+    let members = app.db().read(move |conn| Membership::for_room(conn, room_id)).await.unwrap();
+    assert_eq!(members.iter().map(|member| member.user_id).collect::<Vec<_>>(), vec![JASON]);
+}
+
+#[tokio::test]
 async fn closed_rooms_are_created_with_the_selected_users() {
     let Some(app) = TestApp::boot().await else { return };
     let mut david = app.david();
@@ -291,14 +314,16 @@ async fn back_links_go_to_the_last_room_visited() {
         back_link(&reply.text()).to_string()
     };
 
-    assert_eq!(back_link_of(david.get("/rooms/opens/new").await), format!("/rooms/{original}"), "no cookie");
+    assert_eq!(back_link_of(david.get("/account/edit").await), format!("/rooms/{original}"), "no cookie");
     david.get(&format!("/rooms/{QUIET_CORNER}")).await;
-    assert_eq!(back_link_of(david.get("/rooms/opens/new").await), format!("/rooms/{QUIET_CORNER}"));
+    for path in ["/rooms/opens/new", "/rooms/closeds/new"] {
+        assert_eq!(back_link_of(david.get(path).await), "/account/edit", "new rooms return to settings");
+    }
     assert_eq!(back_link_of(david.get("/account/edit").await), format!("/rooms/{QUIET_CORNER}"));
     david.set_cookie("last_room", &DIRECT_KEVIN_BENDER.to_string());
-    assert_eq!(back_link_of(david.get("/rooms/opens/new").await), format!("/rooms/{original}"), "a room he isn't in");
+    assert_eq!(back_link_of(david.get("/account/edit").await), format!("/rooms/{original}"), "a room he isn't in");
     david.set_cookie("last_room", "nonsense");
-    assert_eq!(back_link_of(david.get("/rooms/opens/new").await), format!("/rooms/{original}"));
+    assert_eq!(back_link_of(david.get("/account/edit").await), format!("/rooms/{original}"));
 }
 
 #[tokio::test]

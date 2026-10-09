@@ -150,7 +150,7 @@ fn get_request(path: &str, extra: &str) -> String {
     format!("GET {path} HTTP/1.1\r\nHost: chat.test\r\nConnection: close\r\n{extra}\r\n")
 }
 
-/// An app with the kinds of responses Matchbox sends.
+/// An app with the kinds of responses Ember sends.
 fn test_app() -> (Router, Arc<AtomicUsize>) {
     let hits = Arc::new(AtomicUsize::new(0));
     let counter = hits.clone();

@@ -68,6 +68,8 @@ impl RoomView {
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct ShowView {
     pub room: RoomView,
+    #[serde(default)]
+    pub favorite: bool,
     /// `room.updated_at`, the refresh controller's `loaded_at`.
     pub updated_at: Timestamp,
     /// `Current.user`, for the client-side message template.
