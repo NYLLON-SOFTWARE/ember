@@ -217,14 +217,14 @@ behavior changes and compatibility limits are listed below.
   Home and direct-message navigation use actual room memberships; Activity shows actual unread
   conversations and counts. Search in the rail opens the existing full message search. Ember
   uses “rooms” consistently in labels, settings, favorites, and search. The sidebar starts with
-  rooms directly beneath the workspace name. Room creation lives in workspace
-  settings, alongside the admin-only room-creation permission control; existing creation permissions
+  rooms directly beneath the workspace name, followed by the **DMs** section. Room creation lives
+  in workspace settings, alongside the admin-only room-creation permission control; existing creation permissions
   still apply. The new-room back button returns to workspace settings, including after switching
   between open and private rooms. The appearance control above the profile avatar offers Light,
   Dark, and System, shares onboarding's browser preference, and follows live system changes in
   System mode. The selected palette applies before paint and persists across visits and tabs.
-  Opening a profile does not autofocus the name field. Save confirmations show a single checkmark
-  centered within the content pane; descriptive notices and errors keep their text.
+  Opening a profile or workspace settings does not autofocus the name field. Save confirmations show
+  a single checkmark centered within the content pane; descriptive notices and errors keep their text.
   Custom CSS saves submit with a full page navigation so the stylesheet reload does not consume
   the confirmation before it is displayed.
   The direct-message picker distinguishes an empty people list from an unsuccessful typed search;
@@ -271,10 +271,12 @@ behavior changes and compatibility limits are listed below.
   snapshots; other open browsers pick up the choice on their next page load.
 - **Workspace controls:** entering an editable single-line field selects its existing value so
   typing replaces it. A subsequent click can place the caret normally; multiline editors retain
-  their usual editing behavior. Workspace logos and profile avatars use a single large preview with
-  an overlaid camera picker and a separate removal action. Uploads still save immediately and offer
+  their usual editing behavior. The workspace name preserves normal caret selection and uses a subtle
+  border change instead of an outer focus ring. Workspace logos and profile avatars use a single large
+  preview with an overlaid camera picker and a separate removal action. Uploads still save immediately and offer
   a submit button without JavaScript. The navigation rail shows the uploaded workspace logo, falling
-  back to the Ember mark when no logo is set. Immediate account switches save without success flashes; name/logo
+  back to the Ember mark when no logo is set. Uploaded logos in the rail and welcome card use the current
+  canvas color behind transparent images. Immediate account switches save without success flashes; name/logo
   saves have a readable confirmation. Membership badges use the shared control styling.
 - **Unsaved room edits:** new/edit room forms prompt with **Unsaved Changes**, **Discard**, and
   **Save** before in-app navigation or same-document browser back/forward. Escape or the close action
