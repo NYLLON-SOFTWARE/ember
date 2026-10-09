@@ -1,4 +1,4 @@
-//! URL building that `matchbox_routes` leaves to the caller: query strings (`Hash#to_query`)
+//! URL building that `ember_routes` leaves to the caller: query strings (`Hash#to_query`)
 //! and format extensions (`path(format: :json)`).
 
 /// `CGI.escape`, for templates too.
@@ -29,7 +29,7 @@ pub fn with_query(path: &str, params: Vec<(&str, Param)>) -> String {
 
 /// `rooms_directs_path(user_ids: [ id ])`.
 pub fn rooms_directs_with_users(user_ids: &[i64]) -> String {
-    with_query(&matchbox_routes::rooms_directs(), vec![("user_ids", Param::Many(user_ids.iter().map(ToString::to_string).collect()))])
+    with_query(&ember_routes::rooms_directs(), vec![("user_ids", Param::Many(user_ids.iter().map(ToString::to_string).collect()))])
 }
 
 /// `rooms_directs_path(user_ids: [ user.id ])`.

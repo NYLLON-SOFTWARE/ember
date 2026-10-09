@@ -7,7 +7,7 @@ fn query_strings_parse_like_rails() {
     let mut failures = Vec::new();
     for vector in &vectors {
         let input = vector["input"].as_str().unwrap();
-        let actual = matchbox_kit::parse_nested(input);
+        let actual = ember_kit::parse_nested(input);
         if actual != vector["output"] {
             failures.push(format!("{input:?}\n  rails: {}\n  ours:  {actual}", vector["output"]));
         }

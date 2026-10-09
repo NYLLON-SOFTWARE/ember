@@ -54,10 +54,47 @@ function fixture({ mode = null, dark = false, storageUnavailable = false } = {})
 
 test("appearance keeps legacy preferences and gives the Ember preference priority", () => {
   const { window, storage } = fixture();
+  assert.equal(preferenceKey, "ember:appearance");
   storage.set("campfire:appearance", "dark");
   assert.equal(readMode(window), "dark");
-  storage.set(preferenceKey, "light");
+  storage.set("matchbox:appearance", "light");
   assert.equal(readMode(window), "light");
+  storage.set(preferenceKey, "dark");
+  assert.equal(readMode(window), "dark");
+});
+
+test("existing appearance choices apply before paint and new choices persist under Ember", async () => {
+  const script = await readFile(new URL("../theme-init.js", import.meta.url), "utf8");
+  for (const legacyKey of ["matchbox:appearance", "campfire:appearance"]) {
+    const f = fixture();
+    f.storage.set(legacyKey, "dark");
+    vm.runInNewContext(script, { window: f.window, document: f.document });
+    assert.equal(f.document.documentElement.classList.contains("dark"), true);
+    install(f.window, f.document);
+    assert.equal(f.select.value, "dark");
+    f.select.value = "light";
+    f.document.emit("change", { target: f.select });
+    assert.equal(f.storage.get("ember:appearance"), "light");
+    assert.equal(f.storage.get(legacyKey), "dark");
+    assert.equal(readMode(f.window), "light");
+  }
+});
+
+test("appearance changes in older tabs are followed until an Ember preference is set", () => {
+  const f = fixture();
+  install(f.window, f.document);
+  for (const key of ["campfire:appearance", "matchbox:appearance"]) {
+    f.storage.set(key, "dark");
+    f.window.emit("storage", { key });
+    assert.equal(f.select.value, "dark");
+    f.storage.delete(key);
+    f.window.emit("storage", { key });
+    assert.equal(f.select.value, "system");
+  }
+  f.storage.set(preferenceKey, "light");
+  f.storage.set("matchbox:appearance", "dark");
+  f.window.emit("storage", { key: "matchbox:appearance" });
+  assert.equal(f.select.value, "light");
 });
 
 test("the shipped prepaint script honors explicit preferences, system and inaccessible storage", async () => {

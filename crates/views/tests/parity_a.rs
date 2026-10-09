@@ -7,8 +7,8 @@ mod support;
 mod workspace_snapshot;
 
 use askama::Template;
-use matchbox_views::helpers as h;
-use matchbox_views::*;
+use ember_views::helpers as h;
+use ember_views::*;
 use support::dom::{diff, normalize_html};
 use support::facts::*;
 
@@ -65,12 +65,12 @@ fn hidden_translation_controls_are_omitted_and_visibility_changes_reload_turbo()
         let html = sessions::New { ctx, email_address: None, help_contact: help_contact("sessions_new") }.render().unwrap();
         assert!(!html.contains("language-list-menu"));
         assert!(!html.contains(">Translate<"));
-        assert!(html.contains("name=\"matchbox-hide-translation-buttons\" content=\"true\" data-turbo-track=\"reload\""));
+        assert!(html.contains("name=\"ember-hide-translation-buttons\" content=\"true\" data-turbo-track=\"reload\""));
     });
     with_context("sessions_new", Request::default(), |ctx| {
         let html = sessions::New { ctx, email_address: None, help_contact: help_contact("sessions_new") }.render().unwrap();
         assert!(html.contains("language-list-menu"));
-        assert!(!html.contains("matchbox-hide-translation-buttons"));
+        assert!(!html.contains("ember-hide-translation-buttons"));
     });
 }
 
@@ -436,7 +436,7 @@ fn users_push_subscriptions() {
     assert_parity(name, "html", html);
 }
 
-fn sidebar<'a>(name: &str, ctx: &'a matchbox_views::ViewContext<'a>) -> users::SidebarShow<'a> {
+fn sidebar<'a>(name: &str, ctx: &'a ember_views::ViewContext<'a>) -> users::SidebarShow<'a> {
     let sidebar = &data(name)["sidebar"];
     let me = user_by_email(name, case(name)["as"].as_str().unwrap());
     let me_name = me["name"].as_str().unwrap();
@@ -627,7 +627,7 @@ fn users_partials() {
 
     let name = "user_json";
     let jz = user(name, "JZ");
-    let json = rails_compat::json::encode(&matchbox_views::messages::json::UserJson {
+    let json = rails_compat::json::encode(&ember_views::messages::json::UserJson {
         id: jz["id"].as_i64().unwrap(),
         name: "JZ".into(),
         role: jz["role"].as_str().unwrap().into(),

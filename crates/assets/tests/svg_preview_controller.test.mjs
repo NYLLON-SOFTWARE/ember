@@ -36,7 +36,7 @@ function fixture({ chunks = [new TextEncoder().encode('<svg xmlns="http://www.w3
   const context = vm.createContext({
     Controller: class {},
     URL, Blob, AbortController,
-    window: { location: { href: "https://matchbox.example/rooms/1", origin: "https://matchbox.example" } },
+    window: { location: { href: "https://ember.example/rooms/1", origin: "https://ember.example" } },
     fetch: async (url, options) => { calls.push(["fetch", url.href, options]); return response },
     IntersectionObserver: class {
       constructor(callback) { this.callback = callback; observers.push(this) }

@@ -22,7 +22,7 @@ pub fn link_to_room(room_id: i64, options: &Attrs, content: impl Display) -> ask
         ("data-badge-dot-target", AttrValue::Text("unread")),
         ("data-sorted-list-target", AttrValue::Text("item")),
     ];
-    let url = matchbox_routes::room(room_id);
+    let url = ember_routes::room(room_id);
     content_tag_block("a", link_options(&url, options.view().with_default_data(&defaults)), content)
 }
 
@@ -57,7 +57,7 @@ pub fn button_to_change_involvement<'r>(ctx: &ViewContext, room: impl std::borro
     let room = room.borrow();
     let label_id = dom_id(room.param_key, room.id, Some("involvement_label"));
     let url = with_query(
-        &matchbox_routes::room_involvement(room.id),
+        &ember_routes::room_involvement(room.id),
         vec![("involvement", Param::One(next_involvement(room.direct, involvement).to_string()))],
     );
     let content = format!(

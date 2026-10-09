@@ -10,7 +10,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
     <meta name="view-transition" content="same-origin">
     <meta name="color-scheme" content="light dark">
-{% if ctx.account.hide_translation_buttons %}    <meta name="matchbox-hide-translation-buttons" content="true" data-turbo-track="reload">
+{% if ctx.account.hide_translation_buttons %}    <meta name="ember-hide-translation-buttons" content="true" data-turbo-track="reload">
 {% endif %}
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
@@ -25,13 +25,13 @@
     {{ h::builder_tag("link", h::attrs().attr("rel", "icon").attr("href", ctx.account.logo_url.as_str()).type_("image/png")) }}
     {{ h::builder_tag("link", h::attrs().attr("rel", "apple-touch-icon").attr("href", ctx.account.logo_url.as_str())) }}
 
-    <script src="{{ ctx.asset("matchbox/appearance.js") }}" data-turbo-track="reload"></script>
+    <script src="{{ ctx.asset("ember/appearance.js") }}" data-turbo-track="reload"></script>
     {{ h::raw(ctx.stylesheet_tags) }}
     {{ h::custom_styles_tag(ctx) }}
 
     {{ h::raw(ctx.importmap_tags) }}
-    <script src="{{ ctx.asset("matchbox/shell.js") }}" defer data-turbo-track="reload"></script>
-    <script src="{{ ctx.asset("matchbox/settings.js") }}" defer data-turbo-track="reload"></script>
+    <script src="{{ ctx.asset("ember/shell.js") }}" defer data-turbo-track="reload"></script>
+    <script src="{{ ctx.asset("ember/settings.js") }}" defer data-turbo-track="reload"></script>
 
 {% block head %}{% endblock %}  </head>
 
@@ -41,9 +41,9 @@
 {% if let Some(user) = ctx.current_user.as_ref() %}
     <nav class="mb-rail" aria-label="Workspace">
       <a class="mb-rail__brand" href="{{ h::routes::root() }}" aria-label="Ember home" title="{{ ctx.account.name }}">{% if ctx.account.has_logo %}<img src="{{ ctx.account.logo_url }}" alt="" width="44" height="44">{% else %}{% call icons::icon("flame") %}{% endif %}</a>
-      <a class="mb-rail__link" href="{{ h::routes::root() }}" data-matchbox-home>{% call icons::icon("home") %}<span>Home</span></a>
-      <a class="mb-rail__link" href="{{ h::routes::new_rooms_direct() }}" data-matchbox-new-direct>{% call icons::icon("messages") %}<span>DMs</span></a>
-      <button type="button" class="mb-rail__link" data-matchbox-activity aria-pressed="false" title="Show unread conversations">{% call icons::icon("bell") %}<span>Activity</span><span class="mb-activity-count" data-matchbox-unread-count hidden></span></button>
+      <a class="mb-rail__link" href="{{ h::routes::root() }}" data-ember-home>{% call icons::icon("home") %}<span>Home</span></a>
+      <a class="mb-rail__link" href="{{ h::routes::new_rooms_direct() }}" data-ember-new-direct>{% call icons::icon("messages") %}<span>DMs</span></a>
+      <button type="button" class="mb-rail__link" data-ember-activity aria-pressed="false" title="Show unread conversations">{% call icons::icon("bell") %}<span>Activity</span><span class="mb-activity-count" data-ember-unread-count hidden></span></button>
       <a class="mb-rail__link" href="{{ h::routes::searches() }}">{% call icons::icon("search") %}<span>Search</span></a>
       <hr class="mb-rail__divider">
 {% if ctx.can_administer() %}      <a class="mb-rail__link" href="{{ h::routes::edit_account() }}">{% call icons::icon("settings") %}<span>Admin</span></a>
@@ -56,7 +56,7 @@
     </nav>
 {% endif %}
     <nav id="nav" class="mb-header" aria-label="Page">
-{% if ctx.current_user.is_some() %}      <button class="btn mb-mobile-menu" type="button" data-matchbox-sidebar-toggle aria-label="Open conversations" aria-controls="sidebar" aria-expanded="false">{% call icons::icon("menu") %}</button>
+{% if ctx.current_user.is_some() %}      <button class="btn mb-mobile-menu" type="button" data-ember-sidebar-toggle aria-label="Open conversations" aria-controls="sidebar" aria-expanded="false">{% call icons::icon("menu") %}</button>
 {% endif %}
 {% block nav %}{% endblock %}    </nav>
 
@@ -77,9 +77,9 @@
     </main>
 
 {% if ctx.current_user.is_some() %}
-    <button type="button" class="mb-sidebar-backdrop" data-matchbox-sidebar-close aria-label="Close conversations" tabindex="-1" hidden></button>
+    <button type="button" class="mb-sidebar-backdrop" data-ember-sidebar-close aria-label="Close conversations" tabindex="-1" hidden></button>
     <aside id="sidebar" class="mb-sidebar" aria-label="Conversations" data-controller="toggle-class" data-toggle-class-toggle-class="open">
-      <button type="button" class="btn mb-sidebar-close" data-matchbox-sidebar-close aria-label="Close conversations">{% call icons::icon("close") %}</button>
+      <button type="button" class="btn mb-sidebar-close" data-ember-sidebar-close aria-label="Close conversations">{% call icons::icon("close") %}</button>
 {% block sidebar %}{% if !ctx.request_url.ends_with("/users/me/sidebar") %}{{ h::sidebar_turbo_frame_tag(Some(h::routes::user_sidebar().as_str()), "") }}{% endif %}{% endblock %}
     </aside>
 {% endif %}

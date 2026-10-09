@@ -1,5 +1,5 @@
 # The template digest EtagWithTemplateDigest adds to `Users::AvatarsController#show`'s ETag
-# (TEMPLATE_DIGEST in crates/matchbox/src/controllers/users/avatars.rs): the SHA256 (truncated)
+# (TEMPLATE_DIGEST in crates/ember/src/controllers/users/avatars.rs): the SHA256 (truncated)
 # of show.svg.erb's source plus "-", since it renders no other templates.
 #
 #   parity/bin/reference runner reference-tools/campfire/controllers_a/digest.rb

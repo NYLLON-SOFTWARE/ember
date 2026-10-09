@@ -1,24 +1,397 @@
-# Ember
+# How does this differ from Campfire in Rust?
 
-[MIT licensed](MIT-LICENSE) · [GitHub](https://github.com/nyllon-software/ember)
+**Ember is a fork of [Campfire in Rust](https://github.com/basecamp/once-campfire-rust) with a
+redesigned workspace and new ways to organize rooms, start conversations, and manage preferences.**
+It keeps the Rust server and Campfire chat features, along with compatibility with existing
+SQLite databases, uploaded files, and current signed/encrypted cookies.
 
-Ember is an independently maintained fork of
-[Basecamp's Campfire in Rust](https://github.com/basecamp/once-campfire-rust), developed by
-[NYLLON-SOFTWARE](https://github.com/nyllon-software). Campfire was created by
-[37signals](https://37signals.com); the Rust implementation is based on the original
-[ONCE Campfire Rails application](https://github.com/basecamp/once-campfire).
+[MIT licensed](MIT-LICENSE) · [Ember on GitHub](https://github.com/nyllon-software/ember) ·
+[Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
+Ember is independently maintained by [NYLLON-SOFTWARE](https://github.com/nyllon-software).
+Campfire was created by [37signals](https://37signals.com); the Rust implementation is based on
+the original [ONCE Campfire Rails application](https://github.com/basecamp/once-campfire).
 This repository preserves the upstream Git history and the pinned Rails source in `reference/`.
-Ember adds its own interface and configuration changes, documented under
-[Known differences](#known-differences). It is an independent project, not an official
-37signals or Basecamp release.
 
-The existing SQLite database, storage layout and signed/encrypted cookies remain compatible,
-so existing installs can upgrade without migrating data or signing everyone out.
+The comparison below uses Campfire in Rust at our
+[fork point, `5eb6d2d`](https://github.com/basecamp/once-campfire-rust/commit/5eb6d2d3b3090aa1680b80e19d077455fe413119),
+and describes the implementation in this checkout. Ember is an independent project, not an
+official 37signals or Basecamp release.
 
-One `ember` executable replaces Ruby, Puma, Redis, Resque and Thruster, with libvips and ffmpeg
-for media. The Rails frontend ships with a few [port-owned overrides](crates/assets/OVERRIDES.md).
-The app includes TLS, HTTP/2, Web Push, bot webhooks, search and Action Cable-compatible WebSockets.
+## Feature comparison
+
+| Area | Campfire in Rust at the fork point | What Ember adds or changes |
+|---|---|---|
+| Workspace | Campfire's original application interface | A neutral workspace with a navigation rail, conversation sidebar, compact room header, and redesigned settings and authentication screens. |
+| Mobile navigation | Original responsive Campfire layout | A dismissible conversation drawer, backdrop, keyboard focus handling, and larger touch controls. |
+| Unread activity | Existing unread room state | An Activity control that filters the sidebar to unread conversations and shows their count. |
+| Appearance | System-responsive light and dark styling | An explicit **Light / Dark / System** picker with a saved browser preference, cross-tab updates, and live system changes. |
+| Favorite rooms | No personal starred-room feature | Star rooms, keep them above other rooms, and choose your own favorite order. |
+| Shared room order | Alphabetical shared-room list | Administrators arrange rooms in workspace settings and explicitly save the shared order; members retain their own starred order. |
+| Room icons | Original room-type icons | Searchable Lucide icons for open and private rooms, shown in the sidebar and room header. |
+| Starting DMs | Existing direct-message page and group-DM support | A people-search modal with multiple recipients, pagination, keyboard selection, and retry handling. |
+| Room editing | Ordinary create/edit forms | An **Unsaved Changes** dialog and draft preservation when switching between open and private room forms. |
+| Message actions | Existing boosts, replies, edit, copy link, download, and share | A compact toolbar, three quick reactions, an expanded reaction tray, and a redesigned custom-reaction form. |
+| Message layout | Original message presentation | Revised spacing, left-aligned messages, follow-up timestamps on hover/focus, and corrected grouping after rapid sends. |
+| Attachment uploads | Existing upload queue and percentage progress | A 250 MB per-file limit, clearer transfer/processing display, file sizes, actionable errors, and continued uploads after individual failures. |
+| SVG uploads | Downloadable file cards | Lazy image previews for SVG files up to 5 MiB, while retaining the original download. |
+| Translation controls | Language-help buttons beside interface fields | An administrator setting to hide them for everyone, enabled by default. |
+| Notification enrollment | Existing Web Push and room notification settings | Permission requested directly from the click, readiness after subscription saving, specific error guidance, and manual retry using the bell. |
+| First-run setup | Original setup form | A Basecoat form card, avatar preview, password visibility toggle, and an enforced eight-character initial password minimum. |
+| Logos and avatars | Existing upload and removal support | Large camera-style pickers, separate removal controls, and the workspace logo in the navigation rail. |
+| Product identity | Campfire name and executable | Ember branding, an `ember` executable, configuration aliases, and the actual release version in the footer and response header. |
+| Frontend verification | Rails compatibility and shared regression checks | Ember DOM snapshots and disposable-account browser checks for the redesigned interface. |
+
+## Known differences
+
+### Workspace navigation and appearance
+
+Ember replaces the application-page presentation with a shared workspace layout: a left navigation
+rail, a conversation sidebar, a compact room header, an invitation card, and a full-width composer.
+The rail provides Home, DMs, Activity, Search, workspace settings, appearance, and your profile.
+The navigation rail has 56 × 56 px buttons with rounded corners and padded 80px-wide spacing.
+Navigation uses actual room memberships. **Activity** filters the existing sidebar to unread
+conversations and shows an unread conversation count. **Search** opens the inherited full message
+search, with recent searches shown once above the results.
+
+Rooms appear directly beneath the workspace name, followed by direct messages. Room creation lives
+in **Workspace settings**, alongside the existing administrator-only room-creation permission
+control. That permission still determines who can create rooms. The new-room back button returns
+to workspace settings, including after switching room access types. Ember uses “rooms” consistently
+throughout the interface.
+
+On small screens, conversations open in a drawer with a dismissible backdrop, Escape support,
+focus handling, and touch-sized controls. The workspace styling also covers search, bots, room
+management, profiles, and account settings. Sign-in and invitation signup use labeled form cards.
+Account custom CSS remains supported.
+
+The appearance control above your profile avatar offers **Light**, **Dark**, and **System**.
+The preference is saved in the browser, persists across visits, synchronizes across tabs, and is
+applied before paint. Solid-color palettes and a keyboard-accessible fallback menu support browsers
+without light-dark() or native popovers. System mode follows operating-system changes as they happen. First-run setup
+shares this preference and defaults to the system palette; it has no separate appearance selector.
+
+### Favorite rooms and shared ordering
+
+The star beside a room name saves a **personal favorite**. Starred rooms stay at the top of your
+sidebar in your chosen order. Hold and drag a starred room, or focus it and use **Alt + Up/Down**,
+to reorder your favorites. Starring an already-starred room leaves its position intact.
+
+Administrators manage the **shared room order** in Workspace settings. Drag handles and
+**Alt + Up/Down** stage a draft; **Save order** applies it to everyone and refreshes connected
+sidebars. **Cancel** discards the draft. Failed saves keep the draft available for retry.
+
+Unstarred rooms follow the administrator's saved order. New or unranked rooms follow the ranked
+entries alphabetically. Each member's favorites and favorite order survive shared-order changes.
+Saving the shared order removes legacy personal overrides for unstarred rooms from earlier versions
+of this fork.
+
+Order submissions are checked against visible shared-room memberships. The administrator endpoint
+rechecks the role inside the write transaction and preserves ranked private rooms that the
+submitting administrator cannot see. Personal reordering accepts only a permutation of the caller's
+current visible favorites. Change broadcasts contain no room IDs; each browser fetches its own
+authorized sidebar.
+
+### Custom room icons
+
+Room creators and administrators can choose a [Lucide](https://lucide.dev/icons/) icon while
+creating or editing an open or private room. The searchable picker supports keyboard navigation,
+stages the selection, and offers **Use icon** and cancel actions. Saving the room persists the icon
+for everyone; the default hashtag can be restored.
+
+Icons appear in the sidebar and room header, including live sidebar updates. Without JavaScript,
+the full catalog is available in a native select. Only canonical catalog names are accepted;
+unknown names return 422 before other room changes are applied. Changing a room's access type
+retains its icon, and deleting the room removes the preference. The changed room's timestamp is
+updated without changing the account timestamp or message fragment caches.
+
+The catalog is pinned to `lucide-static` 1.53.0 and contains 1,869 canonical icons. Chat pages embed
+only the selected icons. The picker loads and caches the catalog on first opening and shows
+72 results at a time. Uploaded SVGs or user-provided markup cannot become room icons.
+
+### A faster way to start direct messages
+
+The sidebar's new-DM action and the rail's **DMs** button open a shared people-search modal.
+Search by full name, choose one or more recipients, and start or reopen a conversation using the
+existing direct-room endpoint. A leading `@` is accepted as a search convenience; it does not
+introduce unique usernames.
+
+The picker supports keyboard selection, pagination, mobile layouts, and retries after failed
+searches. Background sidebar updates preserve the search and selected recipients. Empty people
+lists and searches with no matches have separate feedback. The original direct-message page
+remains the link destination when the modal enhancement is unavailable.
+
+### Protection for unsaved room edits
+
+New-room and edit-room forms preserve name, icon, and membership drafts when switching between
+open and private access. In-app navigation and same-document Back/Forward open an
+**Unsaved Changes** dialog with **Discard** and **Save** actions. Escape or closing the dialog
+returns to editing. Save validates and persists the room before continuing to the requested
+destination; a failed save leaves the draft intact. Reverting the edited values removes the prompt.
+
+Discarded drafts do not reappear from Turbo snapshots. Tab close, reload, and cross-document history
+use the browser's standard unsaved-changes warning. Other forms retain their existing save behavior.
+Room create/update requests with `Prefer: return=minimal` receive a 204 acknowledgment after saving,
+allowing navigation to finish even when the edit removes your own membership. Ordinary form
+submissions retain their redirects.
+
+### Message readability, actions, and reactions
+
+Ember changes the presentation of existing message features. Messages are left-aligned with
+revised author grouping, spacing, avatars, and date separators. The first message in a group keeps
+its header timestamp; follow-up timestamps appear beside the body on hover or keyboard focus,
+with space reserved so text does not shift.
+
+Message options open a compact toolbar with three quick reactions, reply or attachment actions,
+copy link, edit, and **More reactions**. The expanded tray contains the remaining reactions and
+the existing custom boost action. The inline **Add a boost** control opens that same tray, including
+after Turbo replaces the reactions; Escape returns focus to the inline control.
+
+On desktop, hovering a message opens its toolbar and keeps it reachable while moving the pointer
+onto it. Clicking **Message options** keeps it open for interaction. Only one toolbar opens at a
+time. Keyboard and touch users can open it explicitly; Escape dismisses it. Placement stays within
+the conversation, and the additional reaction tray opens above the toolbar when necessary near
+the composer. Open menus close before Turbo caches a page.
+
+The custom-reaction form has a labeled input, explicit **Add reaction / Cancel** actions, and the
+existing 16-character limit. Without JavaScript, the native disclosure includes the full reaction
+tray and the inline boost link still opens its original form. Existing message submission,
+rich-text editing, reply, boost, attachment, and permission contracts are retained.
+
+Rapid sends also recheck author grouping and day separators when optimistic messages are replaced.
+A confirmed message no longer retains a hidden author after the preceding pending message
+disappears; the conversation displays correctly without a reload.
+
+### Attachment limits and upload progress
+
+Multipart attachments are capped at **250 MB each (250,000,000 bytes)** while streaming to temporary
+storage. Oversized files return 413 before attachment records are created. The composer also rejects
+oversized files on selection, paste, or drop before uploading them.
+
+The existing percentage progress now appears with a progress bar, file size, and explicit
+uploading/processing states until the attachment is ready. A failed file shows an actionable error
+and does not prevent other selected files from uploading. Existing stored files remain downloadable.
+The inherited 16 MiB limits on non-file
+request bodies and direct-upload requests remain in place.
+
+### SVG attachment previews
+
+SVG uploads up to **5 MiB** gain a lazy browser image preview. The browser reads the existing
+download into an isolated `<img>` data URL. Uploaded markup is never inserted into the page DOM;
+scripts and external resources do not run in that image context.
+
+The original remains a download served as `application/octet-stream` with attachment disposition.
+Oversized or undecodable SVGs retain their file card. This adds no server-side SVG parser or
+rendering service and does not change the inherited image/video processing pipeline.
+
+### Translation-button visibility
+
+Administrators can toggle **Hide translation buttons** in Workspace settings. Hiding is enabled
+by default for new and existing installs and applies to everyone, including sign-in, invitations,
+room forms, profiles, and the welcome card.
+
+These buttons provide language help for interface labels. The setting controls their visibility;
+it does not add automatic message translation or full application localization. The choice is
+stored in the account's existing settings JSON. Changing it reloads the document to clear Turbo
+snapshots; other open browsers pick up the choice on their next page load.
+
+### More reliable notification setup
+
+The room-header bell requests browser permission within the original click, waits for service-worker
+activation, and saves the subscription before exposing per-room preferences. Denied permission,
+unsupported browsers, missing server configuration, and retryable failures receive distinct
+feedback. A failed new subscription is rolled back and the bell becomes available for a manual
+retry. This enrollment flow does not add automatic notification-delivery retries.
+
+Web Push delivery and per-room notification preferences come from the Rust base. Ember improves
+the enrollment flow. Browsers without Push support show instructions to use a supported browser;
+iOS/iPadOS users must install the Home Screen app.
+
+### First-run setup and settings polish
+
+The `/first_run` screen uses a responsive Basecoat form card with visible labels, input icons,
+an optional camera-style avatar picker, a password visibility toggle, and a **Continue** button.
+It omits translation popups and the appearance selector, while honoring the saved browser palette.
+Crossing between the setup and workspace stylesheet profiles reloads the document, including
+Turbo frame requests that would otherwise embed the setup form in a workspace page.
+
+The initial administrator password must contain **at least eight characters**, enforced by both
+the browser and server. Rejected setup submissions create no account and retain the name and email
+for correction. This change applies to first-run setup; existing accounts and sign-in retain their
+existing behavior. Multipart setup, optional avatars, and signed sessions retain their contracts.
+
+Workspace logos and profile avatars use a single large preview with an overlaid camera picker
+and a separate removal action. Uploads still save immediately, with a submit button available
+without JavaScript. The rail displays the uploaded workspace logo and falls back to the Ember mark.
+
+Entering an editable single-line field selects its current value so typing replaces it; a subsequent
+click can position the caret normally. Multiline editors keep their usual behavior, and opening
+your profile does not autofocus the name field. Save confirmations show one checkmark centered
+in the content pane; errors and descriptive notices keep their text. Immediate account switches
+save without success flashes. Custom CSS saves use a full page navigation so the stylesheet reload
+does not consume the confirmation. Membership badges use the shared control styling.
+
+### Branding, release version, and upgrade compatibility
+
+Application copy, page titles, sharing prompts, the web app manifest, installation instructions,
+and documentation use **Ember**. New workspaces default to Ember. Existing workspace names exactly
+equal to `Campfire` or `Matchbox` display as Ember without rewriting the stored name; custom names
+and message contents retain their values.
+
+The executable is `ember`, with `matchbox` retained as a compatibility alias. Scripts that invoke
+the upstream `campfire` executable must use `ember`; there is no `campfire` executable alias.
+Rust crate names, the application source directory (`crates/ember/`), frontend asset paths,
+JavaScript identifiers, and owned snapshot paths use `ember`.
+
+Configuration uses `EMBER_*`, accepting `MATCHBOX_*` and then `CAMPFIRE_*` as fallbacks.
+The first defined value wins, including an explicitly empty value. Style-profile headers use
+`X-Ember-Style-Profile`, with legacy header names still accepted. Appearance preferences use
+`ember:appearance`, with reads of earlier `matchbox:appearance` and `campfire:appearance` values.
+Account settings use `ember_*` keys while accepting earlier `matchbox_*` keys on read; existing
+room order, favorites, and icons survive the rename without a database migration. Reads leave
+stored JSON untouched; the next settings update writes the canonical Ember keys.
+
+Ember's additional preferences use the existing `accounts.settings` JSON column:
+
+| Preference | Stored key |
+|---|---|
+| Language-help button visibility | `hide_translation_buttons` |
+| Shared room order | `ember_default_room_order` |
+| Per-user favorites and their order | `ember_favorite_channels` |
+| Shared-room icon choices | `ember_channel_icons` |
+
+These additions require no schema migration. The SQLite schema, Active Storage file layout,
+`_campfire_session` cookie, current signed/encrypted cookie formats, GlobalID namespace, mention
+MIME type, and inherited asset module paths remain compatible. Keep the existing storage volume,
+secrets, and deployment identity when upgrading to preserve data and sessions.
+
+The footer and `X-Version` header now default to the compiled Cargo release version, currently
+`1.0.0` displayed as `1.0`, instead of `0`. `APP_VERSION`, then `GIT_REVISION`, still override it.
+`X-Rev` carries an explicitly configured Git revision. Version information comes from build or
+deployment configuration rather than an editable database setting.
+
+### Verification of the redesigned interface
+
+Ember owns the presentation of its application pages. Reviewed Ember DOM snapshots and native
+browser checks cover the redesign, including setup, sign-in, workspace navigation, room preferences,
+conversations, settings, and responsive layouts. The browser checks start temporary app instances
+with disposable accounts and storage, without requiring a Rails seed or Docker.
+
+The Rails reference and historical golden fixtures remain in the repository. Unchanged fragments,
+HTTP behavior, network traffic, and Cable messages still have compatibility checks. Presentation
+exceptions do not blanket-exempt status, network, or Cable checks. Full Rails browser comparison
+requires separate review of changed asset requests, body hashes, and sidebar broadcasts; Ember
+does not claim visual parity with the original interface. Message show/index/create snapshots and
+the three message-fragment presentation exceptions cover the compact-action changes.
+
+### Inherited differences from the original Rails application
+
+The Rust base already made deliberate changes to the Rails implementation. Ember retains the
+behavior and limits below; these are part of the inherited baseline rather than new Ember features.
+
+<details>
+<summary>Rust-versus-Rails behavior and compatibility limits</summary>
+
+- **Frontend corrections:** session-transfer auto-submit forms explicitly close their form tag;
+  the pinned Rails reference omitted it. Background sidebar refreshes preserve the legacy New Ping
+  form. Sidebar connection refresh waits for the current Turbo frame to finish loading, preventing
+  an aborted response on startup or reconnect. Obsolete connections and removed frames do not reload.
+- **WebSockets:** `permessage-deflate` without context takeover compresses each broadcast once
+  for all subscribers. Decoded messages remain identical.
+- **CSRF:** `Sec-Fetch-Site` replaces tokens. Writes accept `same-origin` and `same-site`, reject
+  `cross-site` and missing headers over HTTPS with 422, and retain the `Origin` check. Plain HTTP
+  accepts missing headers with `SameSite=Lax` cookies. Pages omit CSRF tags and fields; old tabs
+  still work, but HTTPS forms require a browser that sends the header (Safari 16.4 or newer).
+- **Jobs:** Redis and Resque are replaced by in-process queues with `JOB_CONCURRENCY` workers per
+  job kind. Queued pushes and webhooks are lost on a crash; slow webhooks don't block pushes.
+- **Push:** invalid VAPID keys disable push at boot. Subscriptions survive TLS/configuration
+  failures and are deleted only on 404/410 or an invalid subscription P-256 key. Notification
+  bodies are truncated with an ellipsis at 3 KB and titles at 256 bytes. `VAPID_SUBJECT` is configurable.
+  Delivery timeouts are 10 seconds per connect/read and 30 seconds overall.
+- **Cookies:** sessions are written only on change and deleted when empty; `last_room` only on
+  change. `session_token` is re-signed on the hourly activity refresh, retaining its rolling
+  20-year expiry. Other authenticated reads avoid the database writer.
+- **Caching:** room, messages and search ETags hash cached page parts rather than the body.
+  Copy-link buttons cache paths and resolve them against the page URL; bot JSON is cached per
+  base URL, preventing a request's Host from changing other users' links.
+- **SQLite:** boot adds `index_messages_on_room_id_and_created_at` and
+  `index_messages_on_room_id_and_updated_at` if missing. They remain compatible with Rails.
+  Memory mapping is disabled; reads use SQLite's page cache.
+- **Media formats:** libvips 8.16.1 and ffmpeg 7.1.5 use the Rails image's Debian sources, with
+  byte-identical thumbnails, posters and metadata for supported formats. libvips omits loaders
+  Rails already blocks. ffmpeg omits external-library-only formats: tracker modules, game-console
+  music, JPEG XL/SVG frames, codec2, teletext and DASH/IMF. Tracker/game-console uploads lack
+  duration and bit rate. Unused encoders, muxers, hardware and network support are omitted.
+- **Media processing:** message uploads are copied and checksummed before saving their rows, then
+  deleted if saving fails. The redundant MD5 reread is skipped; analysis, variants, posters and
+  client direct-upload checksums still validate files. At most four media jobs run off the database
+  writer. Variants/posters are saved already analyzed; concurrent transforms keep the first saved
+  result and delete duplicates. ffmpeg posters time out at 60 seconds, ffprobe at 30.
+- **Request limits:** non-file-upload bodies and direct uploads are capped at 16 MiB (413).
+  Nonnumeric direct-upload sizes and oversized QR codes return 422. Page numbers cap at a billion.
+- **Cable limits:** 64 subscriptions per connection, 4 KiB identifiers and 1 MiB messages.
+  Clients that don't read for 30 seconds disconnect. Banning/deactivating a user closes their
+  connections after commit.
+- **Unfurling:** 10 seconds overall, 5 per connect/read, at most 16 concurrent unfurls, and only
+  the first 256 attributes of a `meta` tag are read. Timed-out pages unfurl nothing.
+- **Webhooks:** 60 seconds overall, 7 per connect/read. Replies over 100 MB after decompression
+  fail delivery without posting a response.
+- **Front server:** `TARGET_PORT` binds loopback and enforces front-server timeouts and
+  `MAX_REQUEST_BODY`. Cache keys count toward `CACHE_SIZE`, preserve raw paths/queries, skip URIs
+  over 2 KB and forward range requests. Idle HTTP/1 connections close at the shorter of
+  `HTTP_IDLE_TIMEOUT` and `HTTP_READ_TIMEOUT` until request headers arrive (30 seconds with defaults,
+  60 with image settings); HTTP/2 uses the idle timeout. Response header lines containing DEL are omitted.
+- **Passwords:** bcrypt runs outside database connections/transactions. Unknown emails still
+  perform one bcrypt check.
+- **JSON:** floats use the shortest equivalent digits. The web app manifest properly JSON-escapes
+  account names and URLs.
+- **Search:** words are literal full-text terms, including `NOT`, `AND`, `OR` and `NEAR`.
+  The newest 100 matches are selected by message id, as in current Rails. Imported messages
+  with creation times out of id order follow id order in search. A bounded global scan
+  falls back to a membership-scoped query when most recent matches are inaccessible.
+- **Routes and UI:** `/rooms/directs/:id` redirects to the room; infinite `Accept` q-values sort
+  first or last by sign; EdgeHTML install instructions include the missing image; the new-ping
+  picker requests JSON so suggestions appear.
+- **Rich text attributes:** autolinking escapes `<`/`>` in attributes to prevent stored XSS.
+  Sanitization drops `name` attributes to prevent DOM clobbering. Styles retain only `color` and
+  `background-color` with plain keyword/hex/RGB/HSL values or CSS variables in bot/webhook HTML;
+  message pages drop styles.
+- **Rich text attachments:** content attachments nest at most eight levels; deeper content is
+  empty. Deleted-user mentions render ☒ and are omitted in the editor. Active Storage attachments
+  embedded in message bodies, which the composer can't create, render ☒.
+- **Malformed rich text:** plain-text extraction failures are logged and use empty text or an
+  attachment filename; messages are still indexed, pushed, broadcast and sent to bots. Bodies
+  beyond 400 nesting levels or 400 attributes per element are stored unchanged with empty plain
+  text. These messages render as unrenderable.
+- **Not ported:** Active Storage streaming's duplicate `session_token` cookie or legacy AES-CBC
+  cookies; Ember uses AES-GCM.
+
+HTTP-01 ACME validation is only unit-tested; TLS-ALPN-01 is tested end to end against a local ACME
+server. Rich text is checked against Rails on 658 cases, including 400 fuzzed cases.
+
+</details>
+
+## Features retained from Campfire in Rust
+
+These capabilities were already present in the base fork and remain part of Ember:
+
+| Capability | Retained behavior |
+|---|---|
+| Rooms and conversations | Open and private rooms, memberships, direct and group conversations, unread state, presence, and typing notifications. |
+| Messaging | Rich-text composition, mentions, replies, boosts/custom reactions, message editing, and message links. |
+| Files and media | Uploads, downloads, image variants, video posters, and media metadata using libvips and ffmpeg. |
+| Search | Full-text message search scoped to accessible rooms, with recent searches. |
+| People and administration | Invitations, account roles, user management, bans/deactivation, avatars, and workspace logos. |
+| Integrations | Bot accounts, webhook delivery, and link unfurling. |
+| Browser installation and notifications | Web app manifest, service worker, platform installation guidance, Web Push delivery, and room notification preferences. |
+| Customization | Workspace name, logo, and account custom CSS. |
+| Server | One Rust application executable with built-in TLS/Let's Encrypt, HTTP/2, and Action Cable-compatible WebSockets. |
+| Persistence and operations | Existing SQLite/storage formats, current Rails-compatible cookies, backup/restore hooks, in-process jobs, and response/fragment caches. |
+
+The single executable replacing Ruby, Puma, Redis, Resque, and Thruster is work from Campfire in
+Rust. Ember still uses libvips and ffmpeg for media. The server architecture and historical
+performance improvements are inherited; the [benchmark figures below](#performance) are upstream
+measurements rather than new Ember measurements.
 
 ## Running it
 
@@ -42,10 +415,11 @@ docker run -d -p 80:80 -p 443:443 \
 
 [ONCE](https://github.com/basecamp/once) can also deploy an image you build and publish to your
 own registry. The executable is `ember`; `matchbox` remains available as a compatibility alias.
-The application crate lives in `crates/matchbox/`. Configuration uses `EMBER_*` names, with
+The application crate lives in `crates/ember/`. Configuration uses `EMBER_*` names, with
 `MATCHBOX_*` and `CAMPFIRE_*` accepted for existing deployments, in that order of precedence.
 
-- `TLS_DOMAIN` enables automatic Let's Encrypt certificates; `DISABLE_SSL` enables plain HTTP.
+- `TLS_DOMAIN` enables automatic Let's Encrypt certificates. For plain HTTP, leave it unset and
+  set `DISABLE_SSL=1`; any nonblank `DISABLE_SSL` value disables application SSL enforcement.
 - `/rails/storage` holds the database, uploads, backups and certificates. Existing installs must
   keep their storage volume (including its existing name) and secrets.
 - Web Push needs a valid P-256 VAPID key pair in URL-safe Base64. `VAPID_SUBJECT` sets the contact
@@ -59,7 +433,7 @@ The application crate lives in `crates/matchbox/`. Configuration uses `EMBER_*` 
   Git revision. Version information is build configuration, not an editable database preference.
 - The app listener on `TARGET_PORT` (3000) binds loopback. `TARGET_BIND` overrides this; that listener
   trusts `X-Forwarded-*` from whoever reaches it. Other settings are in
-  [`config.rs`](crates/matchbox/src/config.rs).
+  [`config.rs`](crates/ember/src/config.rs).
 - The Dockerfile supports amd64 and arm64.
 
 ## Performance
@@ -95,14 +469,24 @@ parity/bin/reference build
 parity/bin/seed build
 EMBER_REQUIRE_SEED=1 cargo test --workspace --exclude html5ever
 cargo clippy --workspace --exclude html5ever --all-targets
+cargo fmt --all --check
 parity/bin/candidate build
 parity/bin/candidate compare
 bench/run
 ```
 
 Seed generation and parity checks need Docker. Tests without the seed skip app integration tests.
-For local development, run `cargo run --bin ember -- server` with `SECRET_KEY_BASE` set
-(or `SECRET_KEY_BASE_DUMMY=1`). Build an image with `docker build -t ember .`.
+For local HTTP development, leave `TLS_DOMAIN` unset and run:
+
+```sh
+SECRET_KEY_BASE_DUMMY=1 DISABLE_SSL=1 HTTP_PORT=8080 \
+  cargo run --bin ember -- server
+```
+
+Open `http://localhost:8080`. The dummy secret is regenerated on every start; use a stable
+`SECRET_KEY_BASE` when sessions must survive restarts. If Rust is not on your PATH, use
+`mise exec rust@1.98.1 -- cargo ...` for Cargo commands. Build a production image with
+`docker build -t ember .`.
 
 The reference harness compares HTML, DOM, accessibility trees, assets, Cable frames and screenshots
 against Rails. Ember now owns application-page presentation: reviewed Ember DOM snapshots and
@@ -116,19 +500,22 @@ See [`parity/SCREENS.md`](parity/SCREENS.md) for the historical coverage and mas
 ### Ember frontend
 
 All pages use compiled Askama templates and the existing form helpers for field names, escaping,
-and multipart handling. The workspace interface is styled in
-[`zz-matchbox.css`](crates/assets/overrides/zz-matchbox.css), loaded after the original stylesheets
+and multipart handling. Port-owned frontend changes live in
+[`crates/assets/overrides/`](crates/assets/overrides/), which shadows upstream assets by logical
+path; leave `reference/` unchanged.
+The workspace interface is styled in
+[`zz-ember.css`](crates/assets/overrides/zz-ember.css), loaded after the original stylesheets
 so rich-text editor and interaction styles remain available. Shared navigation,
 unread activity, and the mobile drawer live in
-[`matchbox/shell.js`](crates/assets/overrides/matchbox/shell.js). Edit these two files for shared
+[`ember/shell.js`](crates/assets/overrides/ember/shell.js). Edit these two files for shared
 workspace behavior and appearance; page markup remains in `crates/views/templates/`.
 
-The workspace bundle contains 68,368 bytes of CSS (12,477 gzip) and 7,370 bytes of shell JavaScript
-(2,359 gzip), measured with gzip level 9. Room ordering, icon selection, and SVG previews use separate Stimulus
+The workspace bundle contains 68,365 bytes of CSS (12,474 gzip) and 7,319 bytes of shell JavaScript
+(2,358 gzip), measured with gzip level 9. Room ordering, icon selection, and SVG previews use separate Stimulus
 controllers, discovered through the digested importmap alongside the inherited controllers.
 The compact message-actions controller adds 8,566 bytes (2,298 gzip).
 The composer upload override is 7,703 bytes (2,636 gzip), with a 1,814-byte uploader (734 gzip).
-The shared appearance adapter adds 3,227 bytes (1,171 gzip),
+The shared appearance adapter adds 3,237 bytes (1,178 gzip),
 built from `basecoat/src/workspace-appearance.js` with the shared preference helpers.
 Assets use the existing digested URLs and compression pipeline. Message fragment recording and
 content-addressed response caches retain their existing mechanisms; the message presentation digest
@@ -177,252 +564,17 @@ workspace navigation, conversations, settings, and responsive layouts without Do
 real disposable accounts and messages rather than using the development database. They do not
 replace the reference-seeded integration suite.
 
-Reviewed page DOM snapshots live under `crates/views/tests/golden/matchbox/{a,b}` and render the
+Reviewed page DOM snapshots live under `crates/views/tests/golden/ember/{a,b}` and render the
 frozen Rails fixture inputs. To intentionally update them after reviewing a UI change:
 
 ```sh
-EMBER_UPDATE_VIEWS=1 cargo test -p matchbox_views
-cargo test -p matchbox_views
+EMBER_UPDATE_VIEWS=1 cargo test -p ember_views
+cargo test -p ember_views
 ```
 
 Inspect the resulting snapshot diff. Historical Rails goldens remain unchanged; unchanged message,
 rich-text, and protocol fragments still compare against them. See the
-[snapshot notes](crates/views/tests/golden/matchbox/README.md).
-
-## Known differences
-
-The app keeps the Rails database, storage and current cookie formats compatible. Deliberate
-behavior changes and compatibility limits are listed below.
-
-<details>
-<summary>Differences from Rails</summary>
-
-- **Ember branding:** application copy, page titles, translations, sharing prompts, installation
-  instructions, the web app manifest, and repository documentation use Ember.
-  New workspaces default to Ember; an existing workspace named exactly Campfire or Matchbox displays as
-  Ember without rewriting its stored name. Other workspace names and message contents stay intact.
-  The executable is `ember`, configuration uses `EMBER_*`, and style-profile headers use
-  `X-Ember-Style-Profile`. The `matchbox` executable, `MATCHBOX_*` and `CAMPFIRE_*` configuration,
-  and legacy style-profile headers remain compatible. Configuration precedence is `EMBER_*`,
-  then `MATCHBOX_*`, then `CAMPFIRE_*`; an explicit empty value also takes precedence.
-  Rust crate names, internal asset paths, stored settings, and existing browser appearance
-  preferences are retained for compatibility.
-  The `_campfire_session` cookie, GlobalID namespace, mention MIME type, and upstream asset module
-  paths remain compatible so existing sessions, links, and messages work. Upstream source, URLs,
-  copyright notices, recorded benchmarks, and Rails golden fixtures retain their original names.
-- **Workspace redesign:** application pages use a neutral interface with a left navigation rail,
-  a conversation sidebar, a compact room header, left-aligned message threads, an invitation card,
-  and a full-width composer. Small screens use a dismissible sidebar drawer and touch-sized controls.
-  The navigation rail has 56 × 56 px buttons with rounded corners and padded 80px-wide spacing.
-  Home and direct-message navigation use actual room memberships; Activity shows actual unread
-  conversations and counts. Search in the rail opens the existing full message search. Ember
-  uses “rooms” consistently in labels, settings, favorites, and search. The sidebar starts with
-  rooms directly beneath the workspace name. Room creation lives in workspace
-  settings, alongside the admin-only room-creation permission control; existing creation permissions
-  still apply. The new-room back button returns to workspace settings, including after switching
-  between open and private rooms. The appearance control above the profile avatar offers Light,
-  Dark, and System, shares onboarding's browser preference, and follows live system changes in
-  System mode. The selected palette applies before paint and persists across visits and tabs.
-  Opening a profile does not autofocus the name field. Save confirmations show a single checkmark
-  centered within the content pane; descriptive notices and errors keep their text.
-  Custom CSS saves submit with a full page navigation so the stylesheet reload does not consume
-  the confirmation before it is displayed.
-  The direct-message picker distinguishes an empty people list from an unsuccessful typed search;
-  opening or clearing the search never prompts the user to try another name.
-  The star beside a room name saves a per-user favorite; starred rooms
-  stay at the top of that user’s sidebar in their chosen order; unstarred rooms follow the shared order. Search
-  uses a subtle focus border and a vertically centered exit button.
-  Follow-up message timestamps appear to the right of the message body on hover or keyboard focus,
-  with their space reserved to avoid moving the text; the first message keeps its header timestamp.
-  Desktop messages use a 64px text inset, 36px avatars with 6px corners, and 15px text with a 22px
-  line height. One-line author/message rows are 52px high and continuation rows are 30px high.
-  Date pills use 14px bold text and a 28px height; mobile keeps compact gutters and larger tap targets.
-  Message options use a compact bar with three quick reactions, reply or attachment actions, copy
-  link, and edit. More reactions opens a small tray with the other reactions and custom boost.
-  The inline **Add a boost** control opens that same tray, including after Turbo replaces the
-  reactions; Escape returns focus to the inline control, while submission focuses the stable toolbar
-  control so replacing the reactions does not lose keyboard focus. Its original link remains the no-JS fallback.
-  On desktop the native options disclosure sits inside the bar, giving ordinary editable text
-  messages a 266×42px toolbar, 16px from the pane edge and 17px above the row. Hovering opens the
-  bar across the row's top edge while keeping a continuous hover area.
-  Opening the additional reaction tray keeps the bar anchored in place; near the composer the tray
-  opens above it. The bar stays reachable while moving onto it and dismisses after leaving. Only one
-  bar opens at a time. Clicking Message options keeps it open for interaction, and keyboard and
-  touch users can still open it with that control.
-  Custom reactions use a spaced form card with a labeled input, the existing 16-character limit,
-  and explicit Add reaction / Cancel actions. The bar stays within the conversation on mobile and
-  near scroll boundaries, supports keyboard focus and Escape, and closes before Turbo caches the page.
-  Without JavaScript, the disclosure
-  includes the full reaction tray. Message show/index/create DOM snapshots and the three
-  message-rendering fragment parity exceptions cover this deliberate presentation change.
-  The design does not fabricate rooms, people, or an Apps section. Sign-in and invitation signup
-  use form cards; account/profile screens have persistent labels and visible actions.
-  Search shows recent searches once above the results instead of duplicating the links in navigation.
-  First-run retains its separate Basecoat card. All other pages inherit the shared workspace styles, including
-  room management, search, bots, and user settings. Account custom CSS remains supported.
-  The redesign changes templates, shared CSS, and shell JavaScript; the database, sessions, message
-  submission, rich-text editor, uploads, notifications, and fragment/cache mechanisms retain their
-  existing contracts. Ember DOM snapshots and browser checks replace Rails pixel/DOM equality
-  for owned pages. HTTP outcomes and network/Cable behavior are not blanket-allowlisted.
-- **Translation controls:** administrators can toggle **Hide translation buttons** in Account
-  settings. Hiding is enabled by default for new and existing installs, including sign-in,
-  invitations, room forms, profiles, and the welcome card. The choice is stored in the account's
-  existing settings JSON and applies to everyone. Changing it reloads the document to clear Turbo's
-  snapshots; other open browsers pick up the choice on their next page load.
-- **Workspace controls:** entering an editable single-line field selects its existing value so
-  typing replaces it. A subsequent click can place the caret normally; multiline editors retain
-  their usual editing behavior. Workspace logos and profile avatars use a single large preview with
-  an overlaid camera picker and a separate removal action. Uploads still save immediately and offer
-  a submit button without JavaScript. The navigation rail shows the uploaded workspace logo, falling
-  back to the Ember mark when no logo is set. Immediate account switches save without success flashes; name/logo
-  saves have a readable confirmation. Membership badges use the shared control styling.
-- **Unsaved room edits:** new/edit room forms prompt with **Unsaved Changes**, **Discard**, and
-  **Save** before in-app navigation or same-document browser back/forward. Escape or the close action
-  returns to editing. Save validates and persists before continuing to the requested destination;
-  failed saves leave the draft intact. Room create/update requests with `Prefer: return=minimal`
-  receive a 204 acknowledgment after saving, so removing your own membership can still finish;
-  ordinary form submissions retain their redirects. Access-form switches preserve the name, icon, and membership
-  drafts. Reverting values removes the prompt. Room forms bypass Turbo snapshots so discarded
-  drafts do not return with Back. Tab close, reload, and cross-document history use the browser's
-  standard unsaved-changes warning; browsers do not allow styling that warning. Other forms retain
-  their existing save behavior.
-- **Room ordering:** administrators arrange shared rooms in workspace settings using drag handles
-  or Alt + Up/Down, then explicitly **Save order** for everyone. **Cancel** discards the draft;
-  failed saves retain it for retry. Saving removes legacy personal overrides for unstarred rooms.
-  Members can reorder only their starred rooms, using hold-and-drag or Alt + Up/Down in the sidebar.
-  Activity-filtered favorites remain in saved orders; failed saves preserve newer favorite changes.
-  Favorites and their personal order survive shared-order changes; starring an existing favorite
-  does not move it. New/unranked shared rooms follow the saved order alphabetically.
-  Preferences use the existing account settings JSON with no schema migration or account cache
-  timestamp changes. The admin endpoint rechecks the role inside the write transaction and preserves
-  ranked private rooms the submitting admin cannot see. Personal ordering accepts only a permutation
-  of the caller's visible favorites. Broadcasts carry no room IDs; each browser fetches its own
-  authorized sidebar.
-- **New direct messages:** the sidebar action and rail DMs button open a shared people-search modal.
-  Search matches full names; a leading `@` is accepted as a convenience, not a unique username.
-  Select one or more people to start or reopen a conversation through the existing direct-room
-  endpoint. The modal supports keyboard selection, pagination, mobile layouts, retry after a failed
-  search, and retains recipients across background sidebar updates and HTML submission errors. The original direct-message
-  page remains the link destination when the modal enhancement is unavailable.
-- **Room icons:** room creators and administrators can choose a Lucide icon when creating or
-  editing open or restricted rooms. A searchable, keyboard-accessible picker stages the choice;
-  **Use icon** applies it to the form and **Save** persists it for everyone. Cancel keeps the prior
-  choice; the default hashtag can be restored. Without JavaScript, the complete catalog is available
-  in a native select. Icons appear in the sidebar and room header, including live sidebar updates.
-  Canonical names are validated before any other submitted room changes; unknown names return
-  422. Choices live in `accounts.settings.matchbox_channel_icons`, requiring no schema migration.
-  Type changes retain the icon and room deletion removes it. Only the changed room's timestamp
-  is updated; account timestamps and message fragment caches retain their existing behavior.
-- **SVG attachments:** SVGs up to 5 MiB gain a lazy image preview. The browser loads the original
-  download into an isolated `<img>` data URL; uploaded markup is never inserted into the page DOM.
-  Scripts and external resources do not run in the image context. The original remains served as
-  `application/octet-stream` with attachment disposition. Oversized or undecodable files retain
-  the file card. This is a vector preview, without server-side SVG parsing or a new rendering service.
-- **Notification setup:** the bell requests permission within the original click and waits for
-  service-worker activation and successful subscription saving before exposing room preferences.
-  Denied permission, missing server configuration, unsupported browsers, and retryable failures
-  have distinct feedback. A failed new subscription is rolled back and can be retried.
-- **Release display:** the former default version `0` is replaced by the actual Cargo release version,
-  with the existing deployment overrides retained as described above.
-- **Ember setup screen:** `/first_run` uses a responsive Basecoat form card with visible labels and an
-  optional camera-style avatar picker, input icons, a password visibility toggle, and a Continue
-  button. The setup screen omits the field translation popups and appearance selector. It follows
-  system colors by default and honors an existing saved appearance preference. Workspace pages use
-  system-driven light and dark colors. Setup now requires a password of at least eight characters
-  in both the browser and server; rejected submissions create no account and retain the name and
-  email for correction. Existing accounts and sign-in behavior are unaffected. Multipart setup
-  submissions and signed sessions retain their existing contracts. Crossing stylesheet
-  profiles reloads the document, including a frame request that would embed the new setup form in
-  a legacy page. The setup screen has separate KRO visual and behavior checks.
-- Session-transfer auto-submit forms explicitly close their form tag; the pinned Rails
-  reference omitted it.
-- Background sidebar refreshes preserve the legacy New Ping form as well as the new DM picker.
-- Rapid message sends recheck author grouping and day separators around replaced optimistic messages.
-  A confirmed message no longer keeps its author hidden after the preceding pending message disappears;
-  it displays correctly without reloading the conversation.
-
-- Sidebar connection refresh waits for the current Turbo frame to finish loading,
-  preventing an aborted response on startup or reconnect. Obsolete connections and removed frames do not reload.
-
-- **WebSockets:** `permessage-deflate` without context takeover compresses each broadcast once
-  for all subscribers. Decoded messages remain identical.
-- **CSRF:** `Sec-Fetch-Site` replaces tokens. Writes accept `same-origin` and `same-site`, reject
-  `cross-site` and missing headers over HTTPS with 422, and retain the `Origin` check. Plain HTTP
-  accepts missing headers with `SameSite=Lax` cookies. Pages omit CSRF tags and fields; old tabs
-  still work, but HTTPS forms require a browser that sends the header (Safari 16.4 or newer).
-- **Jobs:** Redis and Resque are replaced by in-process queues with `JOB_CONCURRENCY` workers per
-  job kind. Queued pushes and webhooks are lost on a crash; slow webhooks don't block pushes.
-- **Push:** invalid VAPID keys disable push at boot. Subscriptions survive TLS/configuration
-  failures and are deleted only on 404/410 or an invalid subscription P-256 key. Notification
-  bodies are truncated with an ellipsis at 3 KB and titles at 256 bytes. `VAPID_SUBJECT` is configurable.
-  Delivery timeouts are 10 seconds per connect/read and 30 seconds overall.
-- **Cookies:** sessions are written only on change and deleted when empty; `last_room` only on
-  change. `session_token` is re-signed on the hourly activity refresh, retaining its rolling
-  20-year expiry. Other authenticated reads avoid the database writer.
-- **Caching:** room, messages and search ETags hash cached page parts rather than the body.
-  Copy-link buttons cache paths and resolve them against the page URL; bot JSON is cached per
-  base URL, preventing a request's Host from changing other users' links.
-- **SQLite:** boot adds `index_messages_on_room_id_and_created_at` and
-  `index_messages_on_room_id_and_updated_at` if missing. They remain compatible with Rails.
-  Memory mapping is disabled; reads use SQLite's page cache.
-- **Media formats:** libvips 8.16.1 and ffmpeg 7.1.5 use the Rails image's Debian sources, with
-  byte-identical thumbnails, posters and metadata for supported formats. libvips omits loaders
-  Rails already blocks. ffmpeg omits external-library-only formats: tracker modules, game-console
-  music, JPEG XL/SVG frames, codec2, teletext and DASH/IMF. Tracker/game-console uploads lack
-  duration and bit rate. Unused encoders, muxers, hardware and network support are omitted.
-- **Media processing:** message uploads are copied and checksummed before saving their rows, then
-  deleted if saving fails. The redundant MD5 reread is skipped; analysis, variants, posters and
-  client direct-upload checksums still validate files. At most four media jobs run off the database
-  writer. Variants/posters are saved already analyzed; concurrent transforms keep the first saved
-  result and delete duplicates. ffmpeg posters time out at 60 seconds, ffprobe at 30.
-- **Request limits:** non-file-upload bodies and direct uploads are capped at 16 MiB (413).
-  Multipart files are capped at **250 MB each (250,000,000 bytes)** while streaming to temporary
-  storage; oversized files return 413 before attachment records are created. The composer rejects
-  oversized files on selection, paste, or drop, and shows real upload progress followed by a
-  processing state until the attachment is ready. Failed uploads show an actionable error and do
-  not prevent other selected files from uploading. Existing stored files remain downloadable.
-  Nonnumeric direct-upload sizes and oversized QR codes return 422. Page numbers cap at a billion.
-- **Cable limits:** 64 subscriptions per connection, 4 KiB identifiers and 1 MiB messages.
-  Clients that don't read for 30 seconds disconnect. Banning/deactivating a user closes their
-  connections after commit.
-- **Unfurling:** 10 seconds overall, 5 per connect/read, at most 16 concurrent unfurls, and only
-  the first 256 attributes of a `meta` tag are read. Timed-out pages unfurl nothing.
-- **Webhooks:** 60 seconds overall, 7 per connect/read. Replies over 100 MB after decompression
-  fail delivery without posting a response.
-- **Front server:** `TARGET_PORT` binds loopback and enforces front-server timeouts and
-  `MAX_REQUEST_BODY`. Cache keys count toward `CACHE_SIZE`, preserve raw paths/queries, skip URIs
-  over 2 KB and forward range requests. Idle HTTP/1 connections close at the shorter of
-  `HTTP_IDLE_TIMEOUT` and `HTTP_READ_TIMEOUT` until request headers arrive (30 seconds with defaults,
-  60 with image settings); HTTP/2 uses the idle timeout. Response header lines containing DEL are omitted.
-- **Passwords:** bcrypt runs outside database connections/transactions. Unknown emails still
-  perform one bcrypt check.
-- **JSON:** floats use the shortest equivalent digits. The web app manifest properly JSON-escapes
-  account names and URLs.
-- **Search:** words are literal full-text terms, including `NOT`, `AND`, `OR` and `NEAR`.
-  The newest 100 matches are selected by message id, as in current Rails. Imported messages
-  with creation times out of id order follow id order in search. A bounded global scan
-  falls back to a membership-scoped query when most recent matches are inaccessible.
-- **Routes and UI:** `/rooms/directs/:id` redirects to the room; infinite `Accept` q-values sort
-  first or last by sign; EdgeHTML install instructions include the missing image; the new-ping
-  picker requests JSON so suggestions appear.
-- **Rich text attributes:** autolinking escapes `<`/`>` in attributes to prevent stored XSS.
-  Sanitization drops `name` attributes to prevent DOM clobbering. Styles retain only `color` and
-  `background-color` with plain keyword/hex/RGB/HSL values or CSS variables in bot/webhook HTML;
-  message pages drop styles.
-- **Rich text attachments:** content attachments nest at most eight levels; deeper content is
-  empty. Deleted-user mentions render ☒ and are omitted in the editor. Active Storage attachments
-  embedded in message bodies, which the composer can't create, render ☒.
-- **Malformed rich text:** plain-text extraction failures are logged and use empty text or an
-  attachment filename; messages are still indexed, pushed, broadcast and sent to bots. Bodies
-  beyond 400 nesting levels or 400 attributes per element are stored unchanged with empty plain
-  text. These messages render as unrenderable.
-- **Not ported:** Active Storage streaming's duplicate `session_token` cookie or legacy AES-CBC
-  cookies; Ember uses AES-GCM.
-
-HTTP-01 ACME validation is only unit-tested; TLS-ALPN-01 is tested end to end against a local ACME
-server. Rich text is checked against Rails on 658 cases, including 400 fuzzed cases.
-
-</details>
+[snapshot notes](crates/views/tests/golden/ember/README.md).
 
 ## License and attribution
 

@@ -498,7 +498,7 @@ fn time_per_call(iterations: u32, mut call: impl FnMut()) -> Duration {
     runs[runs.len() / 2]
 }
 
-/// `cargo test --release -p matchbox_db --lib -- --ignored --nocapture row_reading_timing`
+/// `cargo test --release -p ember_db --lib -- --ignored --nocapture row_reading_timing`
 #[test]
 #[ignore = "a timing, run by hand in a release build"]
 fn row_reading_timing() {

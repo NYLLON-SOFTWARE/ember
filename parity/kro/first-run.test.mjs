@@ -161,12 +161,12 @@ test("administrators control translation visibility for everyone, hidden by defa
 
   async function setHidden(hidden) {
     await page.goto("/account/edit")
-    await page.evaluate(() => { window.matchboxVisibilityMarker = true })
+    await page.evaluate(() => { window.emberVisibilityMarker = true })
     const saved = page.waitForResponse((response) => response.request().method() === "POST" && new URL(response.url()).pathname === accountAction)
     // The existing switch styles deliberately hide the native checkbox behind its label.
     await page.locator("#localization-settings label.switch").click()
     assert.ok([302, 303].includes((await saved).status()))
-    await page.waitForFunction(() => !window.matchboxVisibilityMarker)
+    await page.waitForFunction(() => !window.emberVisibilityMarker)
     assert.equal(await toggle.isChecked(), hidden, "changed tracked metadata forces a fresh document")
     await page.reload()
     assert.equal(await toggle.isChecked(), hidden, "setting persists after reload")
@@ -375,12 +375,15 @@ test("appearance follows the system without a selector and honors saved preferen
   await page.reload()
   await expectDark(page, true)
   assert.equal(await page.evaluate(() => window.kroDarkWhenBodyAppeared), true)
-  await page.evaluate(() => localStorage.setItem("matchbox:appearance", "light"))
+  await page.evaluate(() => localStorage.setItem("ember:appearance", "light"))
   await page.emulateMedia({ colorScheme: "dark" })
   await page.reload()
   await expectDark(page, false)
   assert.equal(await page.evaluate(() => window.kroDarkWhenBodyAppeared), false)
-  await page.evaluate(() => localStorage.removeItem("matchbox:appearance"))
+  await page.evaluate(() => {
+    localStorage.removeItem("ember:appearance")
+    localStorage.removeItem("matchbox:appearance")
+  })
   await page.reload()
   await expectDark(page, true)
 })

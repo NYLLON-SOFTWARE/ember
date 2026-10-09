@@ -1,5 +1,5 @@
 # Route table and path recognition as the reference's router sees them, for
-# crates/matchbox/src/controllers (route coverage and Rails' first-match precedence).
+# crates/ember/src/controllers (route coverage and Rails' first-match precedence).
 #
 #   parity/bin/reference runner reference-tools/campfire/routes.rb > vectors/campfire_routes.json
 require "json"

@@ -1,4 +1,4 @@
-# Boots the reference app on a database matchbox_db wrote (`export_database_for_rails` in
+# Boots the reference app on a database ember_db wrote (`export_database_for_rails` in
 # src/tests/fixtures_test.rs) and reads, edits, searches and deletes through Active Record, the
 # way Rails would after a rollback. Run by reference-tools/db/differential.sh.
 ActiveJob::Base.queue_adapter = :test

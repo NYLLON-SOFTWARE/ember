@@ -50,7 +50,7 @@ pub fn body_classes(ctx: &ViewContext, body_class: Option<&str>) -> String {
 pub fn link_back(ctx: &ViewContext) -> Html {
     let back_url = match &ctx.referrer {
         Some(referrer) if *referrer != ctx.request_url => referrer.clone(),
-        _ => matchbox_routes::root(),
+        _ => ember_routes::root(),
     };
     link_back_to(ctx, &back_url)
 }
@@ -68,8 +68,8 @@ pub fn link_back_to(ctx: &ViewContext, destination: impl std::fmt::Display) -> H
 /// `RoomsHelper#link_back_to_last_room_visited`.
 pub fn link_back_to_last_room_visited(ctx: &ViewContext) -> Html {
     match ctx.last_room_visited_id {
-        Some(room_id) => link_back_to(ctx, matchbox_routes::room(room_id)),
-        None => link_back_to(ctx, matchbox_routes::root()),
+        Some(room_id) => link_back_to(ctx, ember_routes::room(room_id)),
+        None => link_back_to(ctx, ember_routes::root()),
     }
 }
 
@@ -92,7 +92,7 @@ pub fn button_to_copy_to_clipboard(url: &str, content: &str) -> Html {
 /// `link_to_zoom_qr_code(url) { content }`: the QR code route takes the URL,
 /// `Base64.urlsafe_encode64`d (reference/app/helpers/qr_code_helper.rb).
 pub fn link_to_zoom_qr_code(url: &str, content: &str) -> Html {
-    let path = matchbox_routes::qr_code(encoding::urlsafe_encode_padded(url.as_bytes()));
+    let path = ember_routes::qr_code(encoding::urlsafe_encode_padded(url.as_bytes()));
     let options =
         attrs().class("btn").data("lightbox_target", "image").data("action", "lightbox#open").data("lightbox_url_value", path.as_str());
     link_to(&path, options, content)

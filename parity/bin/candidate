@@ -92,7 +92,7 @@ copy_seed_into() {
 container() { echo "ember-candidate-$1"; }
 instance_dir() { echo "$INSTANCES/$1"; }
 
-# Labels also find Matchbox containers started before the rename.
+# Labels also find containers started before the Ember rename.
 containers_on_port() {
   docker ps -a --filter "label=parity.candidate.port=$1" --format '{{.Names}}'
 }

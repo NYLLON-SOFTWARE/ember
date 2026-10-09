@@ -18,16 +18,16 @@ export default class extends Controller {
   #submitting = false
 
   connect() {
-    this.element.dataset.matchboxDmReady = "true"
+    this.element.dataset.emberDmReady = "true"
     this.#events = new AbortController()
     const options = { signal: this.#events.signal }
     document.addEventListener("click", event => {
-      const trigger = event.target.closest("[data-matchbox-new-direct]")
+      const trigger = event.target.closest("[data-ember-new-direct]")
       if (!trigger || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
       event.preventDefault()
       this.#trigger = trigger
-      this.#triggerSelector = trigger.closest(".mb-rail") ? ".mb-rail [data-matchbox-new-direct]" : "#sidebar [data-matchbox-new-direct]"
-      window.dispatchEvent(new Event("matchbox:close-sidebar"))
+      this.#triggerSelector = trigger.closest(".mb-rail") ? ".mb-rail [data-ember-new-direct]" : "#sidebar [data-ember-new-direct]"
+      window.dispatchEvent(new Event("ember:close-sidebar"))
       this.#reset()
       this.element.showModal()
       this.searchTarget.focus()
@@ -44,7 +44,7 @@ export default class extends Controller {
   }
 
   disconnect() {
-    delete this.element.dataset.matchboxDmReady
+    delete this.element.dataset.emberDmReady
     this.#events?.abort()
     this.#request?.abort()
     clearTimeout(this.#timer)
@@ -56,7 +56,7 @@ export default class extends Controller {
     this.element.close()
     this.#reset()
     const trigger = this.#trigger?.isConnected ? this.#trigger : document.querySelector(this.#triggerSelector)
-    const target = trigger && !trigger.closest("[inert]") ? trigger : document.querySelector("[data-matchbox-sidebar-toggle]")
+    const target = trigger && !trigger.closest("[inert]") ? trigger : document.querySelector("[data-ember-sidebar-toggle]")
     target?.focus({ preventScroll: true })
   }
 

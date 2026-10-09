@@ -1,2 +1,2 @@
 require_relative "verification"
-MatchboxVerification.load("comparison_support.rb", __FILE__)
+EmberVerification.load("comparison_support.rb", __FILE__)

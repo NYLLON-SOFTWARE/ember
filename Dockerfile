@@ -118,10 +118,10 @@ COPY crates crates
 # crates/assets/build.rs digests and embeds the reference's assets and public/ at build time.
 COPY reference reference
 
-RUN --mount=type=cache,id=matchbox-rust-cargo-registry,target=/usr/local/cargo/registry \
-    --mount=type=cache,id=matchbox-rust-target,target=/src/target \
+RUN --mount=type=cache,id=ember-rust-cargo-registry,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=ember-rust-target,target=/src/target \
     if [ "$TARGETARCH" = arm64 ]; then export JEMALLOC_SYS_WITH_LG_PAGE=14; fi && \
-    cargo build --release --locked -p matchbox --bin ember && \
+    cargo build --release --locked -p ember --bin ember && \
     install -D -m 755 target/release/ember /out/ember
 
 

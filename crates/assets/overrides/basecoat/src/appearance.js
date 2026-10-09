@@ -1,11 +1,15 @@
-export const preferenceKey = "matchbox:appearance";
+export const preferenceKey = "ember:appearance";
 
 export function normalizeMode(mode) {
   return ["light", "dark", "system"].includes(mode) ? mode : "system";
 }
 
 export function readMode(window) {
-  try { return normalizeMode(window.localStorage.getItem(preferenceKey) ?? window.localStorage.getItem("campfire:appearance")); }
+  try {
+    return normalizeMode(window.localStorage.getItem(preferenceKey)
+      ?? window.localStorage.getItem("matchbox:appearance")
+      ?? window.localStorage.getItem("campfire:appearance"));
+  }
   catch { return "system"; }
 }
 

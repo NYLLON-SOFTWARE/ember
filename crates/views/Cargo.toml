@@ -1,5 +1,5 @@
 [package]
-name = "matchbox_views"
+name = "ember_views"
 version = "0.1.0"
 edition.workspace = true
 license.workspace = true
@@ -10,8 +10,8 @@ workspace = true
 
 [dependencies]
 askama = { workspace = true, features = ["blocks"] }
-matchbox_assets.workspace = true
-matchbox_routes.workspace = true
+ember_assets.workspace = true
+ember_routes.workspace = true
 crc32fast.workspace = true
 rails_compat.workspace = true
 ruby_compat.workspace = true

@@ -1,0 +1,34 @@
+# Ember page DOM snapshots
+
+Ember owns the application-page design. The `a/` and `b/` directories contain reviewed normalized
+DOM tokens rendered from the frozen Rails fixture inputs in the neighboring `a/` and `b/` golden
+directories. They are presentation expectations for this fork, not replacement upstream evidence.
+Historical Rails HTML, JSON facts, and assets remain unchanged.
+
+`parity_a.rs` selects Ember snapshots for application-layout pages and redesigned sidebar
+fragments. The view-B tests select them for page renders. Unchanged message, rich-text, and protocol
+fragments still compare with the original Rails goldens. Message show/index/create renders use
+Ember snapshots for the compact actions bar, as do room refresh streams; their routes and Turbo targets retain behavior
+coverage. The custom-reaction form also has an Ember snapshot; its validation and Turbo targets
+remain covered by native browser checks. Existing behavior assertions remain in the
+tests alongside these presentation snapshots.
+
+Workspace snapshots also cover the appearance selector, new-room return to settings, and the
+single-icon save confirmation, admin room-order editor, and sidebar favorite handles. Native browser checks verify saved appearance choices, system
+changes, keyboard/mobile controls, profile focus, and confirmation alignment in the content pane.
+
+After making an intentional UI change, rebuild snapshots explicitly:
+
+```sh
+EMBER_UPDATE_VIEWS=1 cargo test -p ember_views
+cargo test -p ember_views
+```
+
+Review the JSON diff and the affected pages before committing it. The update environment variable
+is opt-in; normal test runs fail on a changed or missing snapshot.
+
+The native browser gate (`npm run test:kro --prefix parity`) tests actual form submissions,
+message interactions, desktop/mobile layouts, keyboard controls, and light/dark appearance against
+fresh temporary app instances. Those checks complement DOM snapshots; neither implies unchanged
+Rails pixels. The reference comparison retains strict HTTP-status, network, and Cable checks,
+including deliberate mismatches that need a narrow review rather than a blanket exemption.

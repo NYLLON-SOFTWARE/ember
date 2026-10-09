@@ -174,7 +174,7 @@ async function shell(page) {
   assert.equal(await page.locator("aside#sidebar.mb-sidebar").count(), 1)
   assert.equal(await page.locator("#main-content.mb-main").count(), 1)
   const sheets = await page.locator('link[rel="stylesheet"]').evaluateAll((links) => links.map((link) => link.href))
-  assert.equal(sheets.filter((href) => href.includes("zz-matchbox")).length, 1, "workspace stylesheet loads once")
+  assert.equal(sheets.filter((href) => href.includes("zz-ember")).length, 1, "workspace stylesheet loads once")
 }
 
 async function submitMessage(page, roomPath, text) {
@@ -200,10 +200,10 @@ test("workspace navigation, global search, and room creation use the real applic
     return { x, width }
   }))
   assert.ok(boxes[0].x < boxes[1].x && boxes[1].x < boxes[2].x, "rail, conversations, and content are arranged left to right")
-  await page.locator("nav.mb-rail [data-matchbox-activity]").click()
-  assert.equal(await page.locator("[data-matchbox-activity]").getAttribute("aria-pressed"), "true")
-  await page.locator("[data-matchbox-room-empty]").getByText("You’re all caught up. No unread conversations.", { exact: true }).waitFor()
-  await page.locator("nav.mb-rail [data-matchbox-activity]").click()
+  await page.locator("nav.mb-rail [data-ember-activity]").click()
+  assert.equal(await page.locator("[data-ember-activity]").getAttribute("aria-pressed"), "true")
+  await page.locator("[data-ember-room-empty]").getByText("You’re all caught up. No unread conversations.", { exact: true }).waitFor()
+  await page.locator("nav.mb-rail [data-ember-activity]").click()
   assert.equal(await page.locator('#sidebar a[href="/rooms/opens/new"]').count(), 0)
   await page.locator('nav.mb-rail').getByRole('link', { name: 'Admin', exact: true }).click()
   await page.locator('#channel-settings').getByRole('link', { name: 'New room', exact: true }).click()
@@ -212,7 +212,7 @@ test("workspace navigation, global search, and room creation use the real applic
   await page.locator("#composer").waitFor()
   const designPath = new URL(page.url()).pathname
   assert.notEqual(designPath, roomPath)
-  assert.equal(await page.locator("[data-matchbox-room-filter]").count(), 0)
+  assert.equal(await page.locator("[data-ember-room-filter]").count(), 0)
   assert.equal(await page.locator('.mb-workspace-heading a[href="/rooms/opens/new"]').count(), 0)
   assert.equal(await page.getByRole('heading', { name: 'Rooms', exact: true }).count(), 0)
   const railLabels = await page.locator('.mb-rail__link span:first-of-type').allTextContents()
@@ -443,7 +443,7 @@ test("chat sends, edits, reacts, uploads, and searches without losing its contro
   await page.locator("#composer").waitFor()
   await submitMessage(page, roomPath, "Back navigation keeps the composer working.")
   assert.equal(await page.locator("nav.mb-rail").count(), 1)
-  assert.equal(await page.locator("[data-matchbox-room-filter]").count(), 0)
+  assert.equal(await page.locator("[data-ember-room-filter]").count(), 0)
 })
 
 test("mobile and tablet navigation keep the conversation and settings usable", { timeout: 90_000 }, async (t) => {
@@ -462,11 +462,11 @@ test("mobile and tablet navigation keep the conversation and settings usable", {
     const imageBounds = await page.locator('.message img.message__attachment').first().boundingBox()
     assert.ok(imageBounds.x >= -1 && imageBounds.x + imageBounds.width <= width + 1, `${width}px uploaded image fits the conversation`)
     if (width <= 900) {
-      const toggle = page.locator("[data-matchbox-sidebar-toggle]").filter({ visible: true }).first()
+      const toggle = page.locator("[data-ember-sidebar-toggle]").filter({ visible: true }).first()
       await toggle.waitFor()
       assert.equal(await toggle.getAttribute("aria-expanded"), "false")
       await toggle.click()
-      await page.waitForFunction(() => document.querySelector('[data-matchbox-sidebar-toggle][aria-expanded="true"]'))
+      await page.waitForFunction(() => document.querySelector('[data-ember-sidebar-toggle][aria-expanded="true"]'))
       await page.waitForFunction(() => document.querySelector("#sidebar").getBoundingClientRect().x >= 0)
       const sidebar = page.locator("#sidebar")
       const bounds = await sidebar.boundingBox()
@@ -480,14 +480,14 @@ test("mobile and tablet navigation keep the conversation and settings usable", {
       assert.equal(await toggle.getAttribute("aria-expanded"), "false")
       assert.equal(await toggle.evaluate((node) => node === document.activeElement), true, "Escape restores focus to the menu toggle")
       await toggle.click()
-      await page.locator(".mb-sidebar-close[data-matchbox-sidebar-close]").click()
+      await page.locator(".mb-sidebar-close[data-ember-sidebar-close]").click()
       assert.equal(await toggle.getAttribute("aria-expanded"), "false")
       await toggle.click()
-      await page.locator(".mb-sidebar-backdrop[data-matchbox-sidebar-close]").click({ position: { x: width - 4, y: 420 } })
+      await page.locator(".mb-sidebar-backdrop[data-ember-sidebar-close]").click({ position: { x: width - 4, y: 420 } })
       assert.equal(await toggle.getAttribute("aria-expanded"), "false", "backdrop closes the drawer")
       await toggle.click()
       await page.locator(`#shared_rooms a[href="${roomPath}"]`).click()
-      await page.waitForFunction(() => !document.querySelector('[data-matchbox-sidebar-toggle][aria-expanded="true"]'))
+      await page.waitForFunction(() => !document.querySelector('[data-ember-sidebar-toggle][aria-expanded="true"]'))
       await page.waitForFunction(() => getComputedStyle(document.querySelector("#sidebar")).visibility === "hidden")
     } else {
       assert.equal(await page.locator("#sidebar").isVisible(), true, "tablet conversations remain visible alongside the chat")
@@ -948,14 +948,14 @@ test("starred room ordering persists, remains isolated, and rejects unstarred ro
   }
   await page.locator('#shared_rooms a[data-sorted-list-name="Alpha"].unread').waitFor()
   await page.locator('#shared_rooms a[data-sorted-list-name="Zulu"].unread').waitFor()
-  await page.locator('[data-matchbox-activity]').click()
+  await page.locator('[data-ember-activity]').click()
   assert.equal(await page.locator('#shared_rooms a[data-sorted-list-name="All Talk"]').isVisible(), false)
   const filteredSave = page.waitForResponse(response => response.request().method() === 'PUT' && new URL(response.url()).pathname === '/users/me/sidebar/order')
   await page.locator('#shared_rooms a[data-sorted-list-name="Alpha"]').press('Alt+ArrowUp')
   const filteredResponse = await filteredSave
   assert.equal(filteredResponse.status(), 204)
   assert.equal(filteredResponse.request().postDataJSON().room_ids.length, 3, 'hidden favorites remain in the saved order')
-  await page.locator('[data-matchbox-activity]').click()
+  await page.locator('[data-ember-activity]').click()
 
   // A failed reorder must not undo an unstar completed while the request was pending.
   let releaseFailure
@@ -1737,7 +1737,7 @@ test('channel guard retains access, icon and membership edits and protects brows
   await page.locator('#room_icon').selectOption('coffee', { force: true })
   await page.locator('label[for="room_type"]').click()
   await page.waitForURL(`**/rooms/closeds/${id}/edit`)
-  await page.locator(`form[data-matchbox-settings][action="/rooms/closeds/${id}"]`).waitFor()
+  await page.locator(`form[data-ember-settings][action="/rooms/closeds/${id}"]`).waitFor()
   assert.equal(await page.locator('#room_name').inputValue(), 'Working draft')
   assert.equal(await page.locator('#room_icon').inputValue(), 'coffee')
   const member = page.locator('input[name="user_ids[]"]').first()
@@ -1745,10 +1745,10 @@ test('channel guard retains access, icon and membership edits and protects brows
   assert.equal(await member.isChecked(), false)
   await page.locator('label[for="room_type"]').click()
   await page.waitForURL(`**${editPath}`)
-  await page.locator(`form[data-matchbox-settings][action="/rooms/opens/${id}"]`).waitFor()
+  await page.locator(`form[data-ember-settings][action="/rooms/opens/${id}"]`).waitFor()
   await page.locator('label[for="room_type"]').click()
   await page.waitForURL(`**/rooms/closeds/${id}/edit`)
-  await page.locator(`form[data-matchbox-settings][action="/rooms/closeds/${id}"]`).waitFor()
+  await page.locator(`form[data-ember-settings][action="/rooms/closeds/${id}"]`).waitFor()
   assert.equal(await member.isChecked(), false, 'switching access forms preserves membership edits')
   await page.evaluate(() => history.back())
   await modal.waitFor()

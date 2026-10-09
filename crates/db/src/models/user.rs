@@ -472,7 +472,7 @@ impl User {
     }
 
     /// After commit: a connection authenticating meanwhile then either finds the sessions gone or
-    /// is already listening for this (see `matchbox_cable`'s connection setup).
+    /// is already listening for this (see `ember_cable`'s connection setup).
     fn close_remote_connections(&self, tx: &mut Tx<'_>, reconnect: bool) {
         tx.emit_after_commit(Event::DisconnectUser { user_id: self.id, reconnect });
     }
