@@ -699,12 +699,14 @@ class Manager:
         require(seen == set(entries) and {"config", "storage", "config/state.json", "config/app.env", "config/runtime.json", "config/manager", "config/manager/emberctl", "config/manager/emberctl.py"} <= seen, "Backup is incomplete.")
         return metadata
 
-    def complete_availability_recovery(self, journal):
+    def complete_availability_recovery(self, journal, *, restart=False):
         require(journal.get("operation") in {"backup", "restart"} and isinstance(journal.get("was_running"), bool), "Invalid availability recovery record.")
         state = journal["state"]
         require(state == self.state(), "Installed configuration differs from the interrupted operation.")
         self.managed_container(state)
         if journal["was_running"]:
+            if restart:
+                self.stop(state)
             self.start(state)
             self.readiness(state)
         else:
@@ -911,7 +913,7 @@ class Manager:
         journal = json_file(self.journal_file) if self.journal_file.exists() else None
         prestart_recovery = None
         if journal and journal.get("operation") in {"backup", "restart"}:
-            self.complete_availability_recovery(journal)
+            self.complete_availability_recovery(journal, restart=True)
             print(f"Recovered {journal['operation']}; Ember is {'ready' if journal['was_running'] else 'stopped as before the backup'}.")
             return
         if journal and journal.get("operation") == "install" and journal.get("phase") in {"preparing", "prepared"}:

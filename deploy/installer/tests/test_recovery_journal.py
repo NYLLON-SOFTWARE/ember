@@ -89,6 +89,24 @@ class AvailabilityRecovery(unittest.TestCase):
         self.assertTrue(self.docker.containers['ember']['State']['Running'])
         self.assertFalse(self.manager.journal_file.exists())
 
+    def test_retry_restarts_a_running_process_that_failed_readiness(self):
+        launches = 0
+        def realistic_start(args, **kwargs):
+            nonlocal launches
+            if args[1] == 'start' and not self.docker.containers['ember']['State']['Running']:
+                launches += 1
+            return self.docker(args, **kwargs)
+        def healthy_after_relaunch(state):
+            if launches < 2:
+                raise m.Failure('running process requires a restart')
+        with mock.patch.object(m, 'run', side_effect=realistic_start), mock.patch.object(self.manager, 'readiness', side_effect=healthy_after_relaunch):
+            with self.assertRaisesRegex(m.Failure, 'requires a restart'):
+                self.manager.restart(self.state)
+            self.assertTrue(self.docker.containers['ember']['State']['Running'])
+            self.manager.restart(self.state)
+        self.assertEqual(launches, 2)
+        self.assertFalse(self.manager.journal_file.exists())
+
     def test_readiness_failure_does_not_clear_restart_recovery(self):
         with mock.patch.object(self.manager, 'readiness', side_effect=m.Failure('not ready')):
             with self.assertRaisesRegex(m.Failure, 'not ready'):
