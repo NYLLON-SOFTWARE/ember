@@ -61,6 +61,28 @@ def run(args, *, capture=True, input=None, check=True):
     return result
 
 
+def require_available_port(port):
+    for family, address in ((socket.AF_INET, "0.0.0.0"), (socket.AF_INET6, "::")):
+        try:
+            listener = socket.socket(family, socket.SOCK_STREAM)
+        except OSError:
+            if family == socket.AF_INET6:
+                continue
+            raise
+        with listener:
+            # Closed connections in TIME_WAIT are reusable; active listeners still conflict.
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            if family == socket.AF_INET6:
+                listener.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
+            try:
+                listener.bind((address, port))
+                listener.listen(1)
+            except OSError as error:
+                if family == socket.AF_INET6 and error.errno in {47, 97, 99}:
+                    continue  # IPv6 is disabled on this host.
+                raise Failure(f"TCP port {port} is already occupied or unavailable; stop the conflicting service explicitly.") from error
+
+
 def digest_file(path):
     digest = hashlib.sha256()
     with path.open("rb") as source:
@@ -340,22 +362,7 @@ class Manager:
         except OSError as error:
             raise Failure("Hostname does not resolve yet. Point its DNS records to this server and retry.") from error
         for port in (80, 443):
-            for family, address in ((socket.AF_INET, "0.0.0.0"), (socket.AF_INET6, "::")):
-                try:
-                    listener = socket.socket(family, socket.SOCK_STREAM)
-                except OSError:
-                    if family == socket.AF_INET6:
-                        continue
-                    raise
-                with listener:
-                    if family == socket.AF_INET6:
-                        listener.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
-                    try:
-                        listener.bind((address, port))
-                    except OSError as error:
-                        if family == socket.AF_INET6 and error.errno in {47, 97, 99}:
-                            continue  # IPv6 is disabled on this host.
-                        raise Failure(f"TCP port {port} is already occupied or unavailable; stop the conflicting service explicitly.") from error
+            require_available_port(port)
         return domain
 
     def install(self, args):

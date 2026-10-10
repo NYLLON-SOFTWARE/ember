@@ -324,7 +324,7 @@
   "\" \"",
   "</header>",
   "\" \"",
-  "<form accept-charset=\"UTF-8\" action=\"http://campfire.test/session\" class=\"mb-auth-form\" method=\"post\">",
+  "<form accept-charset=\"UTF-8\" action=\"http://campfire.test/session\" class=\"mb-auth-form\" data-turbo=\"false\" method=\"post\">",
   "\" \"",
   "<div class=\"mb-field\">",
   "\" \"",

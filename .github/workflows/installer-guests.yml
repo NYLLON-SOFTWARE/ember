@@ -63,10 +63,22 @@ jobs:
           GUEST_ARCH: ${{ matrix.arch }}
           PUBLIC_INSTALLER: ${{ inputs.public }}
         run: sudo --preserve-env=PATH,GITHUB_ACTIONS,GUEST_OS,GUEST_ARCH,PUBLIC_INSTALLER,PLAYWRIGHT_BROWSERS_PATH python3 deploy/verification/guests.py --assets release-assets
+      - name: Collect non-secret acceptance diagnostics
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/ember-diagnostics"
+          chmod 700 "$RUNNER_TEMP/ember-diagnostics"
+          # The guest workspace stays root-private, including SSH keys and test credentials.
+          for name in console.log dns.log boot.log preflight.log application.log result.json; do
+            source="$PWD/tmp/installer-verification/diagnostics/$name"
+            if sudo test -f "$source"; then
+              sudo cat "$source" > "$RUNNER_TEMP/ember-diagnostics/$name"
+            fi
+          done
       - name: Upload non-secret acceptance diagnostics
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: guest-${{ matrix.os }}-${{ matrix.arch }}-public-${{ inputs.public }}
-          path: tmp/installer-verification/diagnostics/
+          path: ${{ runner.temp }}/ember-diagnostics/
           if-no-files-found: warn

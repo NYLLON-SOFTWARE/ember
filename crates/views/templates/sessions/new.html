@@ -12,7 +12,8 @@
       <h1>Sign in to {{ ctx.account.name }}</h1>
       <p>Welcome back. Pick up the conversation.</p>
     </header>
-{% let form = h::form_with(ctx.url(h::routes::session().as_str())).class("mb-auth-form") %}
+{# A native submission displays the 401 body; Turbo reloads this page and loses flash.now. #}
+{% let form = h::form_with(ctx.url(h::routes::session().as_str())).class("mb-auth-form").data("turbo", false) %}
     {% filter form_with(form) %}
       <div class="mb-field">
         <div class="mb-field-label">
