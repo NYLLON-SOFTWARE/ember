@@ -74,12 +74,16 @@ reusing a tag or overwriting a release asset. Website promotion is withheld.
 `deploy/verification/guests.lock.json` pins official Ubuntu and Debian cloud images by immutable
 build URL and checksum. Each job creates an isolated runner bridge and a fresh disk. Guests start
 without Docker. No live server, production secret, or external cloud resource is used.
+Initial SSH readiness allows 20 minutes for TCG boot; production HTTPS readiness remains 180 seconds.
 
 A local HTTPS mirror serves the exact final GitHub artifact URLs during candidate verification;
 artifact bytes and the bootstrap's embedded checksum remain unchanged. A digest-pinned Pebble
 server performs actual HTTP-01/TLS-ALPN challenges against guest ports 80/443. Its test CA and the
 mirror CA are trusted explicitly in the disposable guest, application container, browser, and
-API client. HTTPS verification is never disabled. Guests run the exact advertised
+API client. The mirror CA and server certificate declare explicit X.509 constraints, key usages,
+and key identifiers. A TLS handshake regression checks every mirror hostname with
+[Python 3.13's strict verification](https://docs.python.org/3.13/library/ssl.html#ssl.create_default_context)
+enabled. HTTPS verification is never disabled. Guests run the exact advertised
 `curl -fsSL https://get.nyllon.com/ember | sh --` command through a real terminal and answer its
 hostname prompt. The disposable guest session sets `EMBER_INSTALL_RUNTIME_ENV` and
 `EMBER_INSTALL_TEST_CA` to private local files; these defaults use the same validation as the

@@ -3,6 +3,7 @@ import contextlib
 import importlib.util
 import io
 from pathlib import Path
+import ssl
 import subprocess
 import sys
 import tempfile
@@ -95,6 +96,36 @@ class PreflightDiagnostics(unittest.TestCase):
             guests.require_preflight_refusal(result, "Conflicting package runc", "package conflict")
 
 
+class MirrorCertificates(unittest.TestCase):
+    def test_mirror_chain_passes_strict_verification_for_all_https_names(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            certs = Path(temporary)
+            guests.mirror_certificates(certs)
+            server = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            server.load_cert_chain(certs / "server.pem", certs / "server.key")
+            client = ssl.create_default_context(cafile=str(certs / "ca.pem"))
+            # This is a default in Python 3.13; require it on older developer runtimes too.
+            client.verify_flags |= ssl.VERIFY_X509_STRICT
+            for hostname in ("github.com", "get.nyllon.com", "pebble.ember.test"):
+                with self.subTest(hostname=hostname):
+                    client_in, client_out, server_in, server_out = (ssl.MemoryBIO() for _ in range(4))
+                    connections = (client.wrap_bio(client_in, client_out, server_hostname=hostname),
+                                   server.wrap_bio(server_in, server_out, server_side=True))
+                    completed = set()
+                    for _ in range(20):
+                        for connection in connections:
+                            try:
+                                connection.do_handshake()
+                                completed.add(connection)
+                            except ssl.SSLWantReadError:
+                                pass
+                        server_in.write(client_out.read())
+                        client_in.write(server_out.read())
+                        if len(completed) == 2:
+                            break
+                    self.assertEqual(len(completed), 2, "Strict TLS handshake must complete")
+
+
 class BrowserDiagnostics(unittest.TestCase):
     def test_playwright_failure_redacts_private_url_and_preserves_exit_code(self):
         token = 'c' * 64
@@ -145,6 +176,20 @@ class BrowserDiagnostics(unittest.TestCase):
 
 
 class BootDiagnostics(unittest.TestCase):
+    def test_initial_boot_has_a_separate_deadline_and_short_ssh_probes(self):
+        guest = guests.Guest.__new__(guests.Guest)
+        guest.process = mock.Mock()
+        guest.process.poll.return_value = None
+
+        def probe(action, timeout):
+            self.assertEqual(timeout, 1200)
+            return action()
+
+        with mock.patch.object(guests, "wait_for", side_effect=probe) as wait, mock.patch.object(guest, "ssh") as ssh:
+            guest.wait_for_ssh()
+        wait.assert_called_once_with(mock.ANY, timeout=guests.GUEST_BOOT_TIMEOUT)
+        ssh.assert_called_once_with("true", timeout=15)
+
     def test_ssh_failure_emits_bounded_console_tail_and_final_error(self):
         guest = guests.Guest.__new__(guests.Guest)
         guest.process = mock.Mock()
