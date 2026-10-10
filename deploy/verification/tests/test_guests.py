@@ -217,30 +217,43 @@ class SSHTransportDiagnostics(unittest.TestCase):
             self.assertNotIn('private command', diagnostic)
             self.assertEqual((work / 'diagnostics/application.log').read_text(), 'app log')
 
-    def test_boot_transport_failure_reaches_top_level_diagnostics(self):
-        original = guests.SSHTransportFailure('ssh: cloud-init connection reset', 'private command')
-        with tempfile.TemporaryDirectory() as temporary, contextlib.ExitStack() as stack:
-            work = Path(temporary) / 'fresh-work'
-            guest = mock.Mock()
-            guest.boot.side_effect = original
-            guest.ssh.side_effect = OSError('diagnostic-only failure')
-            stack.enter_context(mock.patch.object(guests, 'WORK', work))
-            stack.enter_context(mock.patch.object(guests.argparse.ArgumentParser, 'parse_args', return_value=guests.argparse.Namespace(assets=Path(temporary))))
-            stack.enter_context(mock.patch.object(guests.os, 'geteuid', return_value=0))
-            stack.enter_context(mock.patch.object(guests.platform, 'system', return_value='Linux'))
-            stack.enter_context(mock.patch.object(guests.platform, 'machine', return_value='aarch64'))
-            stack.enter_context(mock.patch.dict(guests.os.environ, {'GITHUB_ACTIONS': 'true', 'GUEST_ARCH': 'arm64', 'GUEST_OS': 'ubuntu-24.04'}))
-            for name in ('network', 'certificates', 'mirror'):
-                stack.enter_context(mock.patch.object(guests, name))
-            stack.enter_context(mock.patch.object(guests, 'Guest', return_value=guest))
-            acceptance = stack.enter_context(mock.patch.object(guests, 'acceptance'))
-            stack.enter_context(contextlib.redirect_stderr(io.StringIO()))
-            with self.assertRaises(guests.SSHTransportFailure) as failure:
-                guests.main()
-            self.assertIs(failure.exception, original)
-            self.assertIn('cloud-init connection reset', (work / 'diagnostics/transport.log').read_text())
-            acceptance.assert_not_called()
-            guest.boot.assert_called_once_with('ubuntu-24.04', 'arm64')
+    def test_boot_transport_failure_reaches_top_level_diagnostics_even_when_disk_is_full(self):
+        original = guests.SSHTransportFailure('ssh: cloud-init connection reset\nEMBER_SETUP_TOKEN=private-token', 'private command')
+        for write_failure in (False, True):
+            with self.subTest(write_failure=write_failure), tempfile.TemporaryDirectory() as temporary, contextlib.ExitStack() as stack:
+                work = Path(temporary) / 'fresh-work'
+                guest = mock.Mock()
+                guest.boot.side_effect = original
+                guest.ssh.side_effect = OSError('diagnostic-only failure')
+                stack.enter_context(mock.patch.object(guests, 'WORK', work))
+                stack.enter_context(mock.patch.object(guests.argparse.ArgumentParser, 'parse_args', return_value=guests.argparse.Namespace(assets=Path(temporary))))
+                stack.enter_context(mock.patch.object(guests.os, 'geteuid', return_value=0))
+                stack.enter_context(mock.patch.object(guests.platform, 'system', return_value='Linux'))
+                stack.enter_context(mock.patch.object(guests.platform, 'machine', return_value='aarch64'))
+                stack.enter_context(mock.patch.dict(guests.os.environ, {'GITHUB_ACTIONS': 'true', 'GUEST_ARCH': 'arm64', 'GUEST_OS': 'ubuntu-24.04'}))
+                for name in ('network', 'certificates', 'mirror'):
+                    stack.enter_context(mock.patch.object(guests, name))
+                stack.enter_context(mock.patch.object(guests, 'Guest', return_value=guest))
+                acceptance = stack.enter_context(mock.patch.object(guests, 'acceptance'))
+                if write_failure:
+                    stack.enter_context(mock.patch.object(Path, 'write_text', side_effect=OSError('No space left on device')))
+                output = stack.enter_context(contextlib.redirect_stderr(io.StringIO()))
+                with self.assertRaises(guests.SSHTransportFailure) as failure:
+                    guests.main()
+                self.assertIs(failure.exception, original)
+                self.assertIn('cloud-init connection reset', output.getvalue())
+                self.assertNotIn('private-token', output.getvalue())
+                self.assertNotIn('private command', output.getvalue())
+                if not write_failure:
+                    self.assertIn('cloud-init connection reset', (work / 'diagnostics/transport.log').read_text())
+                acceptance.assert_not_called()
+                guest.boot.assert_called_once_with('ubuntu-24.04', 'arm64')
+
+    def test_diagnostic_file_and_stderr_failures_are_both_best_effort(self):
+        with mock.patch.object(Path, 'write_text', side_effect=OSError('No space left on device')) as write, mock.patch('builtins.print', side_effect=OSError('Broken pipe')) as emit:
+            guests.write_diagnostic('transport.log', 'safe original cause', emit=True)
+        write.assert_called_once_with('safe original cause')
+        emit.assert_called_once_with('safe original cause', file=guests.sys.stderr, flush=True)
 
 
 class PrivilegeRefusal(unittest.TestCase):

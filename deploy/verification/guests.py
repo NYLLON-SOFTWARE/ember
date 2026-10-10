@@ -96,6 +96,18 @@ def sanitized_output(value, limit=4096, secrets=()):
     return value if len(value) <= limit else '[truncated]\n' + value[-limit:]
 
 
+def write_diagnostic(name, detail, emit=False):
+    try:
+        (WORK / 'diagnostics' / name).write_text(detail)
+    except OSError:
+        pass
+    if emit:
+        try:
+            print(detail, file=sys.stderr, flush=True)
+        except OSError:
+            pass
+
+
 class SSHTransportFailure(subprocess.CalledProcessError):
     def __init__(self, stderr, command):
         super().__init__(255, ['ssh', '[remote command omitted]'],
@@ -238,16 +250,17 @@ class Guest:
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError, RuntimeError) as error:
             console = WORK / 'diagnostics/console.log'
             tail = b''
-            if console.exists():
+            try:
                 with console.open('rb') as source:
                     source.seek(max(0, console.stat().st_size - 16384))
                     tail = source.read(16384)
+            except OSError:
+                pass
             status = self.process.poll()
             detail = (f'Guest SSH readiness failed; QEMU exit status: {status}\n'
                       f'Final SSH/error: {sanitized_output(getattr(error, "stderr", None) or str(error))}\n'
                       f'Console tail:\n{sanitized_output(tail, limit=16384)}\n')
-            (WORK / 'diagnostics/boot.log').write_text(detail)
-            print(detail, file=sys.stderr, flush=True)
+            write_diagnostic('boot.log', detail, emit=True)
             raise
 
 
@@ -522,17 +535,16 @@ def failure_diagnostics(guest, error):
     if isinstance(error, (SSHTransportFailure, SSHTransportTimeout)):
         reason = f'timeout={error.timeout}s' if isinstance(error, SSHTransportTimeout) else f'exit={error.returncode}'
         detail = f'Guest SSH transport failed; {reason}\nstderr:\n{error.stderr}\n'
-        (WORK / 'diagnostics/transport.log').write_text(detail)
-        print(detail, file=sys.stderr, flush=True)
+        write_diagnostic('transport.log', detail, emit=True)
     if isinstance(error, PreflightFailure):
-        (WORK / 'diagnostics/preflight.log').write_text(str(error) + '\n')
+        write_diagnostic('preflight.log', str(error) + '\n')
     # Do not upload environment files, cookies, tokens, databases, or raw HTTP traces.
     try:
         log = sanitized_output(guest.ssh('docker logs --tail 100 ember', check=False, timeout=15).stdout, limit=16384)
     except (SSHTransportFailure, SSHTransportTimeout, OSError):
         # Diagnostic collection must preserve the original failure and its transport evidence.
         return
-    (WORK / 'diagnostics/application.log').write_text(log)
+    write_diagnostic('application.log', log)
 
 
 def main():
