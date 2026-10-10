@@ -27,6 +27,8 @@ GUEST = '192.0.2.10'
 DOMAIN = 'chat.ember.test'
 INSTALL_COMMAND = 'curl -fsSL https://get.nyllon.com/ember | sh --'
 HOSTNAME_PROMPT = 'Hostname pointing to this server (for example chat.example.com): '
+# Ubuntu arm64 under TCG reached cloud-init config at 569s; allow bounded slow first boots.
+GUEST_BOOT_TIMEOUT = 1200
 PEBBLE = 'ghcr.io/letsencrypt/pebble@sha256:d9080f68f6cb6af8d82134ab26de0aaaf312ac9cba42aecc6d3aede6cb63007b'
 
 
@@ -171,7 +173,7 @@ class Guest:
             return self.ssh('true', timeout=15)
 
         try:
-            wait_for(ready)
+            wait_for(ready, timeout=GUEST_BOOT_TIMEOUT)
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError, RuntimeError) as error:
             console = WORK / 'diagnostics/console.log'
             tail = b''
@@ -209,13 +211,25 @@ def network(public):
         hosts.write(f'\n{GUEST} {DOMAIN}\n{HOST} pebble.ember.test\n')
 
 
+def mirror_certificates(certs):
+    # Python 3.13 verifies RFC 5280 strictly, including CA key usage and critical constraints.
+    (certs / 'ca.cnf').write_text('[req]\ndistinguished_name=dn\nx509_extensions=ca_extensions\n[dn]\n'
+                                '[ca_extensions]\nbasicConstraints=critical,CA:TRUE\n'
+                                'keyUsage=critical,keyCertSign,cRLSign\nsubjectKeyIdentifier=hash\n'
+                                'authorityKeyIdentifier=keyid:always,issuer\n')
+    run('openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-sha256', '-days', '3', '-subj', '/CN=Ember isolated runner CA', '-config', certs / 'ca.cnf', '-keyout', certs / 'ca.key', '-out', certs / 'ca.pem', capture=True)
+    run('openssl', 'req', '-newkey', 'rsa:2048', '-nodes', '-sha256', '-subj', '/CN=pebble.ember.test', '-keyout', certs / 'server.key', '-out', certs / 'server.csr', capture=True)
+    (certs / 'extensions').write_text('subjectAltName=DNS:pebble.ember.test,DNS:github.com,DNS:get.nyllon.com\n'
+                                    'extendedKeyUsage=serverAuth\nbasicConstraints=critical,CA:FALSE\n'
+                                    'keyUsage=critical,digitalSignature,keyEncipherment\n'
+                                    'subjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid,issuer\n')
+    run('openssl', 'x509', '-req', '-sha256', '-in', certs / 'server.csr', '-CA', certs / 'ca.pem', '-CAkey', certs / 'ca.key', '-CAcreateserial', '-days', '3', '-extfile', certs / 'extensions', '-out', certs / 'server.pem', capture=True)
+
+
 def certificates():
     certs = WORK / 'certs'
     certs.mkdir()
-    run('openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '3', '-subj', '/CN=Ember isolated runner CA', '-keyout', certs / 'ca.key', '-out', certs / 'ca.pem', capture=True)
-    run('openssl', 'req', '-newkey', 'rsa:2048', '-nodes', '-subj', '/CN=pebble.ember.test', '-keyout', certs / 'server.key', '-out', certs / 'server.csr', capture=True)
-    (certs / 'extensions').write_text('subjectAltName=DNS:pebble.ember.test,DNS:github.com,DNS:get.nyllon.com\nextendedKeyUsage=serverAuth\nbasicConstraints=CA:FALSE\n')
-    run('openssl', 'x509', '-req', '-in', certs / 'server.csr', '-CA', certs / 'ca.pem', '-CAkey', certs / 'ca.key', '-CAcreateserial', '-days', '3', '-extfile', certs / 'extensions', '-out', certs / 'server.pem', capture=True)
+    mirror_certificates(certs)
     config = {'pebble': dict(listenAddress='0.0.0.0:14000', managementListenAddress='0.0.0.0:15000', certificate='/test/server.pem', privateKey='/test/server.key', httpPort=80, tlsPort=443, externalAccountBindingRequired=False)}
     (certs / 'pebble.json').write_text(json.dumps(config))
     run('docker', 'run', '-d', '--name', 'ember-pebble', '--network', 'host', '-e', 'PEBBLE_VA_NOSLEEP=1', '--mount', f'type=bind,source={certs},target=/test,readonly', PEBBLE, '-config', '/test/pebble.json', '-dnsserver', HOST + ':53')
@@ -412,7 +426,7 @@ def acceptance(guest, assets, certs, overrides, public):
         pull_failure = '#!/bin/sh\nif [ "$1" = pull ]; then echo "Registry unavailable (acceptance injection)" >&2; exit 69; fi\nexec /usr/bin/docker-real "$@"\n'
         with docker_override(guest, pull_failure):
             unavailable = guest.ssh('emberctl update ' + next_version, check=False)
-            assert unavailable.returncode != 0 and 'Registry unavailable' in unavailable.stderr, 'A failed registry pull must abort the update'
+            require_preflight_refusal(unavailable, 'Registry unavailable', 'A failed registry pull must abort the update')
             assert guest.ssh('sha256sum /etc/ember/state.json /etc/ember/app.env').stdout == state_before
             assert guest.ssh("docker inspect --format '{{.Id}} {{.State.Running}} {{.State.StartedAt}}' ember").stdout == container_before, 'Registry failure must not stop or recreate the live container'
             assert guest.ssh('find /var/lib/ember/backups -mindepth 1 -maxdepth 1 -type d | sort').stdout == backup_before
@@ -427,7 +441,7 @@ def acceptance(guest, assets, certs, overrides, public):
         startup_failure = '#!/bin/sh\nif [ "$1" = create ]; then shift; exec /usr/bin/docker-real create --entrypoint /bin/false "$@"; fi\nexec /usr/bin/docker-real "$@"\n'
         with docker_override(guest, startup_failure):
             failed = guest.ssh('emberctl update ' + failed_version, check=False)
-            assert failed.returncode != 0 and 'restore' in failed.stderr, 'Failed startup must require explicit recovery'
+            require_preflight_refusal(failed, 'restore', 'Failed startup must require explicit recovery')
         journal = json.loads(guest.ssh('cat /var/lib/ember/recovery.json').stdout)
         guest.ssh('emberctl restore ' + shlex.quote(journal['backup']) + ' --accept-data-loss')
         browser('persist')
