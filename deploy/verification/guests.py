@@ -96,12 +96,37 @@ def sanitized_output(value, limit=4096, secrets=()):
     return value if len(value) <= limit else '[truncated]\n' + value[-limit:]
 
 
+class SSHTransportFailure(subprocess.CalledProcessError):
+    def __init__(self, stderr, command):
+        super().__init__(255, ['ssh', '[remote command omitted]'],
+                         stderr=sanitized_output(stderr, secrets=(command,)))
+
+
+class SSHTransportTimeout(subprocess.TimeoutExpired):
+    def __init__(self, timeout, stderr, command):
+        super().__init__(['ssh', '[remote command omitted]'], timeout,
+                         stderr=sanitized_output(stderr, secrets=(command,)))
+
+
 def require_preflight_refusal(result, expected, message):
-    if result.returncode != 0 and (expected is None or expected.lower() in result.stderr.lower()):
+    expected = (expected,) if isinstance(expected, str) else expected
+    if result.returncode not in (0, 255) and any(marker.lower() in result.stderr.lower() for marker in expected):
         return
     raise PreflightFailure(f"{message}; exit={result.returncode}\n"
                            f"stdout:\n{sanitized_output(result.stdout)}\n"
                            f"stderr:\n{sanitized_output(result.stderr)}")
+
+
+def require_privilege_refusal(result):
+    # install.sh either reports missing sudo or delegates to sudo's explicit refusal.
+    expected = ('Run this installer as root (or install sudo).',
+                'sudo: a terminal is required to read the password',
+                'sudo: a password is required',
+                'nobody is not in the sudoers file',
+                'user nobody is not allowed to execute',
+                'sudo: nobody is not allowed to run sudo')
+    require_preflight_refusal(result, expected,
+                              'Unprivileged installation must fail without sudo authorization')
 
 
 def installer_session_command(command=INSTALL_COMMAND):
@@ -128,15 +153,51 @@ class Guest:
 
     def ssh_command(self, command, tty=False):
         return ['ssh', *(['-tt'] if tty else []), '-i', str(self.key), '-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=/dev/null',
-                '-o', 'LogLevel=ERROR', '-o', 'ConnectTimeout=5', '-o', 'ServerAliveInterval=5', '-o', 'ServerAliveCountMax=3',
+                '-o', 'LogLevel=ERROR', '-o', 'ConnectTimeout=30', '-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=4',
                 'root@' + GUEST, command]
 
     def ssh(self, command, check=True, timeout=900):
-        return run(*self.ssh_command(command), capture=True, check=check, timeout=timeout)
+        try:
+            result = run(*self.ssh_command(command), capture=True, check=False, timeout=timeout)
+        except subprocess.TimeoutExpired as error:
+            raise SSHTransportTimeout(error.timeout, error.stderr, command) from None
+        if result.returncode == 255:
+            raise SSHTransportFailure(result.stderr, command) from None
+        if check:
+            result.check_returncode()
+        return result
+
+    def reboot(self):
+        command = 'cat /proc/sys/kernel/random/boot_id'
+        before = self.ssh(command).stdout.strip()
+        assert before, 'Guest boot ID unavailable before reboot'
+        try:
+            self.ssh('systemctl reboot', timeout=15)
+        except (SSHTransportFailure, SSHTransportTimeout):
+            pass  # A reboot may disconnect SSH before systemctl returns.
+        time.sleep(10)
+
+        def rebooted():
+            after = self.ssh(command, timeout=15).stdout.strip()
+            assert after and after != before, 'Guest has not rebooted'
+
+        wait_for(rebooted)
 
     def install(self, command=INSTALL_COMMAND, check=True):
-        return run_interactive(self.ssh_command(installer_session_command(command), tty=True),
-                               [(HOSTNAME_PROMPT, DOMAIN)], check=check)
+        session = installer_session_command(command)
+        withheld = 'Interactive stderr unavailable: terminal output intentionally omitted to protect setup credentials.'
+        try:
+            result = run_interactive(self.ssh_command(session, tty=True),
+                                     [(HOSTNAME_PROMPT, DOMAIN)], check=check)
+        except subprocess.TimeoutExpired as error:
+            raise SSHTransportTimeout(error.timeout, withheld, session) from None
+        except subprocess.CalledProcessError as error:
+            if error.returncode == 255:
+                raise SSHTransportFailure(withheld, session) from None
+            raise
+        if result.returncode == 255:
+            raise SSHTransportFailure(withheld, session) from None
+        return result
 
     def copy(self, source, destination):
         run('scp', '-q', '-i', self.key, '-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=/dev/null',
@@ -357,7 +418,7 @@ def acceptance(guest, assets, certs, overrides, public):
             del overrides[bundle_path]
         guest.ssh('test ! -e /etc/ember && test ! -e /etc/apt/sources.list.d/docker.sources && ! command -v docker')
     unprivileged = guest.ssh("su -s /bin/sh nobody -c " + shlex.quote(failure_command), check=False)
-    require_preflight_refusal(unprivileged, None, 'Unprivileged installation must fail without sudo authorization')
+    require_privilege_refusal(unprivileged)
     assert guest.ssh('test ! -e /etc/ember').returncode == 0
     # Unsupported OS is a real shell preflight, with the guest's OS metadata restored immediately.
     guest.ssh('cp /etc/os-release /root/os-release.saved && printf "ID=unsupported\\nVERSION_ID=99\\n" > /etc/os-release')
@@ -399,8 +460,7 @@ def acceptance(guest, assets, certs, overrides, public):
     guest.ssh('emberctl backup')
     backup = guest.ssh('find /var/lib/ember/backups -mindepth 1 -maxdepth 1 -type d | sort | tail -1').stdout.strip().split('/')[-1]
     run('docker', 'stop', 'ember-pebble', capture=True)  # Cached certificates must survive without the CA.
-    guest.ssh('systemctl reboot', check=False, timeout=15)
-    time.sleep(10)
+    guest.reboot()
     wait_for(lambda: guest.ssh('emberctl status', timeout=15))
     wait_for(lambda: guest.ssh('curl -fsS --connect-timeout 3 --max-time 10 https://' + DOMAIN + '/up', timeout=15))
     assert guest.ssh('sha256sum /etc/ember/app.env').stdout == baseline
@@ -453,6 +513,23 @@ def acceptance(guest, assets, certs, overrides, public):
     (WORK / 'diagnostics/result.json').write_text(json.dumps(summary, indent=2) + '\n')
 
 
+def failure_diagnostics(guest, error):
+    if isinstance(error, (SSHTransportFailure, SSHTransportTimeout)):
+        reason = f'timeout={error.timeout}s' if isinstance(error, SSHTransportTimeout) else f'exit={error.returncode}'
+        detail = f'Guest SSH transport failed; {reason}\nstderr:\n{error.stderr}\n'
+        (WORK / 'diagnostics/transport.log').write_text(detail)
+        print(detail, file=sys.stderr, flush=True)
+    if isinstance(error, PreflightFailure):
+        (WORK / 'diagnostics/preflight.log').write_text(str(error) + '\n')
+    # Do not upload environment files, cookies, tokens, databases, or raw HTTP traces.
+    try:
+        log = sanitized_output(guest.ssh('docker logs --tail 100 ember', check=False, timeout=15).stdout, limit=16384)
+    except (SSHTransportFailure, SSHTransportTimeout, OSError):
+        # Diagnostic collection must preserve the original failure and its transport evidence.
+        return
+    (WORK / 'diagnostics/application.log').write_text(log)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--assets', type=Path, required=True)
@@ -468,15 +545,11 @@ def main():
     certs = certificates()
     overrides = mirror(args.assets.resolve(), certs, public)
     guest = Guest()
-    guest.boot(os.environ['GUEST_OS'], os.environ['GUEST_ARCH'])
     try:
+        guest.boot(os.environ['GUEST_OS'], os.environ['GUEST_ARCH'])
         acceptance(guest, args.assets.resolve(), certs, overrides, public)
     except BaseException as error:
-        if isinstance(error, PreflightFailure):
-            (WORK / 'diagnostics/preflight.log').write_text(str(error) + '\n')
-        # Do not upload environment files, cookies, tokens, databases, or raw HTTP traces.
-        log = sanitized_output(guest.ssh('docker logs --tail 100 ember', check=False).stdout, limit=16384)
-        (WORK / 'diagnostics/application.log').write_text(log)
+        failure_diagnostics(guest, error)
         raise
 
 
