@@ -303,6 +303,48 @@ class GuestReboot(unittest.TestCase):
         sleep.assert_not_called()
 
 
+class PublicRequests(unittest.TestCase):
+    def test_public_bundle_and_guide_use_identified_requests_with_default_tls(self):
+        version = '1.2.3'
+        bundle = b'tested public installer bundle'
+        bootstrap = '#!/bin/sh\n# tested installer\n'
+        bundle_url = 'https://github.com/NYLLON-SOFTWARE/ember/releases/download/v1.2.3/ember-installer-1.2.3.tar.gz'
+        manifest = {'version': version, 'bundle': {'url': bundle_url, 'sha256': guests.hashlib.sha256(bundle).hexdigest()}}
+        guide = (guests.ROOT / 'deploy/release/guide.html').read_bytes().replace(b'{{VERSION}}', version.encode())
+        fetched = []
+
+        def public_response(request, **kwargs):
+            self.assertIsInstance(request, guests.urllib.request.Request)
+            self.assertEqual(request.get_method(), 'GET')
+            self.assertEqual(request.get_header('User-agent'), 'Ember-public-release-verification')
+            self.assertNotIn('Python', request.get_header('User-agent'))
+            # No SSL context or transport override: urllib retains normal certificate verification.
+            self.assertEqual(kwargs, {'timeout': 30})
+            fetched.append(request.full_url)
+            response = mock.MagicMock()
+            response.__enter__.return_value = response
+            response.status = 200
+            response.headers.get_content_type.return_value = 'text/html'
+            response.read.return_value = bundle if request.full_url == bundle_url else guide
+            return response
+
+        with tempfile.TemporaryDirectory() as temporary, contextlib.ExitStack() as stack:
+            assets = Path(temporary)
+            (assets / 'release.json').write_text(guests.json.dumps(manifest))
+            (assets / 'bootstrap.sh').write_text(bootstrap)
+            stack.enter_context(mock.patch.object(guests.http.server, 'ThreadingHTTPServer'))
+            stack.enter_context(mock.patch.object(guests.ssl, 'SSLContext'))
+            stack.enter_context(mock.patch.object(guests.threading, 'Thread'))
+            stack.enter_context(mock.patch.object(guests.atexit, 'register'))
+            stack.enter_context(mock.patch.object(guests, 'run', side_effect=[
+                subprocess.CompletedProcess([], 0, bootstrap, ''),
+                subprocess.CompletedProcess([], 0, guests.json.dumps(manifest), '')]))
+            open_request = stack.enter_context(mock.patch.object(guests.urllib.request, 'urlopen', side_effect=public_response))
+            self.assertEqual(guests.mirror(assets, assets, public=True), {})
+        self.assertEqual(fetched, [bundle_url, 'https://get.nyllon.com/'])
+        self.assertEqual(open_request.call_count, 2)
+
+
 class MirrorCertificates(unittest.TestCase):
     def test_mirror_chain_passes_strict_verification_for_all_https_names(self):
         with tempfile.TemporaryDirectory() as temporary:

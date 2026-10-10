@@ -307,6 +307,11 @@ def certificates():
     return certs
 
 
+def public_get(url):
+    request = urllib.request.Request(url, headers={'User-Agent': 'Ember-public-release-verification'})
+    return urllib.request.urlopen(request, timeout=30)
+
+
 def mirror(assets, certs, public):
     overrides = {}
     manifest = json.loads((assets / 'release.json').read_text())
@@ -346,10 +351,10 @@ def mirror(assets, certs, public):
         assert bootstrap == (assets / 'bootstrap.sh').read_bytes(), 'Public bootstrap differs from tested bytes'
         live = json.loads(run('curl', '-fsSL', '--connect-timeout', '5', '--max-time', '30', 'https://get.nyllon.com/releases/stable.json', capture=True).stdout)
         assert live == manifest, 'Public stable manifest differs from tested identity'
-        with urllib.request.urlopen(manifest['bundle']['url'], timeout=30) as response:
+        with public_get(manifest['bundle']['url']) as response:
             digest = hashlib.sha256(response.read()).hexdigest()
         assert digest == manifest['bundle']['sha256'], 'Public bundle checksum mismatch'
-        with urllib.request.urlopen('https://get.nyllon.com/', timeout=30) as response:
+        with public_get('https://get.nyllon.com/') as response:
             assert response.status == 200 and response.headers.get_content_type() == 'text/html', 'Public installation guide must be HTML'
             guide = response.read()
         expected_guide = (ROOT / 'deploy/release/guide.html').read_bytes().replace(b'{{VERSION}}', version.encode())
