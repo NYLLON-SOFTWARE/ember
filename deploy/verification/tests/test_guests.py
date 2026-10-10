@@ -96,6 +96,268 @@ class PreflightDiagnostics(unittest.TestCase):
             guests.require_preflight_refusal(result, "Conflicting package runc", "package conflict")
 
 
+class SSHTransportDiagnostics(unittest.TestCase):
+    def setUp(self):
+        self.guest = guests.Guest.__new__(guests.Guest)
+        self.guest.key = Path('/temporary/ssh-key')
+
+    def test_guest_transport_budget_keeps_outer_command_deadline(self):
+        result = subprocess.CompletedProcess(['ssh'], 0, 'done', '')
+        with mock.patch.object(guests, 'run', return_value=result) as run:
+            self.assertIs(self.guest.ssh('true'), result)
+        command = run.call_args.args
+        for option in ('ConnectTimeout=30', 'ServerAliveInterval=15', 'ServerAliveCountMax=4'):
+            self.assertIn(option, command)
+        self.assertEqual(run.call_args.kwargs, {'capture': True, 'check': False, 'timeout': 900})
+
+    def test_transport_exit_cannot_be_accepted_by_unchecked_command(self):
+        command = 'printf private-command'
+        stderr = ('ssh: Connection timed out\n' + command + '\n'
+                  'SECRET_KEY_BASE=private-secret\nEMBER_SETUP_TOKEN=private-token\n'
+                  'https://chat.ember.test/first_run/access#token=private-fragment\n'
+                  'Cookie: private-cookie\nAuthorization: private-authorization\n')
+        result = subprocess.CompletedProcess(['ssh', command], 255, 'private stdout', stderr)
+        for check in (True, False):
+            with self.subTest(check=check), mock.patch.object(guests, 'run', return_value=result) as run:
+                with self.assertRaises(guests.SSHTransportFailure) as failure:
+                    self.guest.ssh(command, check=check)
+            self.assertEqual(run.call_count, 1, 'Mutating commands must never be retried')
+            error = failure.exception
+            self.assertEqual(error.returncode, 255)
+            self.assertEqual(error.cmd, ['ssh', '[remote command omitted]'])
+            self.assertIsNone(error.output)
+            self.assertIn('Connection timed out', error.stderr)
+            for private in ('private-command', 'private stdout', 'private-secret', 'private-token',
+                            'private-fragment', 'private-cookie', 'private-authorization'):
+                self.assertNotIn(private, str(error) + error.stderr)
+
+    def test_timeout_keeps_only_bounded_redacted_stderr(self):
+        command = 'printf private-command'
+        timeout = subprocess.TimeoutExpired(['ssh', command], 17, output=b'private stdout',
+            stderr=(('x' * 20000) + '\nVAPID_PRIVATE_KEY=private-vapid\n' + command + '\nssh: handshake stalled').encode())
+        with mock.patch.object(guests, 'run', side_effect=timeout) as run:
+            with self.assertRaises(guests.SSHTransportTimeout) as failure:
+                self.guest.ssh(command, timeout=17)
+        error = failure.exception
+        self.assertEqual(run.call_count, 1)
+        self.assertEqual(error.timeout, 17)
+        self.assertIsNone(error.output)
+        self.assertTrue(error.__suppress_context__)
+        self.assertIn('handshake stalled', error.stderr)
+        self.assertLess(len(error.stderr), 4200)
+        for private in ('private stdout', 'private-vapid', 'private-command'):
+            self.assertNotIn(private, str(error) + error.stderr)
+
+    def test_interactive_transport_errors_withhold_terminal_transcript(self):
+        command = 'printf private-command'
+        errors = (subprocess.CalledProcessError(255, ['ssh', command], output='private stdout', stderr='private stderr'),
+                  subprocess.TimeoutExpired(['ssh', command], 19, output=b'private stdout', stderr=b'private stderr'))
+        for error in errors:
+            with self.subTest(error=type(error).__name__), mock.patch.object(guests, 'run_interactive', side_effect=error) as run:
+                with self.assertRaises((guests.SSHTransportFailure, guests.SSHTransportTimeout)) as failure:
+                    self.guest.install(command)
+            safe = failure.exception
+            self.assertEqual(run.call_count, 1)
+            self.assertIsNone(safe.output)
+            self.assertTrue(safe.__suppress_context__)
+            self.assertIn('terminal output intentionally omitted', safe.stderr)
+            for private in ('private-command', 'private stdout', 'private stderr'):
+                self.assertNotIn(private, str(safe) + safe.stderr)
+
+    def test_unchecked_interactive_transport_exit_is_still_a_failure(self):
+        result = subprocess.CompletedProcess(['ssh'], 255, 'private stdout', 'private stderr')
+        with mock.patch.object(guests, 'run_interactive', return_value=result) as run:
+            with self.assertRaises(guests.SSHTransportFailure) as failure:
+                self.guest.install(check=False)
+        self.assertEqual(run.call_count, 1)
+        self.assertIsNone(failure.exception.output)
+        self.assertNotIn('private', failure.exception.stderr)
+
+    def test_remote_nonzero_exit_retains_expected_command_semantics(self):
+        result = subprocess.CompletedProcess(['ssh', 'test -e /missing'], 1, '', 'missing')
+        with mock.patch.object(guests, 'run', return_value=result):
+            self.assertIs(self.guest.ssh('test -e /missing', check=False), result)
+            with self.assertRaises(subprocess.CalledProcessError) as failure:
+                self.guest.ssh('test -e /missing')
+        self.assertNotIsInstance(failure.exception, guests.SSHTransportFailure)
+        self.assertEqual(failure.exception.returncode, 1)
+
+    def test_diagnostic_collection_preserves_original_transport_failure(self):
+        original = guests.SSHTransportFailure('ssh: original connection reset', 'private command')
+        cleanup_errors = (guests.SSHTransportFailure('later SSH failure', 'docker logs'),
+                          guests.SSHTransportTimeout(15, 'later timeout', 'docker logs'),
+                          OSError('later process spawn failure'))
+        for cleanup_error in cleanup_errors:
+            with self.subTest(cleanup=type(cleanup_error).__name__), tempfile.TemporaryDirectory() as temporary:
+                work = Path(temporary)
+                (work / 'diagnostics').mkdir()
+                output = io.StringIO()
+                with mock.patch.object(guests, 'WORK', work), mock.patch.object(self.guest, 'ssh', side_effect=cleanup_error) as ssh, contextlib.redirect_stderr(output):
+                    guests.failure_diagnostics(self.guest, original)
+                diagnostic = (work / 'diagnostics/transport.log').read_text()
+                self.assertIn('exit=255', diagnostic)
+                self.assertIn('original connection reset', diagnostic)
+                self.assertNotIn('later', diagnostic)
+                self.assertNotIn('private command', diagnostic)
+                self.assertEqual(output.getvalue(), diagnostic + '\n')
+                self.assertFalse((work / 'diagnostics/application.log').exists())
+                ssh.assert_called_once_with('docker logs --tail 100 ember', check=False, timeout=15)
+
+    def test_timeout_diagnostic_reports_deadline_without_output_or_command(self):
+        error = guests.SSHTransportTimeout(17, 'ssh: timeout\nCookie: private-cookie', 'private command')
+        with tempfile.TemporaryDirectory() as temporary:
+            work = Path(temporary)
+            (work / 'diagnostics').mkdir()
+            with mock.patch.object(guests, 'WORK', work), mock.patch.object(self.guest, 'ssh', return_value=subprocess.CompletedProcess([], 0, 'app log', '')), contextlib.redirect_stderr(io.StringIO()):
+                guests.failure_diagnostics(self.guest, error)
+            diagnostic = (work / 'diagnostics/transport.log').read_text()
+            self.assertIn('timeout=17s', diagnostic)
+            self.assertIn('ssh: timeout', diagnostic)
+            self.assertNotIn('private-cookie', diagnostic)
+            self.assertNotIn('private command', diagnostic)
+            self.assertEqual((work / 'diagnostics/application.log').read_text(), 'app log')
+
+    def test_boot_transport_failure_reaches_top_level_diagnostics_even_when_disk_is_full(self):
+        original = guests.SSHTransportFailure('ssh: cloud-init connection reset\nEMBER_SETUP_TOKEN=private-token', 'private command')
+        for write_failure in (False, True):
+            with self.subTest(write_failure=write_failure), tempfile.TemporaryDirectory() as temporary, contextlib.ExitStack() as stack:
+                work = Path(temporary) / 'fresh-work'
+                guest = mock.Mock()
+                guest.boot.side_effect = original
+                guest.ssh.side_effect = OSError('diagnostic-only failure')
+                stack.enter_context(mock.patch.object(guests, 'WORK', work))
+                stack.enter_context(mock.patch.object(guests.argparse.ArgumentParser, 'parse_args', return_value=guests.argparse.Namespace(assets=Path(temporary))))
+                stack.enter_context(mock.patch.object(guests.os, 'geteuid', return_value=0))
+                stack.enter_context(mock.patch.object(guests.platform, 'system', return_value='Linux'))
+                stack.enter_context(mock.patch.object(guests.platform, 'machine', return_value='aarch64'))
+                stack.enter_context(mock.patch.dict(guests.os.environ, {'GITHUB_ACTIONS': 'true', 'GUEST_ARCH': 'arm64', 'GUEST_OS': 'ubuntu-24.04'}))
+                for name in ('network', 'certificates', 'mirror'):
+                    stack.enter_context(mock.patch.object(guests, name))
+                stack.enter_context(mock.patch.object(guests, 'Guest', return_value=guest))
+                acceptance = stack.enter_context(mock.patch.object(guests, 'acceptance'))
+                if write_failure:
+                    stack.enter_context(mock.patch.object(Path, 'write_text', side_effect=OSError('No space left on device')))
+                output = stack.enter_context(contextlib.redirect_stderr(io.StringIO()))
+                with self.assertRaises(guests.SSHTransportFailure) as failure:
+                    guests.main()
+                self.assertIs(failure.exception, original)
+                self.assertIn('cloud-init connection reset', output.getvalue())
+                self.assertNotIn('private-token', output.getvalue())
+                self.assertNotIn('private command', output.getvalue())
+                if not write_failure:
+                    self.assertIn('cloud-init connection reset', (work / 'diagnostics/transport.log').read_text())
+                acceptance.assert_not_called()
+                guest.boot.assert_called_once_with('ubuntu-24.04', 'arm64')
+
+    def test_diagnostic_file_and_stderr_failures_are_both_best_effort(self):
+        with mock.patch.object(Path, 'write_text', side_effect=OSError('No space left on device')) as write, mock.patch('builtins.print', side_effect=OSError('Broken pipe')) as emit:
+            guests.write_diagnostic('transport.log', 'safe original cause', emit=True)
+        write.assert_called_once_with('safe original cause')
+        emit.assert_called_once_with('safe original cause', file=guests.sys.stderr, flush=True)
+
+
+class PrivilegeRefusal(unittest.TestCase):
+    def test_actual_installer_and_sudo_privilege_refusals_pass(self):
+        messages = ('Run this installer as root (or install sudo).',
+                    'sudo: a terminal is required to read the password; use -S or an askpass helper',
+                    'sudo: a password is required',
+                    'nobody is not in the sudoers file.',
+                    'Sorry, user nobody is not allowed to execute this command as root.')
+        for stderr in messages:
+            with self.subTest(stderr=stderr):
+                result = subprocess.CompletedProcess([], 1, '', stderr)
+                self.assertIsNone(guests.require_privilege_refusal(result))
+
+    def test_unrelated_failure_success_or_transport_cannot_prove_privilege_refusal(self):
+        cases = ((1, 'curl: Could not resolve host: get.nyllon.com'),
+                 (1, 'sudo: unable to execute installer: No such file or directory'),
+                 (0, 'Run this installer as root (or install sudo).'),
+                 (255, 'Run this installer as root (or install sudo).'),
+                 (255, 'sudo: a password is required'))
+        for code, stderr in cases:
+            with self.subTest(code=code, stderr=stderr):
+                with self.assertRaises(guests.PreflightFailure):
+                    guests.require_privilege_refusal(subprocess.CompletedProcess([], code, '', stderr))
+
+
+class GuestReboot(unittest.TestCase):
+    def test_reboot_requests_once_and_requires_changed_boot_id_after_disconnect(self):
+        errors = (None, guests.SSHTransportFailure('Connection closed', 'systemctl reboot'),
+                  guests.SSHTransportTimeout(15, '', 'systemctl reboot'))
+        command = 'cat /proc/sys/kernel/random/boot_id'
+        for error in errors:
+            with self.subTest(disconnect=type(error).__name__):
+                guest = guests.Guest.__new__(guests.Guest)
+                results = [subprocess.CompletedProcess([], 0, 'old-boot\n', ''),
+                           error or subprocess.CompletedProcess([], 0, '', ''),
+                           subprocess.CompletedProcess([], 0, 'old-boot\n', ''),
+                           subprocess.CompletedProcess([], 0, 'new-boot\n', '')]
+
+                def poll(action):
+                    with self.assertRaisesRegex(AssertionError, 'has not rebooted'):
+                        action()
+                    action()
+
+                with mock.patch.object(guest, 'ssh', side_effect=results) as ssh, mock.patch.object(guests, 'wait_for', side_effect=poll), mock.patch.object(guests.time, 'sleep') as sleep:
+                    guest.reboot()
+                self.assertEqual(ssh.call_args_list, [mock.call(command), mock.call('systemctl reboot', timeout=15),
+                                                     mock.call(command, timeout=15), mock.call(command, timeout=15)])
+                sleep.assert_called_once_with(10)
+
+    def test_real_reboot_command_refusal_fails_without_waiting_or_retrying(self):
+        guest = guests.Guest.__new__(guests.Guest)
+        refusal = subprocess.CalledProcessError(1, ['ssh', 'systemctl reboot'], stderr='Access denied')
+        with mock.patch.object(guest, 'ssh', side_effect=[subprocess.CompletedProcess([], 0, 'old-boot\n', ''), refusal]) as ssh, mock.patch.object(guests, 'wait_for') as wait, mock.patch.object(guests.time, 'sleep') as sleep:
+            with self.assertRaises(subprocess.CalledProcessError) as failure:
+                guest.reboot()
+        self.assertIs(failure.exception, refusal)
+        self.assertEqual(ssh.call_count, 2)
+        wait.assert_not_called()
+        sleep.assert_not_called()
+
+
+class PublicRequests(unittest.TestCase):
+    def test_public_bundle_and_guide_use_identified_requests_with_default_tls(self):
+        version = '1.2.3'
+        bundle = b'tested public installer bundle'
+        bootstrap = '#!/bin/sh\n# tested installer\n'
+        bundle_url = 'https://github.com/NYLLON-SOFTWARE/ember/releases/download/v1.2.3/ember-installer-1.2.3.tar.gz'
+        manifest = {'version': version, 'bundle': {'url': bundle_url, 'sha256': guests.hashlib.sha256(bundle).hexdigest()}}
+        guide = (guests.ROOT / 'deploy/release/guide.html').read_bytes().replace(b'{{VERSION}}', version.encode())
+        fetched = []
+
+        def public_response(request, **kwargs):
+            self.assertIsInstance(request, guests.urllib.request.Request)
+            self.assertEqual(request.get_method(), 'GET')
+            self.assertEqual(request.get_header('User-agent'), 'Ember-public-release-verification')
+            self.assertNotIn('Python', request.get_header('User-agent'))
+            # No SSL context or transport override: urllib retains normal certificate verification.
+            self.assertEqual(kwargs, {'timeout': 30})
+            fetched.append(request.full_url)
+            response = mock.MagicMock()
+            response.__enter__.return_value = response
+            response.status = 200
+            response.headers.get_content_type.return_value = 'text/html'
+            response.read.return_value = bundle if request.full_url == bundle_url else guide
+            return response
+
+        with tempfile.TemporaryDirectory() as temporary, contextlib.ExitStack() as stack:
+            assets = Path(temporary)
+            (assets / 'release.json').write_text(guests.json.dumps(manifest))
+            (assets / 'bootstrap.sh').write_text(bootstrap)
+            stack.enter_context(mock.patch.object(guests.http.server, 'ThreadingHTTPServer'))
+            stack.enter_context(mock.patch.object(guests.ssl, 'SSLContext'))
+            stack.enter_context(mock.patch.object(guests.threading, 'Thread'))
+            stack.enter_context(mock.patch.object(guests.atexit, 'register'))
+            stack.enter_context(mock.patch.object(guests, 'run', side_effect=[
+                subprocess.CompletedProcess([], 0, bootstrap, ''),
+                subprocess.CompletedProcess([], 0, guests.json.dumps(manifest), '')]))
+            open_request = stack.enter_context(mock.patch.object(guests.urllib.request, 'urlopen', side_effect=public_response))
+            self.assertEqual(guests.mirror(assets, assets, public=True), {})
+        self.assertEqual(fetched, [bundle_url, 'https://get.nyllon.com/'])
+        self.assertEqual(open_request.call_count, 2)
+
+
 class MirrorCertificates(unittest.TestCase):
     def test_mirror_chain_passes_strict_verification_for_all_https_names(self):
         with tempfile.TemporaryDirectory() as temporary:

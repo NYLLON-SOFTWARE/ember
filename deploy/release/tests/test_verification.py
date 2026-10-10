@@ -33,5 +33,6 @@ class AcceptanceTimeouts(unittest.TestCase):
         with patch.object(guests, 'run') as command:
             guest.ssh('true', timeout=15)
             self.assertEqual(command.call_args.kwargs['timeout'], 15)
-            self.assertIn('ServerAliveInterval=5', command.call_args.args)
-            self.assertIn('ServerAliveCountMax=3', command.call_args.args)
+            self.assertIn('ConnectTimeout=30', command.call_args.args)
+            self.assertIn('ServerAliveInterval=15', command.call_args.args)
+            self.assertIn('ServerAliveCountMax=4', command.call_args.args)
