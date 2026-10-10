@@ -1,0 +1,11 @@
+{
+  "name": "nyllon-get",
+  "account_id": "b9a05c0456567559ed575566fc5bb3f3",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-10-09",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [
+    { "pattern": "get.nyllon.com", "custom_domain": true }
+  ]
+}
