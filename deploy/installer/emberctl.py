@@ -635,7 +635,7 @@ class Manager:
         entries = {}
         archive = directory / "snapshot.tar.gz"
         try:
-            with tarfile.open(archive, "w:gz", dereference=False) as target:
+            with tarfile.open(archive, "w:gz", dereference=True) as target:
                 for prefix, source in (("config", self.config), ("storage", self.storage)):
                     for path in [source, *sorted(source.rglob("*"))]:
                         info = path.lstat()
@@ -858,10 +858,12 @@ class Manager:
         token = uuid.uuid4().hex[:8]
         staged_config = self.config.parent / f".ember-restore-{token}"
         staged_storage = self.data / f".storage-restore-{token}"
-        staged_config.mkdir(mode=0o700)
-        staged_storage.mkdir(mode=0o700)
         stage = {"config": staged_config, "storage": staged_storage}
+        created = []
         try:
+            for directory in (staged_config, staged_storage):
+                directory.mkdir(mode=0o700)
+                created.append(directory)
             with tarfile.open(self.backups / identifier / "snapshot.tar.gz", "r:gz") as source:
                 members = source.getmembers()
                 for member in members:
@@ -905,8 +907,10 @@ class Manager:
             self.journal_file.unlink()
             print(f"Restored {identifier}: Ember {saved['release']['version']}. Superseded files remain private at {old_storage} and {old_config} for manual review.")
         finally:
-            for directory in (staged_config, staged_storage):
-                if directory.exists() and not self.journal_file.exists():
+            active = json_file(self.journal_file) if self.journal_file.exists() else {}
+            retained = [active.get(key) for key in ("staged_config", "staged_storage")]
+            for directory in created:
+                if directory.exists() and str(directory) not in retained:
                     shutil.rmtree(directory)
 
     def restart(self, state):
