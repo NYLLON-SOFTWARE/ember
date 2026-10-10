@@ -20,7 +20,10 @@ case "$(uname -m)" in x86_64|aarch64|arm64) ;; *) echo 'Supported architectures:
 case "${ID:-}:${VERSION_ID:-}" in ubuntu:24.04|debian:13) ;; *) echo 'Supported systems: Ubuntu 24.04 and Debian 13.' >&2; exit 1;; esac
 if [ ! -f /etc/ember/state.json ]; then
   for conflict in /etc/ember /var/lib/ember/storage /usr/local/bin/emberctl /usr/local/lib/ember /var/lib/once /etc/once /usr/local/bin/once; do
-    [ ! -e "$conflict" ] && [ ! -L "$conflict" ] || { echo "Refusing unmanaged or incomplete installation: $conflict" >&2; exit 1; }
+    if [ -e "$conflict" ] || [ -L "$conflict" ]; then
+      echo "Refusing unmanaged or incomplete installation: $conflict" >&2
+      exit 1
+    fi
   done
 fi
 # Dependencies come from the distribution's signed repositories. No downloaded shell scripts run.

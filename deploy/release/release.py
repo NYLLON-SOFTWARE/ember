@@ -60,10 +60,17 @@ def run(*command):
     return subprocess.check_output(command, text=True).strip()
 
 
+def require_public_repository(metadata):
+    if metadata.get('private') is not False:
+        raise ValueError('Stable release assets require a public repository for anonymous downloads')
+
+
 def guard(requested, commit):
     version(requested)
     if not SHA.fullmatch(commit):
         raise ValueError('Select an exact 40-character commit SHA')
+    require_public_repository(json.loads(run('gh', 'api', 'repos/' + REPOSITORY)))
+    # Anonymous Git reads are intentional: release artifacts must also be anonymously readable.
     run('git', 'fetch', 'origin', 'main')
     run('git', 'merge-base', '--is-ancestor', commit, 'origin/main')
     if run('git', 'rev-parse', 'HEAD') != commit:

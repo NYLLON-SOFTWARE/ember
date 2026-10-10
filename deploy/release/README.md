@@ -7,7 +7,10 @@ exact tested artifact bundle. Main images and prereleases never advance the stab
 
 ## One-time repository configuration
 
-1. Make the `ember` GHCR package in `NYLLON-SOFTWARE` public through its package settings. Repository
+1. Keep the source repository public so release assets can be downloaded anonymously; dispatch
+   rejects private source repositories. Make the `ember` GHCR package in `NYLLON-SOFTWARE` public
+   through its package settings. If public visibility is disabled, the organization's package
+   publishing policy must first allow public packages. Repository
    visibility does not grant anonymous container pulls. Grant this repository Actions access to
    the package. The workflow performs an unauthenticated pull using an empty Docker config.
 2. Create the `ember-release` GitHub environment. Store `CLOUDFLARE_API_TOKEN` there, scoped to the

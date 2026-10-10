@@ -66,3 +66,11 @@ class ImmutableImageTags(unittest.TestCase):
             raise OSError('registry unavailable')
         with self.assertRaises(OSError):
             release.unused_image_tags('1.2.3', unavailable)
+
+
+class PublicDistribution(unittest.TestCase):
+    def test_repository_must_explicitly_be_public(self):
+        release.require_public_repository({'private': False})
+        for metadata in ({'private': True}, {}):
+            with self.assertRaisesRegex(ValueError, 'public repository'):
+                release.require_public_repository(metadata)
