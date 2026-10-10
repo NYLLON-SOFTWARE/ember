@@ -327,10 +327,11 @@ class Manager:
         value = domain
         if not value:
             try:
-                with open("/dev/tty", "r+") as terminal:
-                    terminal.write("Hostname pointing to this server (for example chat.example.com): ")
-                    terminal.flush()
-                    value = terminal.readline().strip()
+                # A terminal is not seekable, so buffered read/write (r+) is unsupported.
+                with open("/dev/tty", "r") as reader, open("/dev/tty", "w") as writer:
+                    writer.write("Hostname pointing to this server (for example chat.example.com): ")
+                    writer.flush()
+                    value = reader.readline().strip()
             except OSError as error:
                 raise Failure("An interactive terminal or --domain HOSTNAME is required.") from error
         domain = hostname(value)
@@ -364,7 +365,7 @@ class Manager:
             pending = json_file(self.journal_file)
             if pending.get("operation") == "install":
                 require(pending["state"]["release"] == release, "Finish the pending installation using its original versioned bootstrap or emberctl restart before changing versions.")
-                self.resume_install(pending)
+                self.resume_install(pending, args.bundle_dir)
                 return
         if self.state_file.exists():
             self.no_pending()
@@ -406,38 +407,106 @@ class Manager:
             require(args.test_ca.stat().st_size <= 1024 * 1024, "CA bundle exceeds 1 MiB.")
             ssl.create_default_context(cafile=str(args.test_ca))
         self.pull(release["image"])
-        generated = run(["docker", "run", "--rm", "--network", "none", "--log-driver", "none", "--user", "1000:1000", release["image"], "ember", "generate-secrets"]).stdout
-        try:
-            secrets = dict(line.split("=", 1) for line in generated.splitlines())
-        except ValueError as error:
-            raise Failure("Unexpected secret generator output.") from error
+        state = {"managed_by": "emberctl-v1", "install_id": uuid.uuid4().hex, "domain": domain, "storage": str(self.storage), "release": release}
+        staged_config = self.config.parent / (".ember-install-" + state["install_id"])
+        staged_storage = self.data / (".storage-install-" + state["install_id"])
+        require(not os.path.lexists(staged_config) and not os.path.lexists(staged_storage), "Installation staging paths already exist.")
+        details = {"staged_config": str(staged_config), "staged_storage": str(staged_storage), "runtime": options,
+                   "manager_checksums": {name: digest_file(args.bundle_dir / name) for name in ("emberctl", "emberctl.py")}}
+        if args.test_ca:
+            details.update(test_ca_source=str(args.test_ca.resolve()), test_ca_sha256=digest_file(args.test_ca))
+        # The future paths are durable before the first mkdir or secret generation.
+        self.journal("install", state, phase="preparing", **details)
+        self.resume_install(json_file(self.journal_file), args.bundle_dir)
+
+    def prepare_install(self, journal, bundle_dir):
+        state = self.state(recovery=True)
+        require(state == journal["state"], "Installation identity differs from its recovery journal.")
+        require(not any(os.path.lexists(path) for path in (self.config, self.storage, self.lib, self.command)), "Unmanaged installation paths appeared during preparation.")
+        require(bundle_dir is not None, "Finish preparing this installation with its original versioned bootstrap.")
+        require(validate_manifest(json_file(bundle_dir / "install.json"), bundle=False) == state["release"], "Recovery bundle differs from the pending installation.")
+        options = journal.get("runtime")
+        require(isinstance(options, dict) and set(options) in (set(), {"ACME_DIRECTORY", "SSL_CERT_FILE"}), "Invalid preparing runtime options.")
+        if options:
+            parsed = urllib.parse.urlsplit(options["ACME_DIRECTORY"])
+            require(parsed.scheme == "https" and parsed.hostname and not parsed.username and not parsed.password
+                    and options["SSL_CERT_FILE"] == "/run/ember-test-ca.pem", "Invalid preparing ACME options.")
+        checksums = journal.get("manager_checksums")
+        require(isinstance(checksums, dict) and set(checksums) == {"emberctl", "emberctl.py"}
+                and all(digest_file(bundle_dir / name) == expected for name, expected in checksums.items()), "Recovery manager files differ from the original bundle.")
+        stages = []
+        for key, parent, prefix, owners in (("staged_config", self.config.parent, ".ember-install-", {ROOT_UID}),
+                                            ("staged_storage", self.data, ".storage-install-", {ROOT_UID, APP_UID})):
+            stage = Path(journal[key])
+            require(stage.parent == parent and stage.name == prefix + state["install_id"], "Unsafe preparing installation path.")
+            if os.path.lexists(stage):
+                information = stage.lstat()
+                require(stat.S_ISDIR(information.st_mode) and information.st_uid in owners and information.st_mode & 0o077 == 0, "Unsafe preparing installation directory.")
+            else:
+                stage.mkdir(mode=0o700)
+                sync_directory(parent)
+            stages.append(stage)
+        staged_config, staged_storage = stages
+        os.chown(staged_storage, APP_UID, APP_GID)
+        sync_directory(staged_storage)
+        environment = staged_config / "app.env"
+        if os.path.lexists(environment):
+            private(environment)
+            lines = environment.read_text().splitlines()
+            values = dict(line.split("=", 1) for line in lines)
+            require(len(lines) == len(SECRET_KEYS) + 2 and set(values) == SECRET_KEYS | {"TLS_DOMAIN", "EMBER_STORAGE_PATH"}
+                    and values["TLS_DOMAIN"] == state["domain"] and values["EMBER_STORAGE_PATH"] == "/rails/storage", "Invalid staged installation environment.")
+            secrets = {key: values[key] for key in SECRET_KEYS}
+        else:
+            generated = run(["docker", "run", "--rm", "--network", "none", "--log-driver", "none", "--user", "1000:1000", state["release"]["image"], "ember", "generate-secrets"]).stdout
+            try:
+                secrets = dict(line.split("=", 1) for line in generated.splitlines())
+            except ValueError as error:
+                raise Failure("Unexpected secret generator output.") from error
         require(set(secrets) == SECRET_KEYS and re.fullmatch(r"[0-9a-f]{128}", secrets["SECRET_KEY_BASE"])
                 and re.fullmatch(r"[0-9a-f]{64}", secrets["EMBER_SETUP_TOKEN"])
                 and re.fullmatch(r"[A-Za-z0-9_-]{87}", secrets["VAPID_PUBLIC_KEY"])
                 and re.fullmatch(r"[A-Za-z0-9_-]{43}", secrets["VAPID_PRIVATE_KEY"]), "Unexpected secret generator output.")
-        state = {"managed_by": "emberctl-v1", "install_id": uuid.uuid4().hex, "domain": domain, "storage": str(self.storage), "release": release}
-        staged_config = Path(tempfile.mkdtemp(prefix=".ember-install-", dir=self.config.parent))
-        staged_storage = Path(tempfile.mkdtemp(prefix=".storage-install-", dir=self.data))
-        try:
-            os.chown(staged_storage, APP_UID, APP_GID)
-            if args.test_ca:
-                atomic_bytes(staged_config / "test-ca.pem", args.test_ca.read_bytes(), 0o644)
-            atomic_json(staged_config / "runtime.json", options)
-            atomic_bytes(staged_config / "app.env", ("\n".join(f"{key}={value}" for key, value in sorted(secrets.items()))
-                         + f"\nTLS_DOMAIN={domain}\nEMBER_STORAGE_PATH=/rails/storage\n").encode())
-            atomic_json(staged_config / "state.json", state)
-            (staged_config / "manager").mkdir(mode=0o700)
-            for name in ("emberctl", "emberctl.py"):
-                atomic_bytes(staged_config / "manager" / name, (args.bundle_dir / name).read_bytes())
-            self.journal("install", state, phase="prepared", staged_config=str(staged_config), staged_storage=str(staged_storage))
-        except BaseException:
-            if not self.journal_file.exists():
-                shutil.rmtree(staged_config)
-                shutil.rmtree(staged_storage)
-            raise
-        self.resume_install(json_file(self.journal_file))
+        if not environment.exists():
+            atomic_bytes(environment, ("\n".join(f"{key}={value}" for key, value in sorted(secrets.items()))
+                         + f"\nTLS_DOMAIN={state['domain']}\nEMBER_STORAGE_PATH=/rails/storage\n").encode())
+        if options:
+            certificate = staged_config / "test-ca.pem"
+            if os.path.lexists(certificate):
+                information = certificate.lstat()
+                require(stat.S_ISREG(information.st_mode) and information.st_uid == ROOT_UID and information.st_mode & 0o022 == 0, "Unsafe staged test CA.")
+                require(digest_file(certificate) == journal["test_ca_sha256"], "Staged test CA differs from its preparing journal.")
+            else:
+                source = Path(journal["test_ca_source"])
+                require(not source.is_symlink() and source.stat().st_size <= 1024 * 1024 and digest_file(source) == journal["test_ca_sha256"], "Original test CA changed during preparation.")
+                ssl.create_default_context(cafile=str(source))
+                atomic_bytes(certificate, source.read_bytes(), 0o644)
+        for name, value in (("runtime.json", options), ("state.json", state)):
+            target = staged_config / name
+            if os.path.lexists(target):
+                private(target)
+                require(json_file(target) == value, "Staged configuration differs from its preparing journal.")
+            else:
+                atomic_json(target, value)
+        saved = staged_config / "manager"
+        if os.path.lexists(saved):
+            private(saved, True)
+        else:
+            saved.mkdir(mode=0o700)
+            sync_directory(staged_config)
+        for name in ("emberctl", "emberctl.py"):
+            target = saved / name
+            if os.path.lexists(target):
+                private(target)
+                require(digest_file(target) == checksums[name], "Staged manager differs from the original bundle.")
+            else:
+                atomic_bytes(target, (bundle_dir / name).read_bytes())
+        self.journal("install", state, phase="prepared", staged_config=str(staged_config), staged_storage=str(staged_storage))
 
-    def resume_install(self, journal):
+    def resume_install(self, journal, bundle_dir=None):
+        if journal.get("phase") == "preparing":
+            self.prepare_install(journal, bundle_dir)
+            journal = json_file(self.journal_file)
         state = journal["state"]
         validate_manifest(state["release"], bundle=False)
         require(state.get("storage") == str(self.storage) and state.get("managed_by") == "emberctl-v1", "Invalid install recovery identity.")
@@ -630,16 +699,31 @@ class Manager:
         require(seen == set(entries) and {"config", "storage", "config/state.json", "config/app.env", "config/runtime.json", "config/manager", "config/manager/emberctl", "config/manager/emberctl.py"} <= seen, "Backup is incomplete.")
         return metadata
 
+    def complete_availability_recovery(self, journal):
+        require(journal.get("operation") in {"backup", "restart"} and isinstance(journal.get("was_running"), bool), "Invalid availability recovery record.")
+        state = journal["state"]
+        require(state == self.state(), "Installed configuration differs from the interrupted operation.")
+        self.managed_container(state)
+        if journal["was_running"]:
+            self.start(state)
+            self.readiness(state)
+        else:
+            self.stop(state)
+        self.journal_file.unlink()
+        sync_directory(self.data)
+
     def backup(self, state):
         self.no_pending()
         self.space_for_backup()
-        was_running = self.stop(state)
+        container = self.managed_container(state)
+        was_running = container is not None and container["State"]["Running"]
+        # SIGKILL or a power loss skips finally; restart must still know the original state.
+        self.journal("backup", state, phase="stopping", was_running=was_running)
         try:
+            self.stop(state)
             return self.archive(state)
         finally:
-            if was_running:
-                self.start(state)
-                self.readiness(state)
+            self.complete_availability_recovery(json_file(self.journal_file))
 
     def recover_prestart(self, journal, finish=True):
         previous = journal.get("previous", journal["state"])
@@ -826,7 +910,11 @@ class Manager:
     def restart(self, state):
         journal = json_file(self.journal_file) if self.journal_file.exists() else None
         prestart_recovery = None
-        if journal and journal.get("operation") == "install" and journal.get("phase") == "prepared":
+        if journal and journal.get("operation") in {"backup", "restart"}:
+            self.complete_availability_recovery(journal)
+            print(f"Recovered {journal['operation']}; Ember is {'ready' if journal['was_running'] else 'stopped as before the backup'}.")
+            return
+        if journal and journal.get("operation") == "install" and journal.get("phase") in {"preparing", "prepared"}:
             self.resume_install(journal)
             return
         if journal and journal.get("operation") == "update" and journal.get("phase") in {"preparing-backup", "backed-up", "candidate-created"}:
@@ -835,6 +923,9 @@ class Manager:
             journal = None
         require(journal is None or journal.get("operation") in {"install", "update"}, "Restore recovery remains pending; rerun the explicit restore.")
         self.managed_container(state)
+        if journal is None and prestart_recovery is None:
+            self.journal("restart", state, phase="stopping", was_running=True)
+            journal = json_file(self.journal_file)
         self.stop(state)
         self.start(state)
         self.readiness(state)
@@ -844,6 +935,7 @@ class Manager:
             if journal["operation"] == "update" and journal.get("phase") != "manager-installed":
                 self.finish_manager_update(journal)
             self.journal_file.unlink()
+            sync_directory(self.data)
             if journal["operation"] == "update":
                 directory = Path(journal["bundle_dir"])
                 require(directory.parent == self.data and directory.name.startswith(".update-bundle-"), "Unsafe staged bundle path.")
@@ -872,8 +964,8 @@ def parser():
         install = commands.add_parser(internal, help=argparse.SUPPRESS)
         install.add_argument("--bundle-dir", type=Path, required=True)
         install.add_argument("--domain")
-        install.add_argument("--runtime-env", type=Path)
-        install.add_argument("--test-ca", type=Path)
+        install.add_argument("--runtime-env", type=Path, default=os.environ.get("EMBER_INSTALL_RUNTIME_ENV") or None)
+        install.add_argument("--test-ca", type=Path, default=os.environ.get("EMBER_INSTALL_TEST_CA") or None)
     for name in ("status", "logs", "restart", "setup-link", "backup"):
         commands.add_parser(name)
     commands.add_parser("update").add_argument("version", nargs="?")

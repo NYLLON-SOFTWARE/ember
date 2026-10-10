@@ -13,7 +13,7 @@ root access or sudo, and inbound TCP ports 80 and 443 available. Point a hostnam
 A record (and any AAAA record) at that server before running:
 
 ```sh
-curl -fsSL https://get.nyllon.com/ember | sh
+curl -fsSL https://get.nyllon.com/ember | sh --
 ```
 
 The installer asks for the hostname through `/dev/tty`. For an unattended root
@@ -41,8 +41,10 @@ in a URL fragment, exchanged for a short-lived setup cookie, and stops granting
 access once the account exists.
 
 The installer generates signing, push, and setup secrets once. Repeating the
-installer preserves those secrets and existing data. A prepared installation
-interrupted before startup can be resumed with its original versioned bootstrap.
+installer preserves those secrets and existing data. An installation interrupted
+during preparation or before startup can be resumed with its original versioned
+bootstrap. Its journal records staging paths before they are created, and a retry
+preserves any signing, push, and setup secrets already saved in the private stage.
 After the manager is installed, use `sudo emberctl status` and `sudo emberctl
 restart` to finish startup after correcting DNS or port problems.
 
@@ -104,8 +106,11 @@ Configuration and backup directories are root-only (0700), secret/metadata files
 are 0600, and the storage root belongs to UID/GID 1000. Full backups live outside
 the active storage tree. `backup` stops the app, verifies no other running Docker
 container can write that storage, snapshots the complete storage/configuration
-and matching manager, verifies SHA256 checksums, then resumes the app. It causes
-brief downtime. The app's existing `ember backup` command remains the separate
+and matching manager, verifies SHA256 checksums, then restores the original
+running or stopped state. It causes brief downtime. Backups and restarts record
+recovery intent before stopping Docker. After an interruption, `status` reports
+the operation and `restart` finishes recovery; a backup begun while Ember was
+already stopped leaves it stopped. The app's existing `ember backup` command remains the separate
 ONCE-compatible SQLite-only snapshot operation.
 
 Restore accepts only a managed backup ID, verifies archive and per-file checksums,
@@ -160,7 +165,12 @@ fetch mutable GitHub source during a request. See `deploy/release/` and
 `deploy/verification/` for publication and VM gates.
 
 For isolated ACME tests only, the installer accepts `--runtime-env FILE
---test-ca FILE`. The env file must contain exactly `ACME_DIRECTORY=https://...`
+--test-ca FILE`. Root test sessions may instead export `EMBER_INSTALL_RUNTIME_ENV`
+and `EMBER_INSTALL_TEST_CA` with those file paths, so the exact advertised command
+can run through a real terminal and prompt for its hostname. Explicit flags take
+precedence over these environment defaults; the hostname has no environment
+default. These options use the same file validation and never execute the env
+file. The env file must contain exactly `ACME_DIRECTORY=https://...`
 and `SSL_CERT_FILE=/run/ember-test-ca.pem`. The provided CA bundle is copied into
 root-private configuration and mounted read-only into the container; HTTPS
 readiness trusts it explicitly. The disposable guest must also trust the local

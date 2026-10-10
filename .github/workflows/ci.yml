@@ -196,4 +196,5 @@ jobs:
           shellcheck deploy/installer/*.sh deploy/installer/emberctl
           python3 -m unittest discover -s deploy/installer/tests -p 'test_*.py' -v
           python3 -m unittest discover -s deploy/release/tests -p 'test_*.py' -v
+          python3 -m unittest discover -s deploy/verification/tests -p 'test_*.py' -v
           node --test deploy/installer/tests/*.test.mjs deploy/release/tests/*.test.mjs

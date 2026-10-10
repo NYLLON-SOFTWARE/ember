@@ -10,6 +10,7 @@ import os
 import platform
 from pathlib import Path
 import re
+import selectors
 import shlex
 import shutil
 import ssl
@@ -23,6 +24,8 @@ WORK = ROOT / 'tmp/installer-verification'
 HOST = '192.0.2.1'
 GUEST = '192.0.2.10'
 DOMAIN = 'chat.ember.test'
+INSTALL_COMMAND = 'curl -fsSL https://get.nyllon.com/ember | sh --'
+HOSTNAME_PROMPT = 'Hostname pointing to this server (for example chat.example.com): '
 PEBBLE = 'ghcr.io/letsencrypt/pebble@sha256:d9080f68f6cb6af8d82134ab26de0aaaf312ac9cba42aecc6d3aede6cb63007b'
 
 
@@ -30,6 +33,52 @@ def run(*args, capture=False, check=True, timeout=600, **kwargs):
     return subprocess.run([str(x) for x in args], check=check, text=True,
                           stdout=subprocess.PIPE if capture else None,
                           stderr=subprocess.PIPE if capture else None, timeout=timeout, **kwargs)
+
+
+def run_interactive(command, responses, check=True, timeout=900):
+    """Drive the remote controlling terminal without putting replies in the command."""
+    process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    output = bytearray()
+    answered = set()
+    deadline = time.monotonic() + timeout
+    selector = selectors.DefaultSelector()
+    selector.register(process.stdout, selectors.EVENT_READ)
+    try:
+        while selector.get_map():
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise subprocess.TimeoutExpired(command, timeout)
+            for key, _events in selector.select(min(remaining, 1)):
+                block = os.read(key.fileobj.fileno(), 65536)
+                if not block:
+                    selector.unregister(key.fileobj)
+                    continue
+                output.extend(block)
+                for index, (prompt, reply) in enumerate(responses):
+                    if index not in answered and prompt.encode() in output:
+                        process.stdin.write((reply + '\n').encode())
+                        process.stdin.flush()
+                        answered.add(index)
+        code = process.wait(timeout=max(0.01, deadline - time.monotonic()))
+    except BaseException:
+        process.kill()
+        process.wait()
+        raise
+    finally:
+        selector.close()
+        process.stdin.close()
+        process.stdout.close()
+    result = subprocess.CompletedProcess(command, code, output.decode(errors='replace'), '')
+    if check and code:
+        # A successful transcript contains the private setup link; never attach it to exceptions.
+        raise subprocess.CalledProcessError(code, command)
+    return result
+
+
+def installer_session_command(command=INSTALL_COMMAND):
+    # Explicit disposable-host trust configuration; the public command itself has no flags.
+    return ('export EMBER_INSTALL_RUNTIME_ENV=/root/ember-runtime.env '
+            'EMBER_INSTALL_TEST_CA=/root/ember-test-ca.pem; ' + command)
 
 
 def wait_for(action, timeout=600):
@@ -48,10 +97,17 @@ class Guest:
         self.key = WORK / 'ssh'
         run('ssh-keygen', '-q', '-t', 'ed25519', '-N', '', '-f', self.key)
 
+    def ssh_command(self, command, tty=False):
+        return ['ssh', *(['-tt'] if tty else []), '-i', str(self.key), '-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=/dev/null',
+                '-o', 'LogLevel=ERROR', '-o', 'ConnectTimeout=5', '-o', 'ServerAliveInterval=5', '-o', 'ServerAliveCountMax=3',
+                'root@' + GUEST, command]
+
     def ssh(self, command, check=True, timeout=900):
-        return run('ssh', '-i', self.key, '-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=/dev/null',
-                   '-o', 'LogLevel=ERROR', '-o', 'ConnectTimeout=5', '-o', 'ServerAliveInterval=5', '-o', 'ServerAliveCountMax=3',
-                   'root@' + GUEST, command, capture=True, check=check, timeout=timeout)
+        return run(*self.ssh_command(command), capture=True, check=check, timeout=timeout)
+
+    def install(self, command=INSTALL_COMMAND, check=True):
+        return run_interactive(self.ssh_command(installer_session_command(command), tty=True),
+                               [(HOSTNAME_PROMPT, DOMAIN)], check=check)
 
     def copy(self, source, destination):
         run('scp', '-q', '-i', self.key, '-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=/dev/null',
@@ -210,7 +266,8 @@ def acceptance(guest, assets, certs, overrides, public):
     runtime = WORK / 'runtime.env'
     runtime.write_text('ACME_DIRECTORY=https://pebble.ember.test:14000/dir\nSSL_CERT_FILE=/run/ember-test-ca.pem\n')
     guest.copy(runtime, '/root/ember-runtime.env')
-    command = 'curl -fsSL https://get.nyllon.com/ember | sh -- --domain ' + DOMAIN + ' --runtime-env /root/ember-runtime.env --test-ca /root/ember-test-ca.pem'
+    guest.ssh('chmod 600 /root/ember-runtime.env /root/ember-test-ca.pem')
+    failure_command = installer_session_command('curl -fsSL https://get.nyllon.com/ember | sh -s -- --domain ' + DOMAIN)
     assert guest.ssh('command -v docker', check=False).returncode != 0, 'Guest must start without Docker'
     if not public:
         manifest = json.loads((assets / 'release.json').read_text())
@@ -219,39 +276,50 @@ def acceptance(guest, assets, certs, overrides, public):
         bundle = (assets / bundle_name).read_bytes()
         overrides[bundle_path] = bundle[:len(bundle) // 2]
         try:
-            interrupted = guest.ssh(command, check=False)
+            interrupted = guest.ssh(failure_command, check=False)
             assert interrupted.returncode != 0 and 'checksum' in interrupted.stderr.lower(), 'A partial bundle must fail its advertised SHA256 before installation'
         finally:
             del overrides[bundle_path]
         guest.ssh('test ! -e /etc/ember && test ! -e /etc/apt/sources.list.d/docker.sources && ! command -v docker')
-    unprivileged = guest.ssh("su -s /bin/sh nobody -c " + shlex.quote(command), check=False)
+    unprivileged = guest.ssh("su -s /bin/sh nobody -c " + shlex.quote(failure_command), check=False)
     assert unprivileged.returncode != 0, 'Unprivileged installation must fail without sudo authorization'
     assert guest.ssh('test ! -e /etc/ember').returncode == 0
     # Unsupported OS is a real shell preflight, with the guest's OS metadata restored immediately.
     guest.ssh('cp /etc/os-release /root/os-release.saved && printf "ID=unsupported\\nVERSION_ID=99\\n" > /etc/os-release')
     try:
-        unsupported = guest.ssh(command, check=False)
+        unsupported = guest.ssh(failure_command, check=False)
         assert unsupported.returncode != 0 and 'Supported systems' in unsupported.stderr
     finally:
         guest.ssh('cp /root/os-release.saved /etc/os-release')
     port_pid = guest.ssh('nohup python3 -m http.server 80 >/dev/null 2>&1 & echo $!').stdout.strip()
     try:
         wait_for(lambda: guest.ssh('curl -fsS --connect-timeout 3 --max-time 10 http://127.0.0.1/ >/dev/null', timeout=15))
-        conflict = guest.ssh(command, check=False)
+        conflict = guest.ssh(failure_command, check=False)
         assert conflict.returncode != 0 and '80' in conflict.stderr, 'Occupied port must refuse installation'
     finally:
         guest.ssh('kill ' + str(int(port_pid)))
     guest.ssh('DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y runc')
-    conflicting_package = guest.ssh(command, check=False)
+    conflicting_package = guest.ssh(failure_command, check=False)
     assert conflicting_package.returncode != 0 and 'Conflicting package runc' in conflicting_package.stderr
     guest.ssh("dpkg-query -W -f='${Status}' runc | grep -q 'install ok installed'")
     guest.ssh('test ! -e /etc/apt/sources.list.d/docker.sources && test ! -e /etc/ember')
     guest.ssh('DEBIAN_FRONTEND=noninteractive apt-get remove -y runc')
-    result = guest.ssh(command)
+    result = guest.install()
+    assert result.stdout.count(HOSTNAME_PROMPT) == 1, 'The advertised command must prompt for the hostname through the real terminal'
+    state = json.loads(guest.ssh('cat /etc/ember/state.json').stdout)
+    manifest = json.loads((assets / 'release.json').read_text())
+    assert state['domain'] == DOMAIN and state['release']['image'] == manifest['image'], 'The real prompt must select the hostname without changing the candidate image'
+    expected_runtime = {'ACME_DIRECTORY': 'https://pebble.ember.test:14000/dir', 'SSL_CERT_FILE': '/run/ember-test-ca.pem'}
+    assert json.loads(guest.ssh('cat /etc/ember/runtime.json').stdout) == expected_runtime
+    container = json.loads(guest.ssh('docker container inspect ember').stdout)[0]
+    assert container['Config']['Image'] == manifest['image'] and container['Config']['User'] == '1000:1000'
+    assert all(key + '=' + value in container['Config']['Env'] for key, value in expected_runtime.items())
+    assert any(mount['Source'] == '/etc/ember/test-ca.pem' and mount['Destination'] == '/run/ember-test-ca.pem' and mount['RW'] is False for mount in container['Mounts']), 'The explicit test CA must be mounted read-only'
     token = re.search(r'/first_run/access#token=([a-f0-9]{64})', result.stdout).group(1)
     browser('setup', token)
     baseline = guest.ssh('sha256sum /etc/ember/app.env').stdout
-    guest.ssh(command)  # Working Docker and existing managed deployment; preserve all state.
+    repeated = guest.install()  # Working Docker and existing managed deployment; preserve all state.
+    assert HOSTNAME_PROMPT not in repeated.stdout, 'Rerunning the advertised command must retain the managed hostname'
     assert guest.ssh('sha256sum /etc/ember/app.env').stdout == baseline
     guest.ssh('emberctl backup')
     backup = guest.ssh('find /var/lib/ember/backups -mindepth 1 -maxdepth 1 -type d | sort | tail -1').stdout.strip().split('/')[-1]
@@ -306,7 +374,7 @@ def acceptance(guest, assets, certs, overrides, public):
     assert guest.ssh('sha256sum /etc/ember/app.env').stdout == baseline
     browser('persist')
     assert guest.ssh('emberctl setup-link', check=False).returncode != 0, 'Completed setup cannot be reopened'
-    summary = {'os': os.environ['GUEST_OS'], 'arch': os.environ['GUEST_ARCH'], 'public': public, 'gates': ['anonymous-install', 'private-browser-setup', 'chat', 'upload', 'websocket', 'push-enrollment', 'rerun', 'offline-ca-reboot', 'complete-backup-restore'] + ([] if public else ['interrupted-download', 'registry-unavailable-preserves-running-app', 'update', 'failed-start-explicit-recovery'])}
+    summary = {'os': os.environ['GUEST_OS'], 'arch': os.environ['GUEST_ARCH'], 'public': public, 'gates': ['anonymous-install', 'advertised-command-real-terminal-hostname', 'private-browser-setup', 'chat', 'upload', 'websocket', 'push-enrollment', 'rerun', 'offline-ca-reboot', 'complete-backup-restore'] + ([] if public else ['interrupted-download', 'registry-unavailable-preserves-running-app', 'update', 'failed-start-explicit-recovery'])}
     (WORK / 'diagnostics/result.json').write_text(json.dumps(summary, indent=2) + '\n')
 
 

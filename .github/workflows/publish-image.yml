@@ -273,6 +273,8 @@ jobs:
       previous: ${{ steps.previous.outputs.version }}
       previous-deployment: ${{ steps.previous.outputs.deployment }}
       candidate-deployment: ${{ steps.candidate.outputs.deployment }}
+      candidate-version: ${{ steps.upload.outputs.version }}
+      deployment-message: ${{ steps.attempt.outputs.message }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -292,18 +294,34 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: b9a05c0456567559ed575566fc5bb3f3
         run: node deploy/release/cloudflare.mjs previous
-      - id: worker
-        name: Deploy tested installer, manifest, and guide
+      - id: attempt
+        name: Save the deployment attempt identity for recovery and job retries
+        run: printf 'message=Ember release run %s attempt %s\n' "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - id: upload
+        name: Upload tested installer, manifest, and guide as an inactive version
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.identity.outputs.version }}
           COMMIT: ${{ needs.identity.outputs.commit }}
+          WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/ember-worker-upload.ndjson
+          DEPLOYMENT_MESSAGE: ${{ steps.attempt.outputs.message }}
         run: |
           set -euo pipefail
           python3 deploy/release/release.py promotion "$VERSION" "$COMMIT"
           python3 deploy/release/release.py worker release-assets deploy/installer/published.mjs
-          deploy/release/node_modules/.bin/wrangler deploy --config deploy/installer/wrangler.jsonc --message "Ember release run $GITHUB_RUN_ID attempt $GITHUB_RUN_ATTEMPT"
+          : > "$WRANGLER_OUTPUT_FILE_PATH"
+          deploy/release/node_modules/.bin/wrangler versions upload --config deploy/installer/wrangler.jsonc --message "$DEPLOYMENT_MESSAGE"
+          node deploy/release/cloudflare.mjs uploaded
+      - id: worker
+        name: Activate the exact uploaded version without changing the existing domain
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CANDIDATE_VERSION: ${{ steps.upload.outputs.version }}
+          DEPLOYMENT_MESSAGE: ${{ steps.attempt.outputs.message }}
+        run: |
+          set -euo pipefail
+          deploy/release/node_modules/.bin/wrangler versions deploy "$CANDIDATE_VERSION@100%" --yes --config deploy/installer/wrangler.jsonc --message "$DEPLOYMENT_MESSAGE"
       # Keep candidate identity even if Wrangler fails after activating the Worker. Job outputs
       # also remain available when only public verification or rollback is retried later.
       - id: candidate
@@ -313,7 +331,8 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: b9a05c0456567559ed575566fc5bb3f3
           PREVIOUS_DEPLOYMENT: ${{ steps.previous.outputs.deployment }}
-          DEPLOYMENT_MESSAGE: Ember release run ${{ github.run_id }} attempt ${{ github.run_attempt }}
+          CANDIDATE_VERSION: ${{ steps.upload.outputs.version }}
+          DEPLOYMENT_MESSAGE: ${{ steps.attempt.outputs.message }}
         run: node deploy/release/cloudflare.mjs candidate
 
   public-verification:
@@ -347,7 +366,10 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: b9a05c0456567559ed575566fc5bb3f3
           PREVIOUS_VERSION: ${{ needs.deploy.outputs.previous }}
+          PREVIOUS_DEPLOYMENT: ${{ needs.deploy.outputs.previous-deployment }}
           CANDIDATE_DEPLOYMENT: ${{ needs.deploy.outputs.candidate-deployment }}
+          CANDIDATE_VERSION: ${{ needs.deploy.outputs.candidate-version }}
+          DEPLOYMENT_MESSAGE: ${{ needs.deploy.outputs.deployment-message }}
         run: node deploy/release/cloudflare.mjs restore
 
   website-ready:

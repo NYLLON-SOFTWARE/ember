@@ -187,6 +187,46 @@ class Lifecycle(unittest.TestCase):
                 (bundle / member.name).write_bytes(source.extractfile(member).read())
         return m.argparse.Namespace(bundle_dir=bundle, domain="chat.example.com", runtime_env=None, test_ca=None)
 
+    def test_test_trust_environment_uses_existing_validation_before_image_pull(self):
+        original = self.fresh_bundle()
+        runtime = original.bundle_dir / "runtime.env"
+        ca = original.bundle_dir / "test-ca.pem"
+        runtime.write_text("ACME_DIRECTORY=https://pebble.example.test/dir\nSSL_CERT_FILE=/run/ember-test-ca.pem\n")
+        ca.write_bytes(b"not a certificate")
+        command = ["install", "--bundle-dir", str(original.bundle_dir), "--domain", original.domain]
+        environment = {"EMBER_INSTALL_RUNTIME_ENV": str(runtime), "EMBER_INSTALL_TEST_CA": str(ca)}
+        cases = [
+            ("unpaired", {"EMBER_INSTALL_RUNTIME_ENV": str(runtime)}, "ACME_DIRECTORY=https://pebble.example.test/dir\nSSL_CERT_FILE=/run/ember-test-ca.pem\n", b"bad", "provided together"),
+            ("unknown option", environment, "ACME_DIRECTORY=https://pebble.example.test/dir\nSSL_CERT_FILE=/run/ember-test-ca.pem\nRUN=$(touch never-execute)\n", b"bad", "Only ACME_DIRECTORY"),
+            ("HTTP directory", environment, "ACME_DIRECTORY=http://pebble.example.test/dir\nSSL_CERT_FILE=/run/ember-test-ca.pem\n", b"bad", "must use HTTPS"),
+            ("CA mount override", environment, "ACME_DIRECTORY=https://pebble.example.test/dir\nSSL_CERT_FILE=/etc/ssl/arbitrary.pem\n", b"bad", "Only ACME_DIRECTORY"),
+            ("oversized CA", environment, "ACME_DIRECTORY=https://pebble.example.test/dir\nSSL_CERT_FILE=/run/ember-test-ca.pem\n", b"x" * (1024 * 1024 + 1), "exceeds 1 MiB"),
+        ]
+        for label, env, contents, certificate, diagnostic in cases:
+            with self.subTest(label=label), mock.patch.dict(m.os.environ, env, clear=True):
+                runtime.write_text(contents)
+                ca.write_bytes(certificate)
+                args = m.parser().parse_args(command)
+                with mock.patch.object(m.socket, "getaddrinfo"), mock.patch.object(m.socket, "socket"):
+                    with self.assertRaisesRegex(m.Failure, diagnostic):
+                        self.manager.install(args)
+        runtime.write_text("ACME_DIRECTORY=https://pebble.example.test/dir\nSSL_CERT_FILE=/run/ember-test-ca.pem\n")
+        ca.write_bytes(b"not a certificate")
+        with mock.patch.dict(m.os.environ, environment, clear=True), mock.patch.object(m.socket, "getaddrinfo"), mock.patch.object(m.socket, "socket"):
+            args = m.parser().parse_args(command)
+            with self.assertRaises(m.ssl.SSLError):
+                self.manager.install(args)
+            for source in (runtime, ca):
+                contents = source.read_bytes()
+                source.unlink()
+                source.symlink_to(original.bundle_dir / "other-file")
+                with self.assertRaisesRegex(m.Failure, "must not be symlinks"):
+                    self.manager.install(args)
+                source.unlink()
+                source.write_bytes(contents)
+        self.assertFalse(any(event[1] == "pull" for event in self.docker.events))
+        self.assertFalse((original.bundle_dir / "never-execute").exists())
+
     def test_fresh_install_generates_once_and_repeat_preserves_secrets_and_data(self):
         args = self.fresh_bundle()
         with mock.patch.object(m.socket, "getaddrinfo", return_value=[(0, 0, 0, "", ("192.0.2.1", 443))]), mock.patch.object(m.socket, "socket"):
@@ -203,6 +243,8 @@ class Lifecycle(unittest.TestCase):
         self.assertEqual(generator[-2:], ["ember", "generate-secrets"])
         self.assertEqual(generator[generator.index("--log-driver") + 1], "none")
         create = next(event for event in self.docker.events if event[1] == "create")
+        self.assertEqual(json.loads((self.manager.config / "runtime.json").read_text()), {})
+        self.assertFalse(any("ACME_DIRECTORY=" in arg or "SSL_CERT_FILE=" in arg or "test-ca.pem" in arg for arg in create))
         self.assertEqual(create[-2:], ["ember", "server"])
         self.assertEqual(create[create.index("--user") + 1], "1000:1000")
         self.assertEqual(create[create.index("--stop-timeout") + 1], "60")
@@ -497,11 +539,32 @@ class Lifecycle(unittest.TestCase):
 
 
 class Contracts(unittest.TestCase):
+    def test_test_trust_environment_is_explicit_and_cli_paths_take_precedence(self):
+        command = ["install", "--bundle-dir", "/tmp/bundle"]
+        with mock.patch.dict(m.os.environ, {}, clear=True):
+            args = m.parser().parse_args(command)
+            self.assertIsNone(args.runtime_env)
+            self.assertIsNone(args.test_ca)
+            self.assertIsNone(args.domain)
+        env = {"EMBER_INSTALL_RUNTIME_ENV": "/root/runtime.env", "EMBER_INSTALL_TEST_CA": "/root/ca.pem", "EMBER_INSTALL_DOMAIN": "ignored.example.com"}
+        with mock.patch.dict(m.os.environ, env, clear=True):
+            args = m.parser().parse_args(command)
+            self.assertEqual(args.runtime_env, Path("/root/runtime.env"))
+            self.assertEqual(args.test_ca, Path("/root/ca.pem"))
+            self.assertIsNone(args.domain)
+            args = m.parser().parse_args(command + ["--runtime-env", "/root/explicit.env", "--test-ca", "/root/explicit.pem"])
+            self.assertEqual(args.runtime_env, Path("/root/explicit.env"))
+            self.assertEqual(args.test_ca, Path("/root/explicit.pem"))
+        with mock.patch.dict(m.os.environ, {"EMBER_INSTALL_RUNTIME_ENV": "", "EMBER_INSTALL_TEST_CA": ""}, clear=True):
+            args = m.parser().parse_args(command)
+            self.assertIsNone(args.runtime_env)
+            self.assertIsNone(args.test_ca)
+
     def test_commands_match_the_actual_dockerfile_without_entrypoint(self):
         dockerfile = (HERE.parents[1] / "Dockerfile").read_text()
         self.assertFalse(any(line.startswith("ENTRYPOINT") for line in dockerfile.splitlines()))
         source = (HERE / "emberctl.py").read_text()
-        self.assertIn('release["image"], "ember", "generate-secrets"', source)
+        self.assertIn('state["release"]["image"], "ember", "generate-secrets"', source)
         self.assertIn('arguments.extend([state["release"]["image"], "ember", "server"])', source)
 
     def test_rejects_untrusted_images_and_mismatched_versions(self):

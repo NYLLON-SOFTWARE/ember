@@ -60,11 +60,13 @@ async fn create_appends_the_message_as_a_turbo_stream() {
     assert_eq!(reply.status, StatusCode::OK, "{}", reply.text());
     assert_eq!(reply.content_type(), Some("text/vnd.turbo-stream.html; charset=utf-8"));
     assert!(reply.text().contains(r#"<turbo-stream action="append" target="messages_rooms_closed_486777696">"#), "{}", reply.text());
-    assert!(reply.text().contains(r#"id="message_abc-123""#));
     assert!(reply.text().contains("Hello <strong>there</strong>"));
 
     let message = messages_in(&app, ALL_TALK).await.pop().unwrap();
     assert_eq!((message.client_message_id.as_str(), message.creator_id), ("abc-123", DAVID));
+    assert!(reply.text().contains(&format!(r#"id="message_{}""#, message.id)));
+    assert!(reply.text().contains(r#"data-client-message-id="abc-123""#));
+    assert!(!reply.text().contains(r#"id="message_abc-123""#));
 }
 
 /// The message in a turbo stream: what's inside its `<template>`.
@@ -136,7 +138,9 @@ async fn a_text_message_is_answered_and_broadcast_as_it_was_stored() {
     let message = template(&response);
     assert_eq!(template(&broadcast), message);
     assert!(broadcast.starts_with(r#"<turbo-stream action="append" target="messages_rooms_closed_486777696"><template>"#), "{broadcast}");
-    assert!(message.contains(r#"id="message_as-stored""#), "{message}");
+    assert!(message.contains(&format!(r#"id="message_{}""#, stored.id)), "{message}");
+    assert!(message.contains(r#"data-client-message-id="as-stored""#), "{message}");
+    assert!(!message.contains(r#"id="message_as-stored""#), "{message}");
     assert!(message.contains(&format!(r#"data-message-id="{}""#, stored.id)));
     let epoch_ms = ember_views::messages::support::epoch_ms;
     assert!(message.contains(&format!(r#"data-message-timestamp="{}""#, epoch_ms(stored.created_at.jiff()))));
