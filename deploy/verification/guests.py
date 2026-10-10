@@ -15,6 +15,7 @@ import shlex
 import shutil
 import ssl
 import subprocess
+import sys
 import threading
 import time
 import urllib.request
@@ -75,6 +76,29 @@ def run_interactive(command, responses, check=True, timeout=900):
     return result
 
 
+class PreflightFailure(AssertionError):
+    pass
+
+
+def sanitized_output(value, limit=4096):
+    if isinstance(value, bytes):
+        value = value.decode(errors='replace')
+    value = re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]', '', value or '')
+    value = ''.join(character for character in value if character in '\n\t' or character.isprintable())
+    value = re.sub(r'(?im)\b(SECRET_KEY_BASE|VAPID_PUBLIC_KEY|VAPID_PRIVATE_KEY|EMBER_SETUP_TOKEN)\s*=\s*[^\n]*', r'\1=[redacted]', value)
+    value = re.sub(r'(?im)^\s*(authorization|cookie|set-cookie)\s*:[^\n]*', r'\1: [redacted]', value)
+    value = re.sub(r'(?i)(\btoken\s*[=:]\s*)[^\s&#<>"\']+', r'\1[redacted]', value)
+    return value if len(value) <= limit else '[truncated]\n' + value[-limit:]
+
+
+def require_preflight_refusal(result, expected, message):
+    if result.returncode != 0 and (expected is None or expected.lower() in result.stderr.lower()):
+        return
+    raise PreflightFailure(f"{message}; exit={result.returncode}\n"
+                           f"stdout:\n{sanitized_output(result.stdout)}\n"
+                           f"stderr:\n{sanitized_output(result.stderr)}")
+
+
 def installer_session_command(command=INSTALL_COMMAND):
     # Explicit disposable-host trust configuration; the public command itself has no flags.
     return ('export EMBER_INSTALL_RUNTIME_ENV=/root/ember-runtime.env '
@@ -133,14 +157,32 @@ class Guest:
         log = (WORK / 'diagnostics/console.log').open('w')
         self.process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT)
         atexit.register(self.process.terminate)
+        self.wait_for_ssh()
+        self.ssh('cloud-init status --wait')
+        self.ssh('apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y curl ca-certificates python3')
+
+    def wait_for_ssh(self):
         def ready():
             if self.process.poll() is not None:
                 raise RuntimeError('QEMU exited before SSH became available; inspect console.log')
             return self.ssh('true', timeout=15)
 
-        wait_for(ready)
-        self.ssh('cloud-init status --wait')
-        self.ssh('apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y curl ca-certificates python3')
+        try:
+            wait_for(ready)
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError, RuntimeError) as error:
+            console = WORK / 'diagnostics/console.log'
+            tail = b''
+            if console.exists():
+                with console.open('rb') as source:
+                    source.seek(max(0, console.stat().st_size - 16384))
+                    tail = source.read(16384)
+            status = self.process.poll()
+            detail = (f'Guest SSH readiness failed; QEMU exit status: {status}\n'
+                      f'Final SSH/error: {sanitized_output(getattr(error, "stderr", None) or str(error))}\n'
+                      f'Console tail:\n{sanitized_output(tail, limit=16384)}\n')
+            (WORK / 'diagnostics/boot.log').write_text(detail)
+            print(detail, file=sys.stderr, flush=True)
+            raise
 
 
 def network(public):
@@ -277,30 +319,30 @@ def acceptance(guest, assets, certs, overrides, public):
         overrides[bundle_path] = bundle[:len(bundle) // 2]
         try:
             interrupted = guest.ssh(failure_command, check=False)
-            assert interrupted.returncode != 0 and 'checksum' in interrupted.stderr.lower(), 'A partial bundle must fail its advertised SHA256 before installation'
+            require_preflight_refusal(interrupted, 'checksum', 'A partial bundle must fail its advertised SHA256 before installation')
         finally:
             del overrides[bundle_path]
         guest.ssh('test ! -e /etc/ember && test ! -e /etc/apt/sources.list.d/docker.sources && ! command -v docker')
     unprivileged = guest.ssh("su -s /bin/sh nobody -c " + shlex.quote(failure_command), check=False)
-    assert unprivileged.returncode != 0, 'Unprivileged installation must fail without sudo authorization'
+    require_preflight_refusal(unprivileged, None, 'Unprivileged installation must fail without sudo authorization')
     assert guest.ssh('test ! -e /etc/ember').returncode == 0
     # Unsupported OS is a real shell preflight, with the guest's OS metadata restored immediately.
     guest.ssh('cp /etc/os-release /root/os-release.saved && printf "ID=unsupported\\nVERSION_ID=99\\n" > /etc/os-release')
     try:
         unsupported = guest.ssh(failure_command, check=False)
-        assert unsupported.returncode != 0 and 'Supported systems' in unsupported.stderr
+        require_preflight_refusal(unsupported, 'Supported systems', 'Unsupported OS must refuse installation')
     finally:
         guest.ssh('cp /root/os-release.saved /etc/os-release')
     port_pid = guest.ssh('nohup python3 -m http.server 80 >/dev/null 2>&1 & echo $!').stdout.strip()
     try:
         wait_for(lambda: guest.ssh('curl -fsS --connect-timeout 3 --max-time 10 http://127.0.0.1/ >/dev/null', timeout=15))
         conflict = guest.ssh(failure_command, check=False)
-        assert conflict.returncode != 0 and '80' in conflict.stderr, 'Occupied port must refuse installation'
+        require_preflight_refusal(conflict, '80', 'Occupied port must refuse installation')
     finally:
         guest.ssh('kill ' + str(int(port_pid)))
     guest.ssh('DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y runc')
     conflicting_package = guest.ssh(failure_command, check=False)
-    assert conflicting_package.returncode != 0 and 'Conflicting package runc' in conflicting_package.stderr
+    require_preflight_refusal(conflicting_package, 'Conflicting package runc', 'Conflicting runc package must refuse installation')
     guest.ssh("dpkg-query -W -f='${Status}' runc | grep -q 'install ok installed'")
     guest.ssh('test ! -e /etc/apt/sources.list.d/docker.sources && test ! -e /etc/ember')
     guest.ssh('DEBIAN_FRONTEND=noninteractive apt-get remove -y runc')
@@ -396,10 +438,11 @@ def main():
     guest.boot(os.environ['GUEST_OS'], os.environ['GUEST_ARCH'])
     try:
         acceptance(guest, args.assets.resolve(), certs, overrides, public)
-    except BaseException:
+    except BaseException as error:
+        if isinstance(error, PreflightFailure):
+            (WORK / 'diagnostics/preflight.log').write_text(str(error) + '\n')
         # Do not upload environment files, cookies, tokens, databases, or raw HTTP traces.
-        log = guest.ssh('docker logs --tail 100 ember', check=False).stdout
-        log = re.sub(r'(?i)(token[= :]+)[a-z0-9_-]+', r'\1[redacted]', log)
+        log = sanitized_output(guest.ssh('docker logs --tail 100 ember', check=False).stdout, limit=16384)
         (WORK / 'diagnostics/application.log').write_text(log)
         raise
 
