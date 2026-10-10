@@ -192,11 +192,12 @@ setup, reboot, and anonymous registry coverage.
 
 ## Worker deployment
 
-Kevin Rose's Cloudflare account hosts `nyllon-get`. Deploy after the release gate
-has selected the published artifacts:
+Kevin Rose's Cloudflare account hosts `nyllon-get`. The stable release workflow
+uploads and activates the exact tested Worker version with its scoped credential,
+preserving the existing Custom Domain. Follow [the release procedure](../release/README.md)
+to publish; after its public verification gates pass, inspect the endpoints:
 
 ```sh
-npx wrangler deploy --config deploy/installer/wrangler.jsonc
 curl -fsS https://get.nyllon.com/releases/stable.json
 curl -fsS https://get.nyllon.com/ember
 ```
