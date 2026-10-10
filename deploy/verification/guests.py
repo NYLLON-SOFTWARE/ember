@@ -80,9 +80,12 @@ class PreflightFailure(AssertionError):
     pass
 
 
-def sanitized_output(value, limit=4096):
+def sanitized_output(value, limit=4096, secrets=()):
     if isinstance(value, bytes):
         value = value.decode(errors='replace')
+    for secret in secrets:
+        if secret and value:
+            value = value.replace(secret, '[redacted]')
     value = re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]', '', value or '')
     value = ''.join(character for character in value if character in '\n\t' or character.isprintable())
     value = re.sub(r'(?im)\b(SECRET_KEY_BASE|VAPID_PUBLIC_KEY|VAPID_PRIVATE_KEY|EMBER_SETUP_TOKEN)\s*=\s*[^\n]*', r'\1=[redacted]', value)
@@ -283,7 +286,23 @@ def browser(phase, token=None):
     env = {**os.environ, 'EMBER_TEST_ORIGIN': 'https://' + DOMAIN, 'EMBER_BROWSER_PROFILE': str(WORK / 'browser-profile'), 'EMBER_TEST_PHASE': phase, 'NODE_EXTRA_CA_CERTS': str(WORK / 'certs/combined.pem')}
     if token:
         env['EMBER_TEST_TOKEN'] = token
-    run('node', ROOT / 'deploy/verification/browser.mjs', env=env, timeout=300)
+    command = ['node', ROOT / 'deploy/verification/browser.mjs']
+    try:
+        result = run(*command, env=env, timeout=300, capture=True, check=False)
+    except subprocess.TimeoutExpired as error:
+        browser_output(error.stdout, error.stderr, token)
+        raise subprocess.TimeoutExpired(command, error.timeout) from None
+    browser_output(result.stdout, result.stderr, token)
+    if result.returncode:
+        # Playwright call logs can include the private fragment URL. Never retain the transcript.
+        raise subprocess.CalledProcessError(result.returncode, command)
+
+
+def browser_output(stdout, stderr, token=None):
+    for value, destination in ((stdout, sys.stdout), (stderr, sys.stderr)):
+        safe = sanitized_output(value, limit=16384, secrets=(token,))
+        if safe:
+            print(safe, end='' if safe.endswith('\n') else '\n', file=destination, flush=True)
 
 
 @contextlib.contextmanager

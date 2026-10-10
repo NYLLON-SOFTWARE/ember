@@ -65,6 +65,13 @@ installations. Upstream changes enter through ordinary review; upstream releases
 an Ember server. Public installation remains unavailable until the stable release and public
 verification gates pass. See [release operation](deploy/release/README.md) for the rollout gates.
 
+### Rejected sign-in forms
+
+Sign-in uses a native form submission so a rejected password displays the original HTTP 401
+response, retains the email, and clears the password. The frozen Rails form uses Turbo, whose
+reload directive otherwise replaces that response with a fresh sign-in page and loses the alert
+and email. Successful sign-in and session cookies retain their existing behavior.
+
 ### Message identity and inactive-user notifications
 
 Persisted message DOM IDs and edit/delete/reaction targets use database IDs. Client-supplied IDs

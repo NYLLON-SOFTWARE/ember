@@ -95,6 +95,55 @@ class PreflightDiagnostics(unittest.TestCase):
             guests.require_preflight_refusal(result, "Conflicting package runc", "package conflict")
 
 
+class BrowserDiagnostics(unittest.TestCase):
+    def test_playwright_failure_redacts_private_url_and_preserves_exit_code(self):
+        token = 'c' * 64
+        result = subprocess.CompletedProcess(['node'], 7, 'Browser setup started\n',
+            'page.goto: net::ERR_CONNECTION_REFUSED\nCall log:\n'
+            '  - navigating to "https://chat.ember.test/first_run/access#token=' + token + '"\n'
+            "Actual received value: '" + token + "'\n")
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with mock.patch.object(guests, 'run', return_value=result) as run, contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            with self.assertRaises(subprocess.CalledProcessError) as failure:
+                guests.browser('setup', token)
+        self.assertEqual(failure.exception.returncode, 7)
+        self.assertIsNone(failure.exception.output)
+        self.assertIsNone(failure.exception.stderr)
+        self.assertNotIn(token, str(failure.exception))
+        self.assertEqual(stdout.getvalue(), 'Browser setup started\n')
+        self.assertIn('ERR_CONNECTION_REFUSED', stderr.getvalue())
+        self.assertIn('#token=[redacted]', stderr.getvalue())
+        self.assertNotIn(token, stderr.getvalue())
+        self.assertTrue(run.call_args.kwargs['capture'])
+        self.assertFalse(run.call_args.kwargs['check'])
+        self.assertEqual(run.call_args.kwargs['timeout'], 300)
+
+    def test_success_reports_sanitized_useful_output(self):
+        result = subprocess.CompletedProcess(['node'], 0, 'Browser persist: checks passed\n', 'Cookie: private-session\n')
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with mock.patch.object(guests, 'run', return_value=result), contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            guests.browser('persist')
+        self.assertEqual(stdout.getvalue(), 'Browser persist: checks passed\n')
+        self.assertEqual(stderr.getvalue(), 'Cookie: [redacted]\n')
+
+    def test_timeout_redacts_captured_output_and_drops_original_transcript(self):
+        token = 'd' * 64
+        error = subprocess.TimeoutExpired(['node'], 300,
+            output=('private setup fragment ' + token).encode(),
+            stderr=('page.goto: https://chat.ember.test/first_run/access#token=' + token).encode())
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with mock.patch.object(guests, 'run', side_effect=error), contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            with self.assertRaises(subprocess.TimeoutExpired) as failure:
+                guests.browser('setup', token)
+        self.assertEqual(failure.exception.timeout, 300)
+        self.assertIsNone(failure.exception.output)
+        self.assertIsNone(failure.exception.stderr)
+        self.assertTrue(failure.exception.__suppress_context__)
+        self.assertNotIn(token, stdout.getvalue() + stderr.getvalue() + str(failure.exception))
+        self.assertIn('[redacted]', stdout.getvalue())
+        self.assertIn('#token=[redacted]', stderr.getvalue())
+
+
 class BootDiagnostics(unittest.TestCase):
     def test_ssh_failure_emits_bounded_console_tail_and_final_error(self):
         guest = guests.Guest.__new__(guests.Guest)
