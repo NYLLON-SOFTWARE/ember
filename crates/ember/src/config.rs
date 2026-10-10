@@ -33,10 +33,13 @@
 use std::path::PathBuf;
 
 use anyhow::{Context, bail};
+use sha2::{Digest, Sha256};
 
 #[derive(Debug, Clone)]
 pub struct Config {
     pub secret_key_base: String,
+    /// Optional private first-run access, bound to a digest so configuration never retains the token.
+    pub setup_token: Option<SetupToken>,
     pub vapid_public_key: Option<String>,
     pub vapid_private_key: Option<String>,
     /// `VAPID_SUBJECT`, or a default (see the module docs).
@@ -54,6 +57,42 @@ pub struct Config {
     pub log_level: String,
     /// The fragment store's limit in bytes (`EMBER_FRAGMENT_CACHE_MB`).
     pub fragment_cache_bytes: usize,
+}
+
+/// A 256-bit installer token. Empty or malformed configured values fail closed.
+#[derive(Clone)]
+pub struct SetupToken([u8; 32]);
+
+impl SetupToken {
+    pub fn parse(token: &str) -> anyhow::Result<Self> {
+        if token.len() != 64 || !token.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)) {
+            bail!("EMBER_SETUP_TOKEN must contain exactly 64 lowercase hexadecimal characters");
+        }
+        Ok(Self(Sha256::digest(token.as_bytes()).into()))
+    }
+
+    pub fn matches(&self, token: &str) -> bool {
+        Self::parse(token).is_ok_and(|candidate| self.equals(&candidate.0))
+    }
+
+    pub fn fingerprint(&self) -> String {
+        hex::encode(self.0)
+    }
+
+    pub fn matches_fingerprint(&self, fingerprint: &str) -> bool {
+        let mut digest = [0; 32];
+        hex::decode_to_slice(fingerprint, &mut digest).is_ok() && self.equals(&digest)
+    }
+
+    fn equals(&self, digest: &[u8; 32]) -> bool {
+        self.0.iter().zip(digest).fold(0u8, |difference, (left, right)| difference | (left ^ right)) == 0
+    }
+}
+
+impl std::fmt::Debug for SetupToken {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("SetupToken([redacted])")
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -124,6 +163,7 @@ impl Config {
 
         Ok(Self {
             secret_key_base,
+            setup_token: get("EMBER_SETUP_TOKEN").map(|token| SetupToken::parse(&token)).transpose()?,
             vapid_public_key: present("VAPID_PUBLIC_KEY"),
             vapid_private_key: present("VAPID_PRIVATE_KEY"),
             vapid_subject: present("VAPID_SUBJECT").unwrap_or_else(|| default_vapid_subject(present("TLS_DOMAIN"))),
@@ -174,6 +214,23 @@ mod tests {
     fn requires_a_secret_key_base() {
         assert!(config(&[]).is_err());
         assert_eq!(config(&[("SECRET_KEY_BASE_DUMMY", "1")]).unwrap().secret_key_base.len(), 128);
+    }
+
+    #[test]
+    fn configured_setup_access_fails_closed_and_hides_the_token() {
+        assert!(config(&[("SECRET_KEY_BASE", "abc")]).unwrap().setup_token.is_none());
+        for token in ["", " ", "abc", &"A".repeat(64), &"a".repeat(63), &"g".repeat(64)] {
+            let error = config(&[("SECRET_KEY_BASE", "abc"), ("EMBER_SETUP_TOKEN", token)]).unwrap_err();
+            assert!(error.to_string().starts_with("EMBER_SETUP_TOKEN must contain"));
+        }
+        let token = "a".repeat(64);
+        let configured = config(&[("SECRET_KEY_BASE", "abc"), ("EMBER_SETUP_TOKEN", &token)]).unwrap();
+        let setup = configured.setup_token.as_ref().unwrap();
+        assert!(setup.matches(&token));
+        assert!(!setup.matches(&"b".repeat(64)));
+        assert!(setup.matches_fingerprint(&setup.fingerprint()));
+        assert!(!setup.matches_fingerprint(&token));
+        assert!(!format!("{configured:?}").contains(&token));
     }
 
     #[test]

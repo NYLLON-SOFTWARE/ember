@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+umask 077
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+DOCKER_HOST=unix:///var/run/docker.sock
+export DOCKER_HOST
+unset DOCKER_CONTEXT DOCKER_TLS_VERIFY DOCKER_CERT_PATH
+exec /usr/bin/python3 /usr/local/lib/ember/emberctl.py "$@"

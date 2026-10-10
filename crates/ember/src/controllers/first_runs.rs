@@ -1,6 +1,10 @@
 //! `FirstRunsController` (reference/app/controllers/first_runs_controller.rb): set up the account
 //! and its first administrator.
 
+mod access;
+
+pub use access::{create as access_create, show as access_show};
+
 use ember_db::{Account, FirstRun, PasswordDigest};
 use ember_kit::{Ctx, Error, Result, StatusCode, format, halt};
 use ember_views::first_runs;
@@ -12,8 +16,14 @@ use crate::controllers::presenters::page::framed_page;
 
 /// `allow_unauthenticated_access`, `before_action :prevent_repeats`
 pub async fn show(c: &mut Ctx) -> Result {
+    let result = show_form(c).await;
+    access::finish_form(c, result)
+}
+
+async fn show_form(c: &mut Ctx) -> Result {
     concerns::before_actions(c, Before::default().allow_unauthenticated_access()).await?;
     prevent_repeats(c).await?;
+    access::authorize(c)?;
     render(c, StatusCode::OK, first_runs::FormValues::default()).await
 }
 
@@ -29,8 +39,14 @@ async fn render(c: &mut Ctx, status: StatusCode, values: first_runs::FormValues<
 }
 
 pub async fn create(c: &mut Ctx) -> Result {
+    let result = create_account(c).await;
+    access::finish_form(c, result)
+}
+
+async fn create_account(c: &mut Ctx) -> Result {
     concerns::before_actions(c, Before::default().allow_unauthenticated_access()).await?;
     prevent_repeats(c).await?;
+    access::authorize(c)?;
 
     // params.require(:user).permit(:name, :avatar, :email_address, :password)
     let user = c.params.require("user")?.permit(&ember_kit::permit_keys(&["name", "avatar", "email_address", "password"]));
@@ -61,6 +77,7 @@ pub async fn create(c: &mut Ctx) -> Result {
     let root = c.url_for(&ember_routes::root());
     match result {
         Ok((administrator, pending)) => {
+            access::clear_cookie(c);
             attachments::analyze_later(c.app(), pending);
             concerns::start_new_session_for(c, administrator).await?;
             c.redirect_to(&root)
@@ -75,6 +92,7 @@ pub async fn create(c: &mut Ctx) -> Result {
 async fn prevent_repeats(c: &mut Ctx) -> Result<()> {
     let any = c.app().read(|conn| Ok(Account::count(conn)? > 0)).await?;
     if any {
+        access::clear_cookie(c);
         let root = c.url_for(&ember_routes::root());
         return halt(c.redirect_to(&root)?);
     }

@@ -1,13 +1,18 @@
 name: CI
 
 on:
+  workflow_call:
+    inputs:
+      commit:
+        required: true
+        type: string
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}-${{ inputs.commit }}
   cancel-in-progress: true
 
 permissions: {}
@@ -23,6 +28,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ inputs.commit || github.sha }}
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
@@ -47,6 +53,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ inputs.commit || github.sha }}
           submodules: true
 
       - name: Set up Docker Buildx
@@ -93,6 +100,24 @@ jobs:
               exit $status
             '
 
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Verify persisted message targets and optimistic browser sends
+        run: |
+          npm ci --ignore-scripts --prefix parity
+          # Keep the browser and app inside the same Debian/media environment as the tests.
+          # The host's official Node executable runs against the newer Debian runtime libraries.
+          docker run --rm --volume "$PWD:/src" --workdir /src \
+            --mount "type=bind,src=$(command -v node),dst=/usr/local/bin/node,readonly" \
+            --env CARGO_HOME=/src/.cargo-home \
+            ember-toolchain sh -ec '
+              cargo build --locked -p ember --bin ember
+              node parity/node_modules/playwright/cli.js install --with-deps chromium
+              node --test --test-name-pattern="reused client message IDs|rapid messages" parity/kro/workspace.test.mjs
+            '
+
   benchmark-contracts:
     runs-on: ubuntu-latest
     permissions:
@@ -103,6 +128,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ inputs.commit || github.sha }}
 
       - name: Checkout shared verification harness
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -142,6 +168,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ inputs.commit || github.sha }}
 
       - name: Install cargo-shear
         uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
@@ -150,3 +177,24 @@ jobs:
 
       - name: Check for unused dependencies
         run: cargo shear
+
+  installer-contracts:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.commit || github.sha }}
+      - name: Check installer and release contracts
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y shellcheck
+          find deploy/installer -name '*.sh' -exec sh -n {} \;
+          shellcheck deploy/installer/*.sh deploy/installer/emberctl
+          python3 -m unittest discover -s deploy/installer/tests -p 'test_*.py' -v
+          python3 -m unittest discover -s deploy/release/tests -p 'test_*.py' -v
+          python3 -m unittest discover -s deploy/verification/tests -p 'test_*.py' -v
+          node --test deploy/installer/tests/*.test.mjs deploy/release/tests/*.test.mjs

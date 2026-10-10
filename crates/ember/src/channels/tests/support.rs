@@ -161,7 +161,7 @@ pub struct FakePartials;
 
 impl Partials for FakePartials {
     fn message(&self, message: &Message) -> String {
-        format!(r#"<div id="message_{}">message {}</div>"#, message.client_message_id, message.id)
+        format!(r#"<div id="message_{}">message {}</div>"#, message.id, message.id)
     }
     fn message_presentation(&self, message: &Message) -> String {
         format!("<div>presentation {} & more</div>", message.id)

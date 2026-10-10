@@ -21,7 +21,11 @@ async fn fail(_: &mut Ctx) -> Result {
 }
 
 fn app() -> Router {
-    let router = Router::new().route("/echo/{id}", ember_kit::get(echo).post(action(echo))).route("/fail", ember_kit::get(fail));
+    let router = Router::new()
+        .route("/echo/{id}", ember_kit::get(echo).post(action(echo)))
+        .route("/first_run/access", ember_kit::get(echo).post(action(echo)))
+        .route("/first_run", ember_kit::get(echo).post(action(echo)))
+        .route("/fail", ember_kit::get(fail));
     let clock = Arc::new(TestClock::frozen_at("2024-06-01T12:00:00Z".parse().unwrap()));
     ember_kit::app(router, Kit::new(KitConfig::default(), Arc::new(Secrets::new("test-secret")), clock, ()))
 }
@@ -40,7 +44,19 @@ async fn errors_are_logged_as_they_were_raised() {
     let failing = Request::get("/fail").body(AxumBody::empty()).unwrap();
     assert_eq!(app().oneshot(failing).await.unwrap().status(), StatusCode::INTERNAL_SERVER_ERROR);
 
+    for path in ["/first_run", "/first_run/access"] {
+        let query = Request::get(format!("{path}?token=PRIVATE_SETUP_CREDENTIAL%")).body(AxumBody::empty()).unwrap();
+        let body = Request::post(path)
+            .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+            .body(AxumBody::from("token=PRIVATE_SETUP_CREDENTIAL%"))
+            .unwrap();
+        for request in [query, body] {
+            assert_eq!(app().oneshot(request).await.unwrap().status(), StatusCode::BAD_REQUEST);
+        }
+    }
     let text = logs.text();
+    assert!(!text.contains("PRIVATE_SETUP_CREDENTIAL"), "{text}");
+    assert_eq!(text.matches("request rejected error=400 Bad Request").count(), 4, "{text}");
     // Malformed params, as they were rejected.
     assert_eq!(text.matches("request rejected error=bad request: invalid %-encoding (%)").count(), 2, "{text}");
     assert!(!text.contains("bad request: bad request"), "{text}");

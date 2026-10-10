@@ -48,3 +48,8 @@ pub use response::{Body, CacheControl, ExpiresIn, Response, SendOptions};
 pub use session::{Flash, Session};
 
 pub use axum::http::{self, HeaderMap, Method, StatusCode};
+
+/// First-run credentials must stay private even when a malformed request fails before routing.
+pub(crate) fn private_setup_path(path: &str) -> bool {
+    path.trim_start_matches('/').strip_prefix("first_run").is_some_and(|suffix| suffix.is_empty() || suffix.starts_with(['/', '.']))
+}

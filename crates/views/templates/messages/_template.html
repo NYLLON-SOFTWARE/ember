@@ -1,7 +1,9 @@
 {#- reference/app/views/messages/_template.html.erb -#}
 <script type="text/template" data-messages-target="template">
   <div class="message message--me $messageClasses$"
-      id="message_$clientMessageId$"
+      id="pending_message_$clientMessageId$"
+      data-pending-message="true"
+      data-client-message-id="$clientMessageId$"
       data-format-message-target="message"
       data-user-id="{{ user.id }}"
       data-message-timestamp="$messageTimestamp$"

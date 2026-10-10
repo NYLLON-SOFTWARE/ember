@@ -66,6 +66,39 @@ fn does_not_notify_for_invisible_rooms() {
 }
 
 #[test]
+fn banned_users_stop_receiving_everything_and_mentions_until_unbanned() {
+    for involvement in [crate::Involvement::Everything, crate::Involvement::Mentions] {
+        let t = TestDb::new();
+        t.write(move |tx| Membership::find(tx.conn(), id("kevin_designers"))?.update_involvement(tx, involvement));
+        let subscriptions = t.read(|conn| PushSubscription::for_user(conn, id("kevin")));
+        assert!(!subscriptions.is_empty());
+        assert_eq!(deliveries(&t, "designers", "Hey @Kevin", &[id("kevin")]), 3);
+
+        t.write(|tx| crate::User::find(tx.conn(), id("kevin"))?.ban(tx));
+        assert_eq!(deliveries(&t, "designers", "Private after ban", &[id("kevin")]), 2);
+        assert_eq!(t.read(|conn| PushSubscription::for_user(conn, id("kevin"))), subscriptions);
+        assert!(t.read(|conn| Membership::find_by_room_and_user(conn, id("designers"), id("kevin"))).is_some());
+
+        t.write(|tx| crate::User::find(tx.conn(), id("kevin"))?.unban(tx));
+        assert_eq!(deliveries(&t, "designers", "Welcome back @Kevin", &[id("kevin")]), 3);
+    }
+}
+
+#[test]
+fn inactive_users_are_excluded_even_if_subscriptions_and_memberships_remain() {
+    for involvement in [crate::Involvement::Everything, crate::Involvement::Mentions] {
+        let t = TestDb::new();
+        t.write(move |tx| {
+            Membership::find(tx.conn(), id("kevin_designers"))?.update_involvement(tx, involvement)?;
+            crate::User::find(tx.conn(), id("kevin"))?
+                .update(tx, crate::UserChanges { status: Some(crate::Status::Deactivated), ..Default::default() })
+        });
+        assert!(!t.read(|conn| PushSubscription::for_user(conn, id("kevin"))).is_empty());
+        assert_eq!(deliveries(&t, "designers", "Hey @Kevin", &[id("kevin")]), 2);
+    }
+}
+
+#[test]
 fn payloads() {
     let t = TestDb::new();
     let attributes = NewMessage { room_id: id("designers"), creator_id: id("david"), body: Some("Hi".into()), ..Default::default() };

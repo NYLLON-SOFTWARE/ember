@@ -11,3 +11,6 @@ target/
 
 /bench/.work/
 /crates/assets/overrides/basecoat/node_modules/
+
+/deploy/release/node_modules/
+__pycache__/

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Install Ember · NYLLON</title>
+<style>body{font:18px/1.6 system-ui,sans-serif;max-width:780px;margin:60px auto;padding:0 24px;color:#242424;background:#fffaf5}h1,h2{line-height:1.2}pre{padding:18px;background:#eee6dd;overflow:auto;border-radius:8px}code{font-size:15px}a{color:#8a3a13}small{color:#655}</style>
+<h1>Install Ember</h1><p>Your own chat server, maintained by NYLLON. Stable release {{VERSION}}.</p>
+<h2>Before you begin</h2><p>Use a fresh Ubuntu 24.04 or Debian 13 server with an amd64 or arm64 CPU, at least 2 GB RAM, 10 GB free disk, root access, and inbound TCP ports 80 and 443 open. Use an interactive terminal. Existing working Docker installations are reused. Conflicting packages or occupied ports must be resolved first.</p>
+<p>Create a DNS A record such as <code>chat.example.com</code> pointing to the server’s public IPv4 address. If you publish AAAA, IPv6 must reach the same server. Use DNS-only mode when using Cloudflare DNS. Wait for the records to resolve before installing. Ember obtains and renews HTTPS certificates itself.</p>
+<h2>Install</h2><p>Connect to the server as root, then run:</p>
+<pre><code>curl -fsSL https://get.nyllon.com/ember | sh --</code></pre>
+<p>The installer asks for your hostname, installs Docker from its official signed repository when needed, verifies the NYLLON installer bundle, and starts a digest-pinned image. It reports success only after HTTPS works. Open the private setup link it prints to create the first administrator in your browser. Keep this link private. Until setup is complete, root can recover it with <code>emberctl setup-link</code>.</p>
+<h2>Operate and update</h2><pre><code>emberctl status
+emberctl logs
+emberctl restart
+emberctl update
+emberctl update 1.2.3
+emberctl reset-password admin@example.com</code></pre>
+<p>Updates are manual. Only tested NYLLON stable releases are installed; changes from upstream Campfire pass through ordinary review. Password recovery prompts privately and never takes a password on the command line.</p>
+<h2>Back up and recover</h2><pre><code>emberctl backup
+emberctl restore BACKUP_ID --accept-data-loss</code></pre>
+<p>Backup briefly stops Ember to capture a consistent copy of all storage, uploads, certificates, configuration, secrets, and release metadata. Backups are root-only and stored outside live storage in <code>/var/lib/ember/backups/BACKUP_ID</code>. Copy the complete backup directory, including its snapshot and checksum metadata, off the server over an encrypted connection, for example with <code>scp</code>, and keep them encrypted at rest. Local backups do not protect against losing the server.</p>
+<p>Updates download and validate the new image before stopping Ember and create a complete backup before starting it. A failure before the new version starts can resume the old version. Once the new version touches live data, recovery requires an explicit restore. Restoring discards data written since that backup; the failure message names the backup and restore command. Do not remove the recovery journal before resolving it.</p>
+<h2>Troubleshooting</h2><p>Check <code>emberctl status</code> and <code>emberctl logs</code>. For HTTPS failures, verify DNS, any AAAA record, ports 80/443, and the server clock. Registry and download failures leave the current installation intact before cutover. Rerunning the installer preserves managed configuration, data, and secrets. It refuses unmanaged Campfire or ONCE installations; migration is a separate project.</p>
+<p>Configuration is in <code>/etc/ember</code>; persistent data is in <code>/var/lib/ember/storage</code>. Do not edit or delete these during recovery.</p>
+<p><a href="https://github.com/NYLLON-SOFTWARE/ember">Source, releases, and support</a></p>
+</html>

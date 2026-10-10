@@ -63,7 +63,7 @@ pub fn room_dom_id(kind: RoomKind, id: i64, prefix: &str) -> String {
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct MessageView {
     pub id: i64,
-    /// `Message#to_key`, so every `dom_id(message)` uses it.
+    /// Optimistic-send correlation only; persisted DOM identifiers use the database id.
     pub client_message_id: String,
     pub room_id: i64,
     /// `room_display_name(message.room, for_user: nil)`; see [`crate::rooms::room_display_name`].
@@ -159,7 +159,7 @@ pub struct BoostView {
 /// and build a [`MessageView`] only on a miss.
 #[derive(Clone, Debug, PartialEq)]
 pub enum MessageItem {
-    Fragment { client_message_id: String, room_id: i64, html: fragment_cache::Fragment },
+    Fragment { id: i64, room_id: i64, html: fragment_cache::Fragment },
     View(Box<MessageView>),
 }
 
@@ -167,8 +167,8 @@ impl MessageItem {
     /// `dom_id(message)` / `dom_id(message, prefix)`.
     pub fn dom_id(&self, prefix: &str) -> String {
         match self {
-            MessageItem::Fragment { client_message_id, .. } if prefix.is_empty() => format!("message_{client_message_id}"),
-            MessageItem::Fragment { client_message_id, .. } => format!("{prefix}_message_{client_message_id}"),
+            MessageItem::Fragment { id, .. } if prefix.is_empty() => format!("message_{id}"),
+            MessageItem::Fragment { id, .. } => format!("{prefix}_message_{id}"),
             MessageItem::View(message) => message.dom_id(prefix),
         }
     }
@@ -209,11 +209,7 @@ pub const REACTIONS: [(&str, &str); 8] = [
 impl MessageView {
     /// `dom_id(message)` / `dom_id(message, prefix)`.
     pub fn dom_id(&self, prefix: &str) -> String {
-        if prefix.is_empty() {
-            format!("message_{}", self.client_message_id)
-        } else {
-            format!("{prefix}_message_{}", self.client_message_id)
-        }
+        if prefix.is_empty() { format!("message_{}", self.id) } else { format!("{prefix}_message_{}", self.id) }
     }
 
     pub fn is_unrenderable(&self) -> bool {

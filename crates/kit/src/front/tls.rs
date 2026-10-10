@@ -113,6 +113,16 @@ pub fn http_handler(certs: &CertManager, request: &Request<Body>) -> Response<Bo
             None => error(StatusCode::NOT_FOUND, "acme/autocert: certificate cache miss"),
         };
     }
+    if crate::private_setup_path(path) {
+        let mut response = if request.uri().query().is_some_and(|query| !query.is_empty()) {
+            error(StatusCode::BAD_REQUEST, "Bad Request")
+        } else {
+            redirect(certs, request, &host)
+        };
+        response.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+        response.headers_mut().insert("referrer-policy", HeaderValue::from_static("no-referrer"));
+        return response;
+    }
     redirect(certs, request, &host)
 }
 
@@ -275,6 +285,22 @@ mod tests {
         assert_eq!(status, StatusCode::MOVED_PERMANENTLY);
         assert!(!headers.contains_key(header::CONTENT_TYPE));
         assert_eq!(body, "");
+    }
+
+    #[tokio::test]
+    async fn setup_redirects_remain_private_and_never_reflect_queries() {
+        for path in ["/first_run", "/first_run/access", "/first_run.json"] {
+            let (status, headers, _) = get(Method::GET, path, "chat.example.com").await;
+            assert_eq!(status, StatusCode::MOVED_PERMANENTLY);
+            assert_eq!(headers[header::CACHE_CONTROL], "no-store");
+            assert_eq!(headers["referrer-policy"], "no-referrer");
+            let (status, headers, body) = get(Method::GET, &format!("{path}?token=PRIVATE_SETUP_CREDENTIAL"), "chat.example.com").await;
+            assert_eq!(status, StatusCode::BAD_REQUEST);
+            assert_eq!(headers[header::CACHE_CONTROL], "no-store");
+            assert_eq!(headers["referrer-policy"], "no-referrer");
+            assert!(!headers.contains_key(header::LOCATION));
+            assert!(!body.contains("PRIVATE_SETUP_CREDENTIAL"));
+        }
     }
 
     #[tokio::test]

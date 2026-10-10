@@ -106,9 +106,18 @@ impl Golden {
     /// Asserts DOM parity for a template rendered without a layout against a reference page:
     /// the page's main content (or a frame layout's body) is compared with the whole render.
     pub fn assert_content(&self, actual_html: &str) {
-        // These fragments include Ember's message actions and reaction form. Frozen Rails inputs stay
-        // unchanged; the edited presentation has its own reviewed expectation.
-        if matches!(self.name.as_str(), "messages_show_text" | "messages_show_image" | "messages_index" | "messages_boosts_new") {
+        // Owned message markup uses database DOM ids, actions and reactions. Frozen Rails inputs
+        // stay unchanged; each deliberate difference has its own reviewed expectation.
+        if matches!(
+            self.name.as_str(),
+            "messages_show_text"
+                | "messages_show_image"
+                | "messages_index"
+                | "messages_boosts_new"
+                | "messages_edit_text"
+                | "messages_edit_attachment"
+                | "messages_boosts_index"
+        ) {
             workspace_snapshot::assert_snapshot("b", &self.name, &tokens(actual_html));
             return;
         }
@@ -125,7 +134,7 @@ impl Golden {
     }
 
     pub fn assert_dom(&self, actual_html: &str) {
-        if self.kind == "page" || matches!(self.name.as_str(), "messages_create" | "rooms_refreshes_show") {
+        if self.kind == "page" || matches!(self.name.as_str(), "messages_create" | "messages_destroy" | "rooms_refreshes_show") {
             workspace_snapshot::assert_snapshot("b", &self.name, &tokens(actual_html));
             return;
         }

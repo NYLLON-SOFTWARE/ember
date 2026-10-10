@@ -178,7 +178,22 @@ fn router(app: &App, kit: Kit) -> Router {
         .route("/{*path}", dispatch())
         .layer(axum::middleware::from_fn(public_files));
     // config.ru: `use Rack::Deflater` around the whole app.
-    ember_kit::app(routes, kit).layer(axum::middleware::from_fn(ember_kit::deflater::deflater))
+    let protected_setup = app.config.setup_token.is_some();
+    ember_kit::app(routes, kit).layer(axum::middleware::from_fn(ember_kit::deflater::deflater)).layer(axum::middleware::from_fn(
+        move |request: axum::extract::Request, next: Next| async move {
+            let private = request.uri().path().trim_start_matches('/').strip_prefix("first_run").is_some_and(|suffix| {
+                (protected_setup && (suffix.is_empty() || suffix.starts_with(['/', '.']))) || suffix.trim_start_matches('/') == "access"
+            });
+            let mut response = next.run(request).await;
+            if private {
+                // Include parser failures and SSL redirects, which happen before an action has a
+                // Ctx and cannot inherit the setup controller's response headers.
+                response.headers_mut().insert("cache-control", axum::http::HeaderValue::from_static("no-store"));
+                response.headers_mut().insert("referrer-policy", axum::http::HeaderValue::from_static("no-referrer"));
+            }
+            response
+        },
+    ))
 }
 
 /// The Rails route table, with the app's fragment cache current while the action runs.
@@ -229,7 +244,7 @@ fn error_pages() -> ErrorPages {
 
 // --- Commands --------------------------------------------------------------------------------------
 
-const USAGE: &str = "usage: ember [server|backup]";
+const USAGE: &str = "usage: ember [server|backup|generate-secrets|setup-status|reset-password <email>]";
 
 /// The binary's entry point.
 ///
@@ -242,10 +257,20 @@ const USAGE: &str = "usage: ember [server|backup]";
 /// `storage/backups/<env>.sqlite3` over `storage/db/<env>.sqlite3` and delete its `-wal` and
 /// `-shm` files; the next boot's `db:prepare` picks it up.
 pub fn run() -> anyhow::Result<()> {
-    let command = std::env::args().nth(1);
+    let mut arguments = std::env::args().skip(1);
+    let command = arguments.next();
     if matches!(command.as_deref(), Some("-h" | "--help")) {
         println!("{USAGE}");
         return Ok(());
+    }
+    let email =
+        if command.as_deref() == Some("reset-password") { Some(arguments.next().ok_or_else(|| anyhow::anyhow!("{USAGE}"))?) } else { None };
+    if arguments.next().is_some() {
+        anyhow::bail!("unexpected argument\n{USAGE}");
+    }
+    // Fresh installations have no environment yet; generating it must precede configuration.
+    if command.as_deref() == Some("generate-secrets") {
+        return crate::admin::generate_secrets(std::io::stdout().lock());
     }
     let config = Config::from_env()?;
     init_logging(&config);
@@ -257,7 +282,9 @@ pub fn run() -> anyhow::Result<()> {
             tokio::runtime::Runtime::new()?.block_on(serve(config))
         }
         Some("backup") => backup(&config),
-        Some(other) => anyhow::bail!("unknown command {other:?}\n{USAGE}"),
+        Some("setup-status") => crate::admin::setup_status(&config, std::io::stdout().lock()),
+        Some("reset-password") => crate::admin::reset_password(&config, email.as_deref().unwrap()),
+        Some(_) => anyhow::bail!("unknown command\n{USAGE}"),
     }
 }
 

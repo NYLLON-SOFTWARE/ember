@@ -1,6 +1,7 @@
 // The Ember server: controllers, channels, jobs and integrations wired over the crates.
 
 mod active_storage;
+mod admin;
 mod app;
 mod channels;
 mod concerns;

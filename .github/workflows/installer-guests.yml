@@ -1,0 +1,72 @@
+name: Installer acceptance guests
+on:
+  workflow_call:
+    inputs:
+      commit:
+        required: true
+        type: string
+      artifact:
+        required: true
+        type: string
+      public:
+        required: true
+        type: boolean
+permissions: {}
+jobs:
+  installation:
+    name: ${{ matrix.os }} / ${{ matrix.arch }} / public=${{ inputs.public }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            arch: amd64
+            runner: ubuntu-24.04
+          - os: debian-13
+            arch: amd64
+            runner: ubuntu-24.04
+          - os: ubuntu-24.04
+            arch: arm64
+            runner: ubuntu-24.04-arm
+          - os: debian-13
+            arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.commit }}
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: ${{ inputs.artifact }}
+          path: release-assets
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Install guest tools and browser
+        env:
+          # The root-run guest browser must use this same download location.
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ember-playwright
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y qemu-system-x86 qemu-system-arm qemu-utils cloud-image-utils ovmf qemu-efi-aarch64 dnsmasq-base libnss3-tools socat
+          npm ci --ignore-scripts --prefix parity
+          parity/node_modules/.bin/playwright install --with-deps chromium
+      - name: Run fresh guest with real test-CA ACME validation
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ember-playwright
+          GUEST_OS: ${{ matrix.os }}
+          GUEST_ARCH: ${{ matrix.arch }}
+          PUBLIC_INSTALLER: ${{ inputs.public }}
+        run: sudo --preserve-env=PATH,GITHUB_ACTIONS,GUEST_OS,GUEST_ARCH,PUBLIC_INSTALLER,PLAYWRIGHT_BROWSERS_PATH python3 deploy/verification/guests.py --assets release-assets
+      - name: Upload non-secret acceptance diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: guest-${{ matrix.os }}-${{ matrix.arch }}-public-${{ inputs.public }}
+          path: tmp/installer-verification/diagnostics/
+          if-no-files-found: warn

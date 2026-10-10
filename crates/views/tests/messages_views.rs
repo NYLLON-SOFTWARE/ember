@@ -13,6 +13,56 @@ fn show_text_message() {
     g.assert_content(&g.render(|ctx| messages::Show { ctx, message: &message }.render().unwrap()));
 }
 
+#[test]
+fn persisted_messages_with_reused_client_ids_have_distinct_dom_targets() {
+    use ember_views::fragment_cache::{self, FragmentCache};
+
+    let g = golden("messages_show_text");
+    let mut first: MessageView = g.input();
+    let mut second = first.clone();
+    second.id += 1;
+    second.creator.id += 1;
+    first.client_message_id = second.id.to_string();
+    second.client_message_id = first.client_message_id.clone();
+    let cache = FragmentCache::new(fragment_cache::DEFAULT_MAX_BYTES);
+
+    g.render(|ctx| {
+        fragment_cache::with(&cache, || {
+            for message in [&first, &second] {
+                let html = messages::message(ctx, message);
+                assert!(html.contains(&format!("id=\"message_{}\"", message.id)));
+                assert!(html.contains(&format!("data-client-message-id=\"{}\"", message.client_message_id)));
+                let cached = messages::MessageItem::Fragment {
+                    id: message.id,
+                    room_id: message.room_id,
+                    html: messages::cached_message_fragment(message.id, message.updated_at).expect("fragment cached"),
+                };
+                let uncached = messages::MessageItem::from(message.clone());
+                for prefix in ["", "edit", "presentation", "boosts", "new_boost"] {
+                    assert_eq!(cached.dom_id(prefix), uncached.dom_id(prefix));
+                    assert_ne!(first.dom_id(prefix), second.dom_id(prefix));
+                }
+                assert_eq!(
+                    messages::CreateStream { ctx, message: &cached, room_kind: RoomKind::Open }.render().unwrap(),
+                    messages::CreateStream { ctx, message: &uncached, room_kind: RoomKind::Open }.render().unwrap(),
+                );
+            }
+            String::new()
+        })
+    });
+}
+
+#[test]
+fn client_correlation_is_escaped_metadata_and_cannot_choose_markup_ids() {
+    let g = golden("messages_show_text");
+    let mut message: MessageView = g.input();
+    message.client_message_id = "\"><div id=\"forged\">".into();
+    let html = g.render(|ctx| messages::MessagePartial { ctx, message: &message }.render().unwrap());
+    assert!(html.contains(&format!("id=\"message_{}\"", message.id)));
+    assert!(html.contains("data-client-message-id=\"&quot;&gt;&lt;div id=&quot;forged&quot;&gt;\""));
+    assert!(!html.contains("<div id=\"forged\">"));
+}
+
 /// The partial is cached once for every request, so nothing in it may come from the request's
 /// Host header (README, Known differences).
 #[test]

@@ -178,11 +178,12 @@ impl PushSubscription {
         })
     }
 
-    /// `push_subscriptions_for_users_involved_in_everything`
+    /// `push_subscriptions_for_users_involved_in_everything`. Bans retain subscriptions for
+    /// unban, but only active users may receive future room content (unlike the pinned reference).
     pub fn for_users_involved_in_everything(conn: &Connection, room_id: i64, creator_id: i64, now: Timestamp) -> Result<Vec<Self>> {
         query_all(
             conn,
-            r#"SELECT "push_subscriptions".* FROM "push_subscriptions" INNER JOIN "users" ON "users"."id" = "push_subscriptions"."user_id" INNER JOIN "memberships" ON "memberships"."user_id" = "users"."id" WHERE ("memberships"."connected_at" IS NULL OR "memberships"."connected_at" < ?) AND "memberships"."room_id" = ? AND "memberships"."user_id" != ? AND "memberships"."involvement" = 'everything'"#,
+            r#"SELECT "push_subscriptions".* FROM "push_subscriptions" INNER JOIN "users" ON "users"."id" = "push_subscriptions"."user_id" INNER JOIN "memberships" ON "memberships"."user_id" = "users"."id" WHERE "users"."status" = 0 AND ("memberships"."connected_at" IS NULL OR "memberships"."connected_at" < ?) AND "memberships"."room_id" = ? AND "memberships"."user_id" != ? AND "memberships"."involvement" = 'everything'"#,
             params![Membership::connection_cutoff(now), room_id, creator_id],
             Self::from_row,
         )
@@ -200,7 +201,7 @@ impl PushSubscription {
             return Ok(Vec::new());
         }
         let sql = format!(
-            r#"SELECT "push_subscriptions".* FROM "push_subscriptions" INNER JOIN "users" ON "users"."id" = "push_subscriptions"."user_id" INNER JOIN "memberships" ON "memberships"."user_id" = "users"."id" WHERE ("memberships"."connected_at" IS NULL OR "memberships"."connected_at" < ?) AND "memberships"."room_id" = ? AND "memberships"."user_id" != ? AND "memberships"."involvement" = 'mentions' AND "push_subscriptions"."user_id" IN ({})"#,
+            r#"SELECT "push_subscriptions".* FROM "push_subscriptions" INNER JOIN "users" ON "users"."id" = "push_subscriptions"."user_id" INNER JOIN "memberships" ON "memberships"."user_id" = "users"."id" WHERE "users"."status" = 0 AND ("memberships"."connected_at" IS NULL OR "memberships"."connected_at" < ?) AND "memberships"."room_id" = ? AND "memberships"."user_id" != ? AND "memberships"."involvement" = 'mentions' AND "push_subscriptions"."user_id" IN ({})"#,
             placeholders(mentionee_ids.len())
         );
         let mut values: Vec<rusqlite::types::Value> =

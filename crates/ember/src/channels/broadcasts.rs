@@ -3,8 +3,8 @@
 //!
 //! Stream names: records are their GID param (`turbo_stream_from @room, :messages` is
 //! `<room gid param>:messages`), symbols themselves. Targets are `dom_id`s: STI rooms use their
-//! own `param_key` (`messages_rooms_open_1`), and a message's `to_key` is its
-//! `client_message_id` (`message_<uuid>`).
+//! own `param_key` (`messages_rooms_open_1`); persisted messages use their database id.
+//! Client-supplied correlation ids must never choose another message's DOM target.
 use ember_cable::turbo::{Action, Target};
 use ember_db::{Boost, Connection, Involvement, Membership, Message, Room};
 use serde::Serialize;
@@ -44,9 +44,9 @@ pub fn room_dom_id(room: &Room, prefix: &str) -> String {
     dom_id(&room_param_key(room), room.id, Some(prefix))
 }
 
-/// `dom_id(message, prefix)`: messages are keyed by `client_message_id`.
+/// Deliberately differs from the pinned reference: only the database id identifies persisted DOM.
 pub fn message_dom_id(message: &Message, prefix: Option<&str>) -> String {
-    dom_id("message", &message.client_message_id, prefix)
+    dom_id("message", message.id, prefix)
 }
 
 pub const ROOMS: &str = "rooms";
@@ -131,10 +131,10 @@ impl Broadcasts {
 
     // Messages::BoostsController (and its ByBots subclass)
 
-    /// `broadcast_create`: append to `boosts_message_<client_message_id>`.
+    /// `broadcast_create`: append to `boosts_message_<id>`.
     pub fn boost_create(&self, room: &Room, message: &Message, boost: &Boost, partials: &dyn Partials) {
         let html = partials.boost(boost);
-        let target = format!("boosts_message_{}", message.client_message_id);
+        let target = message_dom_id(message, Some("boosts"));
         self.to(&Self::room_messages(room), Action::Append, &target, Some(&html), MAINTAIN_SCROLL);
     }
 
