@@ -2,7 +2,7 @@
 {%- if message.is_unrenderable() %}
   {% include "messages/_unrenderable.html" %}
 {%- else %}
-  <div id="{{ message.dom_id("") }}" class="message {% if message.all_emoji %}message--emoji{% endif %}" data-controller="reply" data-user-id="{{ message.creator.id }}" data-message-id="{{ message.id }}" data-message-timestamp="{{ message.created_at_epoch() }}" data-message-updated-at="{{ message.updated_at_epoch() }}" data-sort-value="{{ message.created_at_epoch() }}" data-messages-target="message" data-search-results-target="message" data-refresh-room-target="message" data-reply-composer-outlet="#composer">
+  <div id="{{ message.dom_id("") }}" class="message {% if message.all_emoji %}message--emoji{% endif %}" data-controller="reply" data-user-id="{{ message.creator.id }}" data-message-id="{{ message.id }}" data-client-message-id="{{ message.client_message_id }}" data-message-timestamp="{{ message.created_at_epoch() }}" data-message-updated-at="{{ message.updated_at_epoch() }}" data-sort-value="{{ message.created_at_epoch() }}" data-messages-target="message" data-search-results-target="message" data-refresh-room-target="message" data-reply-composer-outlet="#composer">
     <h2 class="message__day-separator"><time datetime="{{ message.created_at_iso() }}" data-local-time-target="date"></time></h2>
 
     <figure class="avatar message__avatar">

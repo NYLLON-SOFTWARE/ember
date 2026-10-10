@@ -363,7 +363,13 @@ impl RequestLog {
         Self {
             started: Instant::now(),
             path: request.uri().path().to_string(),
-            query: request.uri().query().unwrap_or("").to_string(),
+            // Setup credentials sent in an invalid query must remain private even though the
+            // app rejects them. Logging runs before routing and forgery protection.
+            query: if crate::private_setup_path(request.uri().path()) {
+                String::new()
+            } else {
+                request.uri().query().unwrap_or("").to_string()
+            },
             method: request.method().to_string(),
             proto: match request.version() {
                 axum::http::Version::HTTP_2 => "HTTP/2.0",
@@ -447,5 +453,23 @@ impl Drop for LoggedBody {
         if let Some(entry) = self.entry.take() {
             entry.write();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn request_logs_never_record_first_run_queries() {
+        let conn = ConnInfo { remote: "127.0.0.1:12345".parse().unwrap(), tls: true };
+        for path in ["/first_run", "/first_run/", "/first_run/access", "/first_run/access/"] {
+            let request = Request::get(format!("{path}?token=private-credential")).body(Body::empty()).unwrap();
+            let log = RequestLog::new(&request, &conn);
+            assert_eq!(log.path, path);
+            assert!(log.query.is_empty());
+        }
+        let request = Request::get("/rooms?before=123").body(Body::empty()).unwrap();
+        assert_eq!(RequestLog::new(&request, &conn).query, "before=123");
     }
 }

@@ -179,7 +179,7 @@ export default class extends Controller {
   }
 
   #pendingUploadExists(clientMessageId) {
-    return this.hasMessagesOutlet && document.getElementById(`message_${clientMessageId}`)?.matches(":not([data-message-id])")
+    return this.hasMessagesOutlet && document.getElementById(`pending_message_${clientMessageId}`)?.matches("[data-pending-message]")
   }
 
   #addFiles(files) {

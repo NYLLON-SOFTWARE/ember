@@ -280,7 +280,10 @@ async fn a_member_may_subscribe_to_a_rooms_message_stream() {
     let message = app.message("first").await;
     app.broadcasts.message_remove(&designers, &message);
     let frame = kevin.next_text().await;
-    assert_eq!(frame, delivery(&channel, &html_json(r#"<turbo-stream action="remove" target="message_0001"></turbo-stream>"#)));
+    assert_eq!(
+        frame,
+        delivery(&channel, &html_json(&format!(r#"<turbo-stream action="remove" target="message_{}"></turbo-stream>"#, message.id)))
+    );
 }
 
 #[tokio::test]

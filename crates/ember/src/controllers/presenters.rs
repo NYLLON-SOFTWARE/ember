@@ -215,7 +215,7 @@ impl<'a> Presenter<'a> {
     /// `render message`, as [`Self::messages`] does it.
     pub fn message_item(&self, message: &Message) -> Result<MessageItem> {
         Ok(match ember_views::messages::cached_message_fragment(message.id, message.updated_at.jiff()) {
-            Some(html) => MessageItem::Fragment { client_message_id: message.client_message_id.clone(), room_id: message.room_id, html },
+            Some(html) => MessageItem::Fragment { id: message.id, room_id: message.room_id, html },
             None => MessageItem::View(Box::new(self.message(message)?)),
         })
     }

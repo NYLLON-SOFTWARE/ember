@@ -383,7 +383,24 @@ async fn record_reference() {
 
 #[tokio::test]
 async fn replays_reference_frames() {
-    let golden: Recording = serde_json::from_str(&std::fs::read_to_string(repo_root().join(GOLDEN)).unwrap()).unwrap();
+    let mut golden: Recording = serde_json::from_str(&std::fs::read_to_string(repo_root().join(GOLDEN)).unwrap()).unwrap();
+    // Deliberate security divergence: persisted messages use database IDs, while the pinned
+    // Rails recording used a client-controlled correlation ID. Translate this single removal;
+    // every other frame and the frozen reference recording remain exact.
+    let message_id: i64 = golden.fixtures.tokens["MESSAGE_ID"].parse().unwrap();
+    let message = golden.fixtures.rows["messages"].iter().find(|row| row["id"].as_i64() == Some(message_id)).unwrap();
+    let client_id = message["client_message_id"].as_str().unwrap();
+    let reference_html = format!(r#"<turbo-stream action="remove" target="message_{client_id}"></turbo-stream>"#);
+    let ember_html = format!(r#"<turbo-stream action="remove" target="message_{message_id}"></turbo-stream>"#);
+    let removal = golden.steps.iter_mut().find(|step| step.step == "message removed").unwrap();
+    let mut translated = 0;
+    for frame in removal.frames.values_mut().flatten() {
+        let value: Value = serde_json::from_str(frame).unwrap();
+        assert_eq!(value["message"], reference_html);
+        *frame = super::support::delivery(value["identifier"].as_str().unwrap(), &super::support::html_json(&ember_html));
+        translated += 1;
+    }
+    assert_eq!(translated, 1);
     let dir = tempfile::tempdir().unwrap();
     let target = start_rust(&golden.fixtures, dir.path()).await;
     let actual = sorted(&run_script(&target, Some(&golden.steps)).await);

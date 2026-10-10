@@ -48,7 +48,9 @@ export default class extends Controller {
   }
 
   messageTargetConnected(target) {
+    const neighbors = this.#reconcilePendingMessage(target)
     this.#formatter.format(target, ThreadStyle.thread)
+    this.#reformatMessages(neighbors)
   }
 
   bodyTargetConnected(target) {
@@ -167,6 +169,20 @@ export default class extends Controller {
       followingMessage.before(message)
     }
     return message
+  }
+
+  #reconcilePendingMessage(message) {
+    const { messageId, clientMessageId, userId } = message.dataset
+    if (!messageId || !clientMessageId || userId !== String(Current.user.id)) return []
+
+    const neighbors = []
+    for (const pending of this.messagesTarget.querySelectorAll("[data-pending-message]")) {
+      if (pending.dataset.clientMessageId === clientMessageId && pending.dataset.userId === userId) {
+        neighbors.push(pending.nextElementSibling)
+        pending.remove()
+      }
+    }
+    return neighbors
   }
 
   #replacementNeighbors(streamElement) {

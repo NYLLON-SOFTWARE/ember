@@ -48,6 +48,35 @@ official 37signals or Basecamp release.
 
 ## Known differences
 
+### Protected setup and independent releases
+
+Installer-managed deployments require a private setup link before the existing first-run form can
+be opened. `EMBER_SETUP_TOKEN` is optional for existing manual deployments. The link exchanges a
+fragment-only credential over HTTPS for a Secure, HttpOnly, encrypted cookie that expires after
+15 minutes. Account creation invalidates setup access. The form, avatar upload, validation, and
+automatic sign-in remain the same. Query-string setup credentials are rejected. First-run paths
+omit query and error details from logs for all deployments. Their HTTP-to-HTTPS redirects use
+no-store/no-referrer and reject queries before constructing a redirect, including manual installs.
+
+NYLLON's reviewed Docker installer and `emberctl` live in `deploy/installer/`. They support fresh
+Ubuntu 24.04 and Debian 13 servers on amd64 and arm64, preserve deployment secrets, pin images by
+digest, and use manual updates with complete offline backups. They refuse unmanaged Campfire/ONCE
+installations. Upstream changes enter through ordinary review; upstream releases cannot update
+an Ember server. Public installation remains unavailable until the stable release and public
+verification gates pass. See [release operation](deploy/release/README.md) for the rollout gates.
+
+### Message identity and inactive-user notifications
+
+Persisted message DOM IDs and edit/delete/reaction targets use database IDs. Client-supplied IDs
+remain correlation metadata for optimistic messages, reconciled only within the current user's
+room. Pending elements have a separate namespace. Two authors reusing a client ID can no longer
+replace or hide each other's displayed messages. Existing database rows require no migration.
+Open browser tabs should reload after an upgrade to pick up the new DOM identity and optimistic-message code.
+
+Both Web Push recipient queries exclude inactive users. Banning a user preserves subscriptions
+and notification preferences for possible reactivation, while stopping newly selected deliveries.
+Notifications already queued or accepted by a push provider cannot be recalled.
+
 ### Workspace navigation and appearance
 
 Ember replaces the application-page presentation with a shared workspace layout: a left navigation

@@ -24,6 +24,27 @@ async fn turbo(app: &TestApp, client: &mut Client, streamables: &[&str]) -> Stri
     channel
 }
 
+#[test]
+fn persisted_message_targets_never_use_client_correlation_ids() {
+    use crate::channels::broadcasts::message_dom_id;
+    use ember_db::{Message, Timestamp};
+
+    let first = Message {
+        id: 12,
+        room_id: 1,
+        creator_id: 1,
+        client_message_id: "13".into(),
+        created_at: Timestamp::from_jiff(jiff::Timestamp::UNIX_EPOCH),
+        updated_at: Timestamp::from_jiff(jiff::Timestamp::UNIX_EPOCH),
+    };
+    let second = Message { id: 13, creator_id: 2, ..first.clone() };
+    for prefix in [None, Some("presentation"), Some("edit"), Some("boosts"), Some("new_boost")] {
+        assert_ne!(message_dom_id(&first, prefix), message_dom_id(&second, prefix));
+    }
+    assert_eq!(message_dom_id(&first, None), "message_12");
+    assert_eq!(message_dom_id(&second, Some("boosts")), "boosts_message_13");
+}
+
 #[tokio::test]
 async fn message_broadcasts() {
     let app = start().await;
@@ -40,7 +61,7 @@ async fn message_broadcasts() {
     assert_eq!(
         turbo_stream(&kevin.next_text().await),
         format!(
-            r#"<turbo-stream action="append" target="messages_rooms_closed_{}"><template><div id="message_0002">message {}</div></template></turbo-stream>"#,
+            r#"<turbo-stream action="append" target="messages_rooms_closed_{}"><template><div id="message_{1}">message {1}</div></template></turbo-stream>"#,
             designers.id, message.id
         )
     );
@@ -50,13 +71,16 @@ async fn message_broadcasts() {
     assert_eq!(
         turbo_stream(&kevin.next_text().await),
         format!(
-            r#"<turbo-stream maintain_scroll="true" action="replace" target="presentation_message_0002"><template><div>presentation {} & more</div></template></turbo-stream>"#,
+            r#"<turbo-stream maintain_scroll="true" action="replace" target="presentation_message_{0}"><template><div>presentation {0} & more</div></template></turbo-stream>"#,
             message.id
         )
     );
 
     app.broadcasts.message_remove(&designers, &message);
-    assert_eq!(turbo_stream(&kevin.next_text().await), r#"<turbo-stream action="remove" target="message_0002"></turbo-stream>"#);
+    assert_eq!(
+        turbo_stream(&kevin.next_text().await),
+        format!(r#"<turbo-stream action="remove" target="message_{}"></turbo-stream>"#, message.id)
+    );
     kevin.assert_silent().await;
 }
 
@@ -73,8 +97,8 @@ async fn boost_broadcasts() {
     assert_eq!(
         turbo_stream(&kevin.next_text().await),
         format!(
-            r#"<turbo-stream maintain_scroll="true" action="append" target="boosts_message_0001"><template><div>boost {}</div></template></turbo-stream>"#,
-            boost.id
+            r#"<turbo-stream maintain_scroll="true" action="append" target="boosts_message_{0}"><template><div>boost {1}</div></template></turbo-stream>"#,
+            message.id, boost.id
         )
     );
 
@@ -213,7 +237,7 @@ async fn broadcast_frames_use_active_support_json_escaping() {
         delivery(
             &channel,
             &html_json(&format!(
-                r#"<turbo-stream maintain_scroll="true" action="replace" target="presentation_message_0001"><template><div>presentation {} & more</div></template></turbo-stream>"#,
+                r#"<turbo-stream maintain_scroll="true" action="replace" target="presentation_message_{0}"><template><div>presentation {0} & more</div></template></turbo-stream>"#,
                 message.id
             ))
         )

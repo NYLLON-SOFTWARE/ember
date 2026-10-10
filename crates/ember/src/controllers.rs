@@ -134,6 +134,8 @@ pub fn routes() -> &'static [Route] {
 static ROUTES: LazyLock<Vec<Route>> = LazyLock::new(|| {
     vec![
         get("/", "welcome#show", welcome::show),
+        get("/first_run/access", "first_runs#access_show", first_runs::access_show),
+        post("/first_run/access", "first_runs#access_create", first_runs::access_create),
         get("/first_run/new(.:format)", "first_runs#new", action_not_found),
         get("/first_run/edit(.:format)", "first_runs#edit", action_not_found),
         get("/first_run(.:format)", "first_runs#show", first_runs::show),
@@ -539,7 +541,13 @@ mod tests {
     #[test]
     fn the_table_is_rails_routes_in_order() {
         let rails = vectors().routes;
-        let owned_endpoints = ["users/sidebars#update_default_order", "users/sidebars#update_order", "rooms/favorites#update"];
+        let owned_endpoints = [
+            "first_runs#access_show",
+            "first_runs#access_create",
+            "users/sidebars#update_default_order",
+            "users/sidebars#update_order",
+            "rooms/favorites#update",
+        ];
         let ours: Vec<_> = routes().iter().filter(|route| !owned_endpoints.contains(&route.endpoint)).collect();
         for (i, (rails, ours)) in rails.iter().zip(&ours).enumerate() {
             let defaults: std::collections::BTreeMap<String, String> =
@@ -552,7 +560,12 @@ mod tests {
         }
         assert_eq!(rails.len(), ours.len(), "every inherited Rails route remains in order");
         let owned: Vec<_> = routes().iter().filter(|route| owned_endpoints.contains(&route.endpoint)).collect();
-        assert_eq!(owned.len(), 3);
+        assert_eq!(owned.len(), 5);
+        assert_eq!(owned[0].verb, Method::GET);
+        assert_eq!(owned[0].pattern, "/first_run/access");
+        assert_eq!(owned[1].verb, Method::POST);
+        assert_eq!(owned[1].pattern, "/first_run/access");
+        let owned = &owned[2..];
         assert_eq!(owned[0].verb, Method::PUT);
         assert_eq!(owned[0].pattern, "/account/room_order(.:format)");
         assert_eq!(owned[1].verb, Method::PUT);

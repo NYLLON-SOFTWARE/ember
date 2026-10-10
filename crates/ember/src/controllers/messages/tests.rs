@@ -288,10 +288,7 @@ async fn show_edit_update_and_destroy() {
 
     let destroyed = david.write(Req::new(Method::DELETE, &path).header("accept", TURBO_STREAM_ACCEPT)).await;
     assert_eq!(destroyed.status, StatusCode::OK);
-    assert_eq!(
-        destroyed.text().trim(),
-        format!(r#"<turbo-stream action="remove" target="message_{}"></turbo-stream>"#, message.client_message_id)
-    );
+    assert_eq!(destroyed.text().trim(), format!(r#"<turbo-stream action="remove" target="message_{}"></turbo-stream>"#, message.id));
     assert!(app.db().read(move |conn| Message::find_by_id(conn, message.id)).await.unwrap().is_none());
     assert_eq!(david.get(&path).await.status, StatusCode::NOT_FOUND);
 }

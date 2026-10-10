@@ -688,6 +688,73 @@ test("new rooms return to settings and profile saves show one centered confirmat
   assert.equal(await page.locator('.flash__inner span').innerText(), 'Changes saved')
 })
 
+test("reused client message IDs cannot replace another member's persisted message", { timeout: 60_000 }, async (t) => {
+  const { page, context, roomPath, joinURL, server } = await setUp(t)
+  const { page: memberPage, context: member } = await newPage(t, server)
+  const joined = await member.request.post(joinURL, {
+    headers: sameOrigin,
+    multipart: { "user[name]": "Maya Chen", "user[email_address]": "maya@example.test", "user[password]": password },
+  })
+  assert.equal(joined.status(), 200)
+  await memberPage.goto(roomPath)
+  await memberPage.locator("#composer").waitFor()
+  await Promise.all([page.waitForLoadState("networkidle"), memberPage.waitForLoadState("networkidle")])
+
+  const correlation = "reused-correlation"
+  const create = async (session, text) => {
+    const response = await session.request.post(`${roomPath}/messages`, {
+      headers: { ...sameOrigin, Accept: "text/vnd.turbo-stream.html" },
+      form: { "message[body]": text, "message[client_message_id]": correlation },
+    })
+    assert.equal(response.status(), 200)
+    return response.text()
+  }
+  const victimText = "Ada's original message must survive"
+  const victimHtml = await create(context, victimText)
+  const victimId = victimHtml.match(/data-message-id="(\d+)"/)[1]
+  const victimSelector = `#message_${victimId}`
+  // Apply HTTP and Cable acknowledgments to the same live DOM; repeats must stay harmless.
+  for (const observer of [page, memberPage]) {
+    await observer.evaluate(html => window.Turbo.renderStreamMessage(html), victimHtml)
+    await observer.locator(victimSelector).waitFor()
+  }
+  const attackerHtml = await create(member, "Maya's separate message")
+  const attackerId = attackerHtml.match(/data-message-id="(\d+)"/)[1]
+  assert.notEqual(attackerId, victimId)
+  for (const observer of [page, memberPage]) {
+    await observer.evaluate(html => window.Turbo.renderStreamMessage(html), attackerHtml)
+    await observer.locator(`#message_${attackerId}`).waitFor()
+    assert.equal(await observer.locator(victimSelector).count(), 1)
+    assert.match(await observer.locator(victimSelector).innerText(), /Ada Lovelace/)
+    assert.ok((await observer.locator(victimSelector).innerText()).includes(victimText))
+  }
+
+  const editedText = "Maya edited only her own message"
+  const edited = await member.request.patch(`${roomPath}/messages/${attackerId}`, {
+    headers: sameOrigin,
+    form: { "message[body]": editedText, "message[client_message_id]": victimId },
+    maxRedirects: 0,
+  })
+  assert.ok([302, 303].includes(edited.status()))
+  for (const observer of [page, memberPage]) {
+    await observer.locator(`#message_${attackerId}`).filter({ hasText: editedText }).waitFor()
+    assert.ok((await observer.locator(victimSelector).innerText()).includes(victimText))
+  }
+  const removed = await member.request.delete(`${roomPath}/messages/${attackerId}`, {
+    headers: { ...sameOrigin, Accept: "text/vnd.turbo-stream.html" },
+  })
+  assert.equal(removed.status(), 200)
+  assert.ok((await removed.text()).includes(`target="message_${attackerId}"`))
+  for (const observer of [page, memberPage]) {
+    await observer.locator(`#message_${attackerId}`).waitFor({ state: "detached" })
+    assert.ok((await observer.locator(victimSelector).innerText()).includes(victimText))
+    await observer.reload()
+    await observer.locator(victimSelector).waitFor()
+    assert.equal(await observer.locator(`#message_${attackerId}`).count(), 0)
+    assert.ok((await observer.locator(victimSelector).innerText()).includes(victimText))
+  }
+})
+
 test("rapid messages keep their first author and day divider before a reload", { timeout: 60_000 }, async (t) => {
   const { page, context, roomPath } = await setUp(t, { viewport: { width: 1280, height: 900 } })
   const newRoom = await context.request.post("/rooms/opens", {
