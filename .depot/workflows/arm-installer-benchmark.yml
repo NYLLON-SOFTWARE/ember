@@ -1,0 +1,167 @@
+name: Manual ARM installer KVM benchmark
+on:
+  workflow_dispatch:
+permissions: {}
+# Optional Depot CI experiment; the GitHub release workflows do not call this.
+concurrency:
+  group: arm-installer-kvm-benchmark
+  cancel-in-progress: false
+jobs:
+  ubuntu-arm64:
+    name: Ubuntu 24.04 / ARM64 / KVM / Ember 1.0.0
+    runs-on: depot-ubuntu-24.04-arm-4
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    env:
+      GUEST_OS: ubuntu-24.04
+      GUEST_ARCH: arm64
+      PUBLIC_INSTALLER: 'false'
+    steps:
+      - name: Start job timing
+        run: |
+          printf 'PLAYWRIGHT_BROWSERS_PATH=%s\n' "$RUNNER_TEMP/ember-playwright" >> "$GITHUB_ENV"
+          python3 - <<'PY'
+          import json, os, time
+          from pathlib import Path
+          path = Path(os.environ['RUNNER_TEMP']) / 'ember-benchmark-timing.json'
+          path.write_text(json.dumps({'job_started': time.monotonic()}))
+          PY
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Require native ARM64 KVM before dependency installation
+        timeout-minutes: 1
+        run: |
+          sudo python3 - <<'PY'
+          import importlib.util, os, platform
+          from pathlib import Path
+          assert os.geteuid() == 0 and platform.system() == 'Linux' and platform.machine() == 'aarch64', 'Use a disposable native ARM64 Linux sandbox'
+          assert not Path('tmp/installer-verification').exists(), 'Use a fresh sandbox'
+          spec = importlib.util.spec_from_file_location('guests', 'deploy/verification/guests.py')
+          guests = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(guests)
+          guests.require_kvm('arm64')
+          print('Native ARM64 KVM device preflight passed')
+          PY
+          sudo docker info >/dev/null
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 24
+      - name: Download and verify the published Ember 1.0.0 assets anonymously
+        run: |
+          mkdir -m 700 release-assets
+          for name in SHA256SUMS bootstrap.sh ember-installer-1.0.0.tar.gz release.json; do
+            curl -fsSL --connect-timeout 10 --max-time 120 --user-agent Ember-installer-benchmark \
+              "https://github.com/NYLLON-SOFTWARE/ember/releases/download/v1.0.0/$name" \
+              --output "release-assets/$name"
+          done
+          python3 - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          assets = Path('release-assets')
+          expected = {
+              'SHA256SUMS': '5890a14306b26d04a3048ab641582491ca838c88474e3c4deabe9a096b011aca',
+              'bootstrap.sh': '85fd738587daee4bfb7016f3ca0bca76c83485a707636df7e1f88ec1f48cdc14',
+              'ember-installer-1.0.0.tar.gz': '0d91d7e956b28e08dd79fc2748aefb90ef849151ac8a550f7003fb9b105524b2',
+              'release.json': '6815b7c32e5351742e62bbfa99e8964f547d40ca369863aa2e252276948f1e7f',
+          }
+          for name, digest in expected.items():
+              assert hashlib.sha256((assets / name).read_bytes()).hexdigest() == digest, 'Published asset checksum mismatch: ' + name
+          manifest = json.loads((assets / 'release.json').read_text())
+          assert manifest == {
+              'schema': 1, 'version': '1.0.0',
+              'source_sha': '37e200f709bc01521a375706911999db2ab0a3cb',
+              'image': 'ghcr.io/nyllon-software/ember@sha256:84b4eabad84edfe4d2c9d19dec3d6084a5d9f4b22cb4af1f81b7d62a24178ec3',
+              'bundle': {
+                  'url': 'https://github.com/NYLLON-SOFTWARE/ember/releases/download/v1.0.0/ember-installer-1.0.0.tar.gz',
+                  'sha256': expected['ember-installer-1.0.0.tar.gz'],
+              },
+          }, 'Published release identity mismatch'
+          PY
+          (cd release-assets && sha256sum --check --strict SHA256SUMS)
+      - name: Install guest tools and browser
+        run: |
+          python3 - <<'PY'
+          import json, os, time
+          from pathlib import Path
+          path = Path(os.environ['RUNNER_TEMP']) / 'ember-benchmark-timing.json'
+          timing = json.loads(path.read_text())
+          timing['dependency_started'] = time.monotonic()
+          path.write_text(json.dumps(timing))
+          PY
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y qemu-system-arm qemu-utils cloud-image-utils qemu-efi-aarch64 ipxe-qemu dnsmasq-base libnss3-tools socat iproute2 iptables openssh-client curl ca-certificates openssl
+          npm ci --ignore-scripts --prefix parity
+          parity/node_modules/.bin/playwright install --with-deps chromium
+          python3 - <<'PY'
+          import json, os, time
+          from pathlib import Path
+          path = Path(os.environ['RUNNER_TEMP']) / 'ember-benchmark-timing.json'
+          timing = json.loads(path.read_text())
+          timing['dependency_finished'] = time.monotonic()
+          path.write_text(json.dumps(timing))
+          PY
+      - name: Run all 14 installer gates with verified KVM acceleration
+        run: |
+          python3 - <<'PY'
+          import json, os, time
+          from pathlib import Path
+          path = Path(os.environ['RUNNER_TEMP']) / 'ember-benchmark-timing.json'
+          timing = json.loads(path.read_text())
+          timing['harness_started'] = time.monotonic()
+          path.write_text(json.dumps(timing))
+          PY
+          sudo --preserve-env=PATH,GUEST_OS,GUEST_ARCH,PUBLIC_INSTALLER,PLAYWRIGHT_BROWSERS_PATH \
+            python3 deploy/verification/guests.py --assets release-assets --benchmark-disposable-runner --accel kvm
+      - name: Collect only sanitized benchmark evidence
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/ember-benchmark-results"
+          chmod 700 "$RUNNER_TEMP/ember-benchmark-results"
+          # Never copy the root-private guest directory, console, or interactive transcript.
+          for name in benchmark.json result.json; do
+            source="$PWD/tmp/installer-verification/diagnostics/$name"
+            if sudo test -f "$source"; then
+              # The redirect intentionally makes a runner-owned readable copy.
+              # shellcheck disable=SC2024
+              sudo cat "$source" > "$RUNNER_TEMP/ember-benchmark-results/$name"
+            fi
+          done
+          python3 - <<'PY'
+          import hashlib, json, math, os, time
+          from pathlib import Path
+          temp = Path(os.environ['RUNNER_TEMP'])
+          output = temp / 'ember-benchmark-results'
+          timing = json.loads((temp / 'ember-benchmark-timing.json').read_text())
+          assert all(type(value) in (int, float) and math.isfinite(value) and value >= 0 for value in timing.values())
+          now = time.monotonic()
+          def duration(start, end):
+              if start not in timing or end not in timing:
+                  return None
+              assert timing[end] >= timing[start]
+              return round(timing[end] - timing[start], 3)
+          benchmark = output / 'benchmark.json'
+          summary = {
+              'schema': 1, 'provider': 'depot-ci', 'runner': 'depot-ubuntu-24.04-arm-4',
+              'provider_setup_seconds': duration('job_started', 'harness_started'),
+              'dependency_setup_seconds': duration('dependency_started', 'dependency_finished'),
+              'total_job_seconds': round(now - timing['job_started'], 3),
+              'benchmark_sha256': hashlib.sha256(benchmark.read_bytes()).hexdigest() if benchmark.exists() else None,
+          }
+          (output / 'job-timing.json').write_text(json.dumps(summary, indent=2, sort_keys=True) + '\n')
+          PY
+      - name: Upload sanitized benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: ember-1.0.0-ubuntu-arm64-kvm-benchmark
+          path: |
+            ${{ runner.temp }}/ember-benchmark-results/benchmark.json
+            ${{ runner.temp }}/ember-benchmark-results/result.json
+            ${{ runner.temp }}/ember-benchmark-results/job-timing.json
+          if-no-files-found: error
+          retention-days: 7

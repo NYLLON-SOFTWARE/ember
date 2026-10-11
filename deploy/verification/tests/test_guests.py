@@ -7,6 +7,7 @@ import ssl
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from unittest import mock
 
@@ -407,7 +408,7 @@ class SSHTransportDiagnostics(unittest.TestCase):
                 guest.boot.side_effect = original
                 guest.ssh.side_effect = OSError('diagnostic-only failure')
                 stack.enter_context(mock.patch.object(guests, 'WORK', work))
-                stack.enter_context(mock.patch.object(guests.argparse.ArgumentParser, 'parse_args', return_value=guests.argparse.Namespace(assets=Path(temporary))))
+                stack.enter_context(mock.patch.object(guests.argparse.ArgumentParser, 'parse_args', return_value=guests.argparse.Namespace(assets=Path(temporary), benchmark_disposable_runner=False, accel='tcg')))
                 stack.enter_context(mock.patch.object(guests.os, 'geteuid', return_value=0))
                 stack.enter_context(mock.patch.object(guests.platform, 'system', return_value='Linux'))
                 stack.enter_context(mock.patch.object(guests.platform, 'machine', return_value='aarch64'))
@@ -882,6 +883,284 @@ class BootDiagnostics(unittest.TestCase):
                     guest.wait_for_ssh()
             ssh.assert_not_called()
             self.assertIn("QEMU exit status: 1", (work / "diagnostics/boot.log").read_text())
+
+
+
+class QemuAcceleration(unittest.TestCase):
+    def test_default_tcg_keeps_existing_machines_cpu_firmware_and_resources(self):
+        for arch, executable, machine in (('amd64', 'qemu-system-x86_64', 'q35'), ('arm64', 'qemu-system-aarch64', 'virt')):
+            with self.subTest(arch=arch):
+                command = guests.qemu_command(arch, 'tcg')
+                self.assertEqual(command[:5], [executable, '-machine', machine, '-cpu', 'max'])
+                self.assertEqual(command[command.index('-accel') + 1], 'tcg')
+                self.assertEqual(command[command.index('-smp') + 1], '2')
+                self.assertEqual(command[command.index('-m') + 1], '4096')
+                self.assertNotIn('-qmp', command)
+                self.assertIn('tap,id=net0,ifname=embertap0,script=no,downscript=no', command)
+                if arch == 'arm64':
+                    self.assertEqual(command[command.index('-bios') + 1], '/usr/share/qemu-efi-aarch64/QEMU_EFI.fd')
+
+    def test_kvm_uses_only_one_accelerator_with_native_cpu_and_arm_host_gic(self):
+        for arch in ('amd64', 'arm64'):
+            with self.subTest(arch=arch):
+                command = guests.qemu_command(arch, 'kvm', monitor=True)
+                self.assertEqual(command.count('-accel'), 1)
+                self.assertEqual(command[command.index('-accel') + 1], 'kvm')
+                self.assertNotIn('tcg', command)
+                self.assertEqual(command[command.index('-cpu') + 1], 'host')
+                self.assertEqual(command[command.index('-machine') + 1], 'q35' if arch == 'amd64' else 'virt,gic-version=host')
+                self.assertEqual(command[command.index('-qmp') + 1], f'unix:{guests.WORK}/qmp.sock,server=on,wait=off')
+        for arch, accel in (('riscv64', 'kvm'), ('arm64', 'auto'), ('arm64', 'kvm:tcg')):
+            with self.subTest(arch=arch, accel=accel), self.assertRaises(AssertionError):
+                guests.qemu_command(arch, accel)
+
+    def test_kvm_preflight_requires_native_linux_before_opening_device(self):
+        for system, machine, arch in (('Darwin', 'aarch64', 'arm64'), ('Linux', 'x86_64', 'arm64'), ('Linux', 'aarch64', 'amd64')):
+            with self.subTest(system=system, machine=machine, arch=arch), mock.patch.object(guests.platform, 'system', return_value=system), mock.patch.object(guests.platform, 'machine', return_value=machine), mock.patch('builtins.open') as opened:
+                with self.assertRaisesRegex(AssertionError, 'native Linux'):
+                    guests.require_kvm(arch)
+                opened.assert_not_called()
+
+    def test_kvm_probe_checks_api_and_creates_and_closes_a_vm(self):
+        opened = mock.mock_open()
+        with mock.patch.object(guests.platform, 'system', return_value='Linux'), mock.patch.object(guests.platform, 'machine', return_value='aarch64'), mock.patch('builtins.open', opened), mock.patch.object(guests.fcntl, 'ioctl', side_effect=[12, 37]) as ioctl, mock.patch.object(guests.os, 'close') as close:
+            guests.require_kvm('arm64')
+        opened.assert_called_once_with('/dev/kvm', 'rb+', buffering=0)
+        self.assertEqual(ioctl.call_args_list, [mock.call(opened(), 0xAE00, 0), mock.call(opened(), 0xAE01, 0)])
+        close.assert_called_once_with(37)
+        opened().__exit__.assert_called_once()
+
+    def test_denied_missing_unsupported_and_uncreatable_kvm_fail_without_fallback(self):
+        for failure in (PermissionError('private permission detail'), FileNotFoundError('private device detail')):
+            with self.subTest(failure=type(failure).__name__), mock.patch.object(guests.platform, 'system', return_value='Linux'), mock.patch.object(guests.platform, 'machine', return_value='aarch64'), mock.patch('builtins.open', side_effect=failure), mock.patch.object(guests.fcntl, 'ioctl') as ioctl:
+                with self.assertRaisesRegex(RuntimeError, '^KVM is unavailable on this disposable runner$') as raised:
+                    guests.require_kvm('arm64')
+                self.assertNotIn('private', str(raised.exception))
+                ioctl.assert_not_called()
+        for replies, message in (([11], 'Unsupported KVM API version'), ([12, OSError('private ioctl detail')], 'KVM is unavailable on this disposable runner')):
+            with self.subTest(message=message), mock.patch.object(guests.platform, 'system', return_value='Linux'), mock.patch.object(guests.platform, 'machine', return_value='aarch64'), mock.patch('builtins.open', mock.mock_open()), mock.patch.object(guests.fcntl, 'ioctl', side_effect=replies), mock.patch.object(guests.os, 'close') as close:
+                with self.assertRaisesRegex(RuntimeError, '^' + message + '$'):
+                    guests.require_kvm('arm64')
+                close.assert_not_called()
+
+    def test_real_qmp_socket_negotiates_and_rejects_fallback_without_exposing_messages(self):
+        for enabled, requested in ((True, 'kvm'), (False, 'tcg'), (False, 'kvm')):
+            with self.subTest(enabled=enabled, requested=requested), tempfile.TemporaryDirectory(prefix='ember-qmp-', dir='/tmp') as temporary:
+                work = Path(temporary)
+                requests, errors = [], []
+                with guests.socket.socket(guests.socket.AF_UNIX, guests.socket.SOCK_STREAM) as server:
+                    server.bind(str(work / 'qmp.sock'))
+                    server.listen(1)
+                    server.settimeout(5)
+
+                    def serve():
+                        try:
+                            with server.accept()[0] as connection, connection.makefile('rwb') as stream:
+                                stream.write(b'{"QMP":{"version":{"qemu":{"major":10,"minor":1,"micro":2},"package":"private-host-detail"},"capabilities":[]}}\n')
+                                stream.flush()
+                                requests.append(guests.json.loads(stream.readline()))
+                                stream.write(b'{"return":{}}\n')
+                                stream.flush()
+                                requests.append(guests.json.loads(stream.readline()))
+                                stream.write(b'{"event":"PRIVATE_EVENT","data":{"token":"private-token"}}\n')
+                                stream.write((guests.json.dumps({'return': {'enabled': enabled, 'present': True, 'private': 'private-token'}}) + '\n').encode())
+                                stream.flush()
+                        except BaseException as error:
+                            errors.append(error)
+
+                    worker = threading.Thread(target=serve, daemon=True)
+                    worker.start()
+                    with mock.patch.object(guests, 'WORK', work):
+                        if requested == 'kvm' and not enabled:
+                            with self.assertRaisesRegex(RuntimeError, '^QEMU did not enable the requested accelerator$') as raised:
+                                guests.qmp_acceleration(requested)
+                            self.assertNotIn('private', str(raised.exception))
+                        else:
+                            result = guests.qmp_acceleration(requested)
+                            self.assertEqual(result, {'accelerator': requested, 'kvm_enabled': enabled, 'qemu_version': {'major': 10, 'minor': 1, 'micro': 2}})
+                    worker.join(5)
+                    self.assertFalse(worker.is_alive())
+                self.assertEqual(errors, [])
+                self.assertEqual(requests, [{'execute': 'qmp_capabilities'}, {'execute': 'query-kvm'}])
+
+
+    def test_real_qmp_absolute_deadline_bounds_continuous_trickling_at_each_read_phase(self):
+        for phase in ('greeting', 'query'):
+            with self.subTest(phase=phase), tempfile.TemporaryDirectory(prefix='ember-qmp-', dir='/tmp') as temporary:
+                work = Path(temporary)
+                stop, errors = threading.Event(), []
+                with guests.socket.socket(guests.socket.AF_UNIX, guests.socket.SOCK_STREAM) as server:
+                    server.bind(str(work / 'qmp.sock'))
+                    server.listen(1)
+                    server.settimeout(2)
+
+                    def serve():
+                        try:
+                            with server.accept()[0] as connection:
+                                connection.settimeout(2)
+                                if phase == 'query':
+                                    connection.sendall(b'{"QMP":{"version":{"qemu":{"major":10,"minor":1,"micro":2}}}}\n')
+                                    with connection.makefile('rb') as stream:
+                                        self.assertEqual(guests.json.loads(stream.readline()), {'execute': 'qmp_capabilities'})
+                                        connection.sendall(b'{"return":{}}\n')
+                                        self.assertEqual(guests.json.loads(stream.readline()), {'execute': 'query-kvm'})
+                                connection.sendall(b'{"private-token":"')
+                                while not stop.wait(0.01):
+                                    connection.sendall(b'x')
+                        except (BrokenPipeError, ConnectionResetError):
+                            pass
+                        except BaseException as error:
+                            errors.append(error)
+
+                    worker = threading.Thread(target=serve, daemon=True)
+                    worker.start()
+                    output = io.StringIO()
+                    started = guests.time.monotonic()
+                    try:
+                        with mock.patch.object(guests, 'WORK', work), contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
+                            with self.assertRaisesRegex(RuntimeError, '^QMP accelerator proof timed out$') as raised:
+                                guests.qmp_acceleration('kvm', timeout=0.12)
+                    finally:
+                        stop.set()
+                        worker.join(2)
+                    self.assertLess(guests.time.monotonic() - started, 1)
+                    self.assertFalse(worker.is_alive())
+                    self.assertEqual(errors, [])
+                    self.assertEqual(output.getvalue(), '')
+                    self.assertNotIn('private', str(raised.exception))
+
+    def test_qmp_startup_retries_share_the_same_absolute_deadline(self):
+        with tempfile.TemporaryDirectory(prefix='ember-qmp-', dir='/tmp') as temporary:
+            started = guests.time.monotonic()
+            with mock.patch.object(guests, 'WORK', Path(temporary)), self.assertRaisesRegex(RuntimeError, '^QMP accelerator proof timed out$'):
+                guests.qmp_acceleration('kvm', timeout=0.05)
+            self.assertLess(guests.time.monotonic() - started, 0.5)
+
+
+class DisposableBenchmark(unittest.TestCase):
+    common = {'anonymous-install', 'advertised-command-real-terminal-hostname', 'private-browser-setup',
+              'chat', 'upload', 'websocket', 'push-enrollment', 'rerun', 'offline-ca-reboot', 'complete-backup-restore'}
+    extra = {'interrupted-download', 'registry-unavailable-preserves-running-app', 'update', 'failed-start-explicit-recovery'}
+
+    def test_local_runner_requires_explicit_opt_in_and_still_requires_native_root_linux(self):
+        for github, benchmark, accepted in ((False, False, False), (False, True, True), (True, False, True)):
+            with self.subTest(github=github, benchmark=benchmark), mock.patch.dict(guests.os.environ, {'GUEST_ARCH': 'arm64', 'GITHUB_ACTIONS': 'true' if github else ''}), mock.patch.object(guests.os, 'geteuid', return_value=0), mock.patch.object(guests.platform, 'system', return_value='Linux'), mock.patch.object(guests.platform, 'machine', return_value='aarch64'):
+                if accepted:
+                    guests.require_runner(benchmark)
+                else:
+                    with self.assertRaisesRegex(AssertionError, 'benchmark-disposable-runner'):
+                        guests.require_runner(benchmark)
+        for uid, system, machine in ((1000, 'Linux', 'aarch64'), (0, 'Darwin', 'aarch64'), (0, 'Linux', 'x86_64')):
+            with self.subTest(uid=uid, system=system, machine=machine), mock.patch.dict(guests.os.environ, {'GUEST_ARCH': 'arm64'}), mock.patch.object(guests.os, 'geteuid', return_value=uid), mock.patch.object(guests.platform, 'system', return_value=system), mock.patch.object(guests.platform, 'machine', return_value=machine), self.assertRaises(AssertionError):
+                guests.require_runner(True)
+
+    def test_cli_defaults_and_explicit_benchmark_flags(self):
+        for flags, expected in (([], (False, 'tcg')), (['--benchmark-disposable-runner', '--accel', 'kvm'], (True, 'kvm'))):
+            with self.subTest(flags=flags), mock.patch.object(guests.sys, 'argv', ['guests.py', '--assets', '/temporary/assets', *flags]), mock.patch.object(guests, 'require_runner', side_effect=RuntimeError('stop before host mutation')) as require:
+                with self.assertRaisesRegex(RuntimeError, '^stop before host mutation$'):
+                    guests.main()
+                require.assert_called_once_with(expected[0])
+        with mock.patch.object(guests.sys, 'argv', ['guests.py', '--assets', '/temporary/assets', '--accel', 'kvm:tcg']), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            guests.main()
+
+    def test_main_passes_flags_and_checks_kvm_before_network_with_no_default_benchmark(self):
+        for benchmark, accel in ((False, 'tcg'), (True, 'kvm')):
+            with self.subTest(benchmark=benchmark, accel=accel), tempfile.TemporaryDirectory() as temporary, contextlib.ExitStack() as stack:
+                work = Path(temporary) / 'fresh-work'
+                flags = ['--benchmark-disposable-runner', '--accel', accel] if benchmark else []
+                stack.enter_context(mock.patch.object(guests.sys, 'argv', ['guests.py', '--assets', temporary, *flags]))
+                stack.enter_context(mock.patch.object(guests, 'WORK', work))
+                stack.enter_context(mock.patch.object(guests, 'BENCHMARK_TIMINGS', None))
+                stack.enter_context(mock.patch.object(guests, 'require_runner'))
+                stack.enter_context(mock.patch.dict(guests.os.environ, {'GUEST_OS': 'ubuntu-24.04', 'GUEST_ARCH': 'arm64', 'PUBLIC_INSTALLER': 'false'}))
+                order = mock.Mock()
+                kvm = stack.enter_context(mock.patch.object(guests, 'require_kvm'))
+                network = stack.enter_context(mock.patch.object(guests, 'network'))
+                order.attach_mock(kvm, 'kvm')
+                order.attach_mock(network, 'network')
+                stack.enter_context(mock.patch.object(guests, 'certificates'))
+                stack.enter_context(mock.patch.object(guests, 'mirror'))
+                factory = stack.enter_context(mock.patch.object(guests, 'Guest'))
+                acceptance = stack.enter_context(mock.patch.object(guests, 'acceptance'))
+                writer = stack.enter_context(mock.patch.object(guests, 'write_benchmark'))
+                guests.main()
+                factory.assert_called_once_with(accel, benchmark)
+                acceptance.assert_called_once()
+                if benchmark:
+                    self.assertEqual(order.mock_calls, [mock.call.kvm('arm64'), mock.call.network(False)])
+                    writer.assert_called_once_with(factory.return_value, Path(temporary).resolve(), False)
+                    self.assertEqual(guests.BENCHMARK_TIMINGS, {})
+                else:
+                    kvm.assert_not_called()
+                    writer.assert_not_called()
+                    self.assertIsNone(guests.BENCHMARK_TIMINGS)
+
+    def test_failed_kvm_preflight_prevents_network_workspace_and_acceptance(self):
+        with tempfile.TemporaryDirectory() as temporary, contextlib.ExitStack() as stack:
+            work = Path(temporary) / 'fresh-work'
+            stack.enter_context(mock.patch.object(guests.sys, 'argv', ['guests.py', '--assets', temporary, '--benchmark-disposable-runner', '--accel', 'kvm']))
+            stack.enter_context(mock.patch.object(guests, 'WORK', work))
+            stack.enter_context(mock.patch.object(guests, 'require_runner'))
+            stack.enter_context(mock.patch.dict(guests.os.environ, {'GUEST_ARCH': 'arm64'}))
+            stack.enter_context(mock.patch.object(guests, 'require_kvm', side_effect=RuntimeError('KVM unavailable')))
+            network = stack.enter_context(mock.patch.object(guests, 'network'))
+            acceptance = stack.enter_context(mock.patch.object(guests, 'acceptance'))
+            with self.assertRaisesRegex(RuntimeError, '^KVM unavailable$'):
+                guests.main()
+            self.assertFalse(work.exists())
+            network.assert_not_called()
+            acceptance.assert_not_called()
+
+    def test_completed_metrics_contain_only_bound_hashes_fixed_metadata_and_numeric_timings(self):
+        for public in (False, True):
+            with self.subTest(public=public), tempfile.TemporaryDirectory() as temporary:
+                work = Path(temporary)
+                (work / 'diagnostics').mkdir()
+                (work / 'release.json').write_text('{"private":"manifest body is hashed only"}')
+                result = {'os': 'ubuntu-24.04', 'arch': 'arm64', 'public': public, 'gates': sorted(self.common if public else self.common | self.extra)}
+                result_file = work / 'diagnostics/result.json'
+                result_file.write_text(guests.json.dumps(result))
+                before = result_file.read_bytes()
+                order = [stage for stage in guests.BENCHMARK_STAGE_ORDER if not public or stage not in ('update', 'explicit-recovery')]
+                timings = {stage: index * 1.5 for index, stage in enumerate(order)}
+                guest = mock.Mock(acceleration={'accelerator': 'kvm', 'kvm_enabled': True, 'qemu_version': {'major': 10, 'minor': 1, 'micro': 2}, 'token': 'private-setup-token', 'command': 'private command'})
+                output = io.StringIO()
+                with mock.patch.object(guests, 'WORK', work), mock.patch.object(guests, 'BENCHMARK_TIMINGS', timings), mock.patch.object(guests.platform, 'machine', return_value='aarch64'), mock.patch.dict(guests.os.environ, {'GUEST_OS': 'ubuntu-24.04', 'EMBER_SETUP_TOKEN': 'private-env-token'}), contextlib.redirect_stdout(output):
+                    guests.write_benchmark(guest, work, public)
+                metrics = guests.json.loads((work / 'diagnostics/benchmark.json').read_text())
+                self.assertEqual(metrics['gate_count'], 10 if public else 14)
+                self.assertTrue(metrics['success'] and metrics['kvm_enabled'])
+                self.assertEqual(metrics['stage_elapsed_seconds'], timings)
+                self.assertEqual(metrics['stage_duration_seconds'], {stage: 1.5 for stage in order[:-1]})
+                self.assertEqual(metrics['result_sha256'], guests.hashlib.sha256(before).hexdigest())
+                self.assertEqual(metrics['release_manifest_sha256'], guests.hashlib.sha256((work / 'release.json').read_bytes()).hexdigest())
+                self.assertEqual(result_file.read_bytes(), before)
+                self.assertEqual(metrics['guest_vcpus'], 2)
+                self.assertEqual(metrics['guest_memory_mib'], 4096)
+                self.assertNotIn('private', (work / 'diagnostics/benchmark.json').read_text() + output.getvalue())
+
+    def test_incomplete_gates_bad_timings_or_fallback_cannot_write_success_metrics(self):
+        for invalid in ('missing-gate', 'duplicate-gate', 'wrong-public', 'missing-stage', 'private-stage', 'nan-time', 'backward-time', 'fallback'):
+            with self.subTest(invalid=invalid), tempfile.TemporaryDirectory() as temporary:
+                work = Path(temporary)
+                (work / 'diagnostics').mkdir()
+                result = {'os': 'ubuntu-24.04', 'arch': 'arm64', 'public': False, 'gates': sorted(self.common | self.extra)}
+                timings = {stage: float(index) for index, stage in enumerate(guests.BENCHMARK_STAGE_ORDER)}
+                acceleration = {'accelerator': 'kvm', 'kvm_enabled': True, 'qemu_version': {'major': 10, 'minor': 1, 'micro': 2}}
+                if invalid == 'missing-gate': result['gates'].pop()
+                elif invalid == 'duplicate-gate': result['gates'][-1] = result['gates'][0]
+                elif invalid == 'wrong-public': result['public'] = True
+                elif invalid == 'missing-stage': timings.pop('complete')
+                elif invalid == 'private-stage': timings['private-token'] = 3
+                elif invalid == 'nan-time': timings['complete'] = float('nan')
+                elif invalid == 'backward-time': timings['complete'] = 0
+                elif invalid == 'fallback': acceleration['kvm_enabled'] = False
+                (work / 'diagnostics/result.json').write_text(guests.json.dumps(result))
+                output = io.StringIO()
+                with mock.patch.object(guests, 'WORK', work), mock.patch.object(guests, 'BENCHMARK_TIMINGS', timings), mock.patch.object(guests.platform, 'machine', return_value='aarch64'), mock.patch.dict(guests.os.environ, {'GUEST_OS': 'ubuntu-24.04'}), contextlib.redirect_stdout(output), self.assertRaises(RuntimeError):
+                    guests.write_benchmark(mock.Mock(acceleration=acceleration), work, False)
+                self.assertFalse((work / 'diagnostics/benchmark.json').exists())
+                self.assertEqual(output.getvalue(), '')
 
 
 if __name__ == "__main__":

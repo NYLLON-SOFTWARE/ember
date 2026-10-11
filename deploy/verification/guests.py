@@ -3,9 +3,11 @@
 import argparse
 import atexit
 import contextlib
+import fcntl
 import hashlib
 import http.server
 import json
+import math
 import os
 import platform
 from pathlib import Path
@@ -13,6 +15,7 @@ import re
 import selectors
 import shlex
 import shutil
+import socket
 import ssl
 import subprocess
 import sys
@@ -30,9 +33,11 @@ HOSTNAME_PROMPT = 'Hostname pointing to this server (for example chat.example.co
 # Ubuntu arm64 under TCG reached cloud-final at 759s; allow bounded slow guest boots.
 GUEST_BOOT_TIMEOUT = 1200
 VERIFICATION_STARTED = time.monotonic()
-VERIFICATION_STAGES = frozenset(('guest-boot', 'guest-ssh', 'guest-cloud-init', 'guest-packages',
+BENCHMARK_TIMINGS = None
+BENCHMARK_STAGE_ORDER = ('guest-boot', 'guest-ssh', 'guest-cloud-init', 'guest-packages',
     'preflight', 'first-install', 'browser-setup', 'managed-rerun', 'backup', 'reboot',
-    'reboot-ssh', 'reboot-health', 'reboot-status', 'reboot-persistence', 'update', 'explicit-recovery', 'restore', 'complete'))
+    'reboot-ssh', 'reboot-health', 'reboot-status', 'reboot-persistence', 'update', 'explicit-recovery', 'restore', 'complete')
+VERIFICATION_STAGES = frozenset(BENCHMARK_STAGE_ORDER)
 PEBBLE = 'ghcr.io/letsencrypt/pebble@sha256:d9080f68f6cb6af8d82134ab26de0aaaf312ac9cba42aecc6d3aede6cb63007b'
 
 
@@ -42,10 +47,125 @@ def run(*args, capture=False, check=True, timeout=600, **kwargs):
                           stderr=subprocess.PIPE if capture else None, timeout=timeout, **kwargs)
 
 
+def native_architecture():
+    return {'x86_64': 'amd64', 'aarch64': 'arm64'}.get(platform.machine())
+
+
+def require_runner(benchmark):
+    assert os.geteuid() == 0 and platform.system() == 'Linux', 'Run only as root on a disposable Linux runner'
+    assert benchmark or os.environ.get('GITHUB_ACTIONS') == 'true', 'A local disposable runner requires --benchmark-disposable-runner'
+    assert native_architecture() == os.environ['GUEST_ARCH'], 'Use a native runner for each architecture'
+
+
+def require_kvm(arch):
+    assert platform.system() == 'Linux' and native_architecture() == arch, 'KVM requires a native Linux runner'
+    try:
+        with open('/dev/kvm', 'rb+', buffering=0) as device:
+            # Stable Linux KVM API: KVM_GET_API_VERSION and KVM_CREATE_VM (type 0).
+            if fcntl.ioctl(device, 0xAE00, 0) != 12:
+                raise RuntimeError('Unsupported KVM API version')
+            descriptor = fcntl.ioctl(device, 0xAE01, 0)
+            os.close(descriptor)
+    except OSError:
+        raise RuntimeError('KVM is unavailable on this disposable runner') from None
+
+
+def qemu_command(arch, accel, monitor=False):
+    assert arch in ('amd64', 'arm64') and accel in ('tcg', 'kvm'), 'Unsupported guest architecture or accelerator'
+    cpu = 'host' if accel == 'kvm' else 'max'
+    if arch == 'amd64':
+        command = ['qemu-system-x86_64', '-machine', 'q35', '-cpu', cpu]
+    else:
+        machine = 'virt,gic-version=host' if accel == 'kvm' else 'virt'
+        command = ['qemu-system-aarch64', '-machine', machine, '-cpu', cpu, '-bios', '/usr/share/qemu-efi-aarch64/QEMU_EFI.fd']
+    command += ['-accel', accel, '-smp', '2', '-m', '4096', '-nographic', '-drive', f'file={WORK}/disk.qcow2,format=qcow2,if=virtio', '-drive', f'file={WORK}/seed.iso,format=raw,if=virtio,readonly=on', '-netdev', 'tap,id=net0,ifname=embertap0,script=no,downscript=no', '-device', 'virtio-net-pci,netdev=net0,mac=52:54:00:12:34:56']
+    if monitor:
+        command += ['-qmp', f'unix:{WORK}/qmp.sock,server=on,wait=off']
+    return command
+
+
+def qmp_remaining(deadline):
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise RuntimeError('QMP accelerator proof timed out')
+    return remaining
+
+
+def qmp_connection(deadline):
+    while True:
+        connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            connection.settimeout(qmp_remaining(deadline))
+            connection.connect(str(WORK / 'qmp.sock'))
+            return connection
+        except (FileNotFoundError, ConnectionRefusedError):
+            connection.close()
+            time.sleep(min(0.1, qmp_remaining(deadline)))
+        except BaseException:
+            connection.close()
+            raise
+
+
+def qmp_message(connection, pending, deadline):
+    for _ in range(32):
+        while b'\n' not in pending:
+            if len(pending) >= 65536:
+                raise RuntimeError('Invalid QMP response')
+            connection.settimeout(qmp_remaining(deadline))
+            block = connection.recv(min(4096, 65537 - len(pending)))
+            if not block:
+                raise RuntimeError('Invalid QMP response')
+            pending.extend(block)
+        line, _separator, _rest = pending.partition(b'\n')
+        del pending[:len(line) + 1]
+        if len(line) >= 65536:
+            raise RuntimeError('Invalid QMP response')
+        try:
+            message = json.loads(line)
+        except ValueError:
+            raise RuntimeError('Invalid QMP response') from None
+        if not isinstance(message, dict):
+            raise RuntimeError('Invalid QMP response')
+        if 'event' not in message:
+            return message
+    raise RuntimeError('Too many QMP events')
+
+
+def qmp_acceleration(accel, timeout=30):
+    # One wall-clock budget covers startup and every read/write, even trickling output.
+    deadline = time.monotonic() + timeout
+    try:
+        with qmp_connection(deadline) as connection:
+            pending = bytearray()
+            greeting = qmp_message(connection, pending, deadline)
+            try:
+                version = greeting['QMP']['version']['qemu']
+            except (KeyError, TypeError):
+                raise RuntimeError('Invalid QMP version') from None
+            if not isinstance(version, dict) or set(version) != {'major', 'minor', 'micro'} or any(type(value) is not int or value < 0 for value in version.values()):
+                raise RuntimeError('Invalid QMP version')
+            for command in ('qmp_capabilities', 'query-kvm'):
+                connection.settimeout(qmp_remaining(deadline))
+                connection.sendall((json.dumps({'execute': command}) + '\n').encode())
+                response = qmp_message(connection, pending, deadline)
+                if 'return' not in response:
+                    raise RuntimeError('QMP accelerator query failed')
+            status = response['return']
+            if not isinstance(status, dict) or type(status.get('enabled')) is not bool or type(status.get('present')) is not bool:
+                raise RuntimeError('Invalid QMP accelerator status')
+            if status['enabled'] != (accel == 'kvm') or (accel == 'kvm' and not status['present']):
+                raise RuntimeError('QEMU did not enable the requested accelerator')
+            return {'accelerator': accel, 'kvm_enabled': status['enabled'], 'qemu_version': version}
+    except socket.timeout:
+        raise RuntimeError('QMP accelerator proof timed out') from None
+
+
 def report_stage(stage):
     if stage not in VERIFICATION_STAGES:
         raise ValueError('Unknown verification stage')
     progress = {'stage': stage, 'elapsed_seconds': round(max(0, time.monotonic() - VERIFICATION_STARTED), 1)}
+    if BENCHMARK_TIMINGS is not None:
+        BENCHMARK_TIMINGS[stage] = progress['elapsed_seconds']
     try:
         print('Guest verification progress: ' + json.dumps(progress, sort_keys=True), file=sys.stderr, flush=True)
     except OSError:
@@ -253,7 +373,8 @@ def wait_for(action, timeout=600):
 
 
 class Guest:
-    def __init__(self):
+    def __init__(self, accel='tcg', benchmark=False):
+        self.accel, self.benchmark = accel, benchmark
         self.key = WORK / 'ssh'
         run('ssh-keygen', '-q', '-t', 'ed25519', '-N', '', '-f', self.key)
 
@@ -329,11 +450,14 @@ class Guest:
         (WORK / 'meta-data').write_text('instance-id: ember-installer-test\nlocal-hostname: ember-test\n')
         (WORK / 'network-config').write_text(f'version: 2\nethernets:\n  ember0:\n    match:\n      macaddress: "52:54:00:12:34:56"\n    set-name: ember0\n    addresses: [{GUEST}/24]\n    routes:\n      - to: default\n        via: {HOST}\n    nameservers:\n      addresses: [{HOST}]\n')
         run('cloud-localds', '--network-config=' + str(WORK / 'network-config'), WORK / 'seed.iso', WORK / 'user-data', WORK / 'meta-data')
-        command = ['qemu-system-x86_64', '-machine', 'q35', '-cpu', 'max'] if arch == 'amd64' else ['qemu-system-aarch64', '-machine', 'virt', '-cpu', 'max', '-bios', '/usr/share/qemu-efi-aarch64/QEMU_EFI.fd']
-        command += ['-accel', 'tcg', '-smp', '2', '-m', '4096', '-nographic', '-drive', f'file={WORK}/disk.qcow2,format=qcow2,if=virtio', '-drive', f'file={WORK}/seed.iso,format=raw,if=virtio,readonly=on', '-netdev', 'tap,id=net0,ifname=embertap0,script=no,downscript=no', '-device', 'virtio-net-pci,netdev=net0,mac=52:54:00:12:34:56']
+        accel = getattr(self, 'accel', 'tcg')
+        monitor = getattr(self, 'benchmark', False) or accel == 'kvm'
+        command = qemu_command(arch, accel, monitor)
         log = (WORK / 'diagnostics/console.log').open('w')
         self.process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT)
         atexit.register(self.process.terminate)
+        if monitor:
+            self.acceleration = qmp_acceleration(accel)
         report_stage('guest-ssh')
         self.wait_for_ssh()
         report_stage('guest-cloud-init')
@@ -680,13 +804,58 @@ def failure_diagnostics(guest, error):
     write_diagnostic('application.log', log)
 
 
+def write_benchmark(guest, assets, public):
+    result_file = WORK / 'diagnostics/result.json'
+    result = json.loads(result_file.read_text())
+    common = {'anonymous-install', 'advertised-command-real-terminal-hostname', 'private-browser-setup',
+              'chat', 'upload', 'websocket', 'push-enrollment', 'rerun', 'offline-ca-reboot', 'complete-backup-restore'}
+    expected = common if public else common | {'interrupted-download', 'registry-unavailable-preserves-running-app', 'update', 'failed-start-explicit-recovery'}
+    valid = (isinstance(result, dict) and set(result) == {'os', 'arch', 'public', 'gates'}
+             and result['os'] in ('ubuntu-24.04', 'debian-13') and result['arch'] in ('amd64', 'arm64') and result['arch'] == native_architecture()
+             and result['os'] == os.environ['GUEST_OS'] and type(result['public']) is bool and result['public'] == public
+             and isinstance(result['gates'], list) and len(result['gates']) == len(expected)
+             and all(type(gate) is str for gate in result['gates']) and set(result['gates']) == expected)
+    if not valid:
+        raise RuntimeError('Benchmark requires the complete acceptance gate result')
+    timings = BENCHMARK_TIMINGS or {}
+    ordered = [stage for stage in BENCHMARK_STAGE_ORDER if not public or stage not in ('update', 'explicit-recovery')]
+    if set(timings) != set(ordered) or any(type(value) not in (int, float) or not math.isfinite(value) or value < 0 for value in timings.values()):
+        raise RuntimeError('Benchmark requires complete safe stage timings')
+    if any(timings[stage] > timings[following] for stage, following in zip(ordered, ordered[1:])):
+        raise RuntimeError('Benchmark stage timings must be ordered')
+    acceleration = guest.acceleration
+    version = acceleration.get('qemu_version')
+    if (acceleration.get('accelerator') not in ('tcg', 'kvm')
+            or type(acceleration.get('kvm_enabled')) is not bool
+            or acceleration['kvm_enabled'] != (acceleration['accelerator'] == 'kvm')
+            or not isinstance(version, dict) or set(version) != {'major', 'minor', 'micro'}
+            or any(type(value) is not int or value < 0 for value in version.values())):
+        raise RuntimeError('Benchmark requires verified accelerator metadata')
+    durations = {stage: round(timings[following] - timings[stage], 1) for stage, following in zip(ordered, ordered[1:])}
+    evidence = {'schema': 1, 'os': result['os'], 'arch': result['arch'], 'public': public,
+                'success': True, 'gate_count': len(expected), 'host_arch': native_architecture(),
+                'guest_vcpus': 2, 'guest_memory_mib': 4096,
+                'accelerator': acceleration['accelerator'], 'kvm_enabled': acceleration['kvm_enabled'], 'qemu_version': version,
+                'stage_elapsed_seconds': dict(timings), 'stage_duration_seconds': durations,
+                'elapsed_seconds': timings['complete'],
+                'result_sha256': hashlib.sha256(result_file.read_bytes()).hexdigest(),
+                'release_manifest_sha256': hashlib.sha256((assets / 'release.json').read_bytes()).hexdigest(),
+                'harness_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}
+    (WORK / 'diagnostics/benchmark.json').write_text(json.dumps(evidence, indent=2, sort_keys=True) + '\n')
+    print('Guest benchmark: ' + json.dumps(evidence, sort_keys=True), flush=True)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--assets', type=Path, required=True)
+    parser.add_argument('--benchmark-disposable-runner', action='store_true')
+    parser.add_argument('--accel', choices=('tcg', 'kvm'), default='tcg')
     args = parser.parse_args()
-    assert os.geteuid() == 0 and platform.system() == 'Linux' and os.environ.get('GITHUB_ACTIONS') == 'true', 'Run only as root on a disposable Linux GitHub runner'
-    expected = {'x86_64': 'amd64', 'aarch64': 'arm64'}.get(platform.machine())
-    assert expected == os.environ['GUEST_ARCH'], 'Use a native runner for each architecture'
+    require_runner(args.benchmark_disposable_runner)
+    if args.accel == 'kvm':
+        require_kvm(os.environ['GUEST_ARCH'])
+    global BENCHMARK_TIMINGS
+    BENCHMARK_TIMINGS = {} if args.benchmark_disposable_runner else None
     assert not WORK.exists(), 'Use a fresh runner for each guest'
     (WORK / 'diagnostics').mkdir(parents=True)
     os.chmod(WORK, 0o700)
@@ -694,10 +863,12 @@ def main():
     network(public)
     certs = certificates()
     overrides = mirror(args.assets.resolve(), certs, public)
-    guest = Guest()
+    guest = Guest(args.accel, args.benchmark_disposable_runner)
     try:
         guest.boot(os.environ['GUEST_OS'], os.environ['GUEST_ARCH'])
         acceptance(guest, args.assets.resolve(), certs, overrides, public)
+        if args.benchmark_disposable_runner:
+            write_benchmark(guest, args.assets.resolve(), public)
     except BaseException as error:
         failure_diagnostics(guest, error)
         raise
