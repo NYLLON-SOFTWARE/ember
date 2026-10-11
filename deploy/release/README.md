@@ -77,7 +77,12 @@ without Docker. No live server, production secret, or external cloud resource is
 Initial SSH readiness allows 20 minutes for TCG boot; production HTTPS readiness remains 180 seconds.
 The disposable guest SSH client allows 30 seconds for connection and key exchange, and 60 seconds
 without a server response. These transport allowances do not retry commands that change guest state.
-Reboot verification requires a changed kernel boot ID before checking the running application.
+The first fresh arm64 install has a one-hour outer test deadline because it includes signed APT
+package installation, Docker installation, and the image pull under software emulation. Fresh
+amd64 installs and managed reruns keep their 15-minute outer deadline. Arm64 jobs allow three
+hours overall; amd64 jobs allow two hours. These are disposable-test limits, not application
+readiness limits, and a timeout still fails the release. Reboot verification requires a changed
+kernel boot ID before checking the running application.
 
 A local HTTPS mirror serves the exact final GitHub artifact URLs during candidate verification;
 artifact bytes and the bootstrap's embedded checksum remain unchanged. A digest-pinned Pebble
@@ -104,6 +109,8 @@ Guest preflights and lifecycle tests also cover unsupported systems, insufficien
 partial downloads, registry failure, archive traversal, operation locking, and interruption.
 
 Diagnostics include bounded, redacted SSH failure stderr without remote commands or captured stdout.
+Interactive install diagnostics contain only fixed progress labels, timing, byte counts, and
+whether the hostname prompt was answered; the terminal transcript and replies remain private.
 They exclude secrets, cookies, storage snapshots, and raw request traces. A release must
 remain unavailable when any required gate cannot run or fails. Passing local checks alone does
 not authorize public promotion.

@@ -67,6 +67,181 @@ print("one-response", flush=True)
         self.assertEqual(interactive.call_args.args[1], [(guests.HOSTNAME_PROMPT, guests.DOMAIN)])
 
 
+class InstallerProgress(unittest.TestCase):
+    def test_real_timeout_retains_only_allowlisted_progress_after_split_prompt_and_marker(self):
+        source = """
+import sys, time
+sys.stdout.write("Reading pack"); sys.stdout.flush()
+time.sleep(0.03)
+sys.stdout.write("age lists\\nhttps://chat.ember.test/first_run/access#token=private-fragment\\n"); sys.stdout.flush()
+prompt = "Hostname pointing to this server (for example chat.example.com): "
+sys.stdout.write(prompt[:20]); sys.stdout.flush()
+time.sleep(0.03)
+sys.stdout.write(prompt[20:]); sys.stdout.flush()
+print("received=" + sys.stdin.readline().strip(), flush=True)
+time.sleep(5)
+"""
+        with tempfile.TemporaryDirectory() as temporary:
+            work = Path(temporary)
+            (work / 'diagnostics').mkdir()
+            output = io.StringIO()
+            with mock.patch.object(guests, 'WORK', work), contextlib.redirect_stderr(output):
+                with self.assertRaises(guests.InteractiveCommandTimeout) as failure:
+                    guests.run_interactive([sys.executable, '-u', '-c', source],
+                        [(guests.HOSTNAME_PROMPT, 'private-reply')], timeout=0.5, progress=guests.report_install_progress)
+            diagnostic = (work / 'diagnostics/install.log').read_text()
+        error = failure.exception
+        self.assertEqual(error.timeout, 0.5)
+        self.assertIsNone(error.output)
+        self.assertEqual(error.cmd, ['interactive command omitted'])
+        self.assertTrue(error.__suppress_context__)
+        snapshots = [guests.json.loads(line.split(': ', 1)[1]) for line in output.getvalue().splitlines()]
+        for snapshot in snapshots:
+            self.assertEqual(set(snapshot), {'observed_output', 'prompt_observed', 'reply_sent', 'bytes_received',
+                                            'elapsed_seconds', 'last_activity_seconds', 'quiet_seconds'})
+            self.assertIsInstance(snapshot['bytes_received'], int)
+            self.assertIsInstance(snapshot['prompt_observed'], bool)
+            self.assertIsInstance(snapshot['reply_sent'], bool)
+            for key in ('elapsed_seconds', 'last_activity_seconds', 'quiet_seconds'):
+                self.assertIsInstance(snapshot[key], (int, float))
+                self.assertGreaterEqual(snapshot[key], 0)
+        self.assertEqual(snapshots[0]['observed_output'], 'unknown')
+        self.assertTrue(any(item['prompt_observed'] and not item['reply_sent'] for item in snapshots))
+        self.assertEqual(snapshots[-1]['observed_output'], 'package-manager-output')
+        self.assertTrue(snapshots[-1]['prompt_observed'] and snapshots[-1]['reply_sent'])
+        self.assertGreater(snapshots[-1]['bytes_received'], len(guests.HOSTNAME_PROMPT))
+        self.assertGreaterEqual(snapshots[-1]['elapsed_seconds'], 0.5)
+        self.assertIn('package-manager-output', error.stderr)
+        self.assertIn('package-manager-output', diagnostic)
+        evidence = output.getvalue() + diagnostic + str(error) + error.stderr
+        for private in ('private-fragment', 'private-reply', '#token=', 'sys.stdout', 'received='):
+            self.assertNotIn(private, evidence)
+
+    def test_terminal_eof_wait_timeout_retains_configured_deadline_and_safe_progress(self):
+        source = "import os,time; print('private-closed-terminal',flush=True); os.close(1); os.close(2); time.sleep(5)"
+        reports = []
+        with self.assertRaises(guests.InteractiveCommandTimeout) as failure:
+            guests.run_interactive([sys.executable, '-u', '-c', source], [], timeout=0.2, progress=reports.append)
+        error = failure.exception
+        self.assertEqual(error.timeout, 0.2)
+        self.assertIsNone(error.output)
+        self.assertTrue(error.__suppress_context__)
+        self.assertIn('Installer interactive progress:', error.stderr)
+        self.assertGreater(reports[-1]['bytes_received'], 0)
+        self.assertNotIn('private-closed-terminal', str(error) + error.stderr)
+
+    def test_quiet_unknown_output_emits_liveness_at_sixty_second_intervals(self):
+        reports, now = [], [0.0]
+        with mock.patch.object(guests.time, 'monotonic', side_effect=lambda: now[0]):
+            progress = guests.InteractiveProgress(reports.append)
+            progress.emit()
+            now[0] = 59.0
+            progress.emit()
+            self.assertEqual(len(reports), 1)
+            now[0] = 60.0
+            progress.emit()
+            now[0] = 61.0
+            progress.observe(b'unrecognized private output')
+            progress.emit()
+            self.assertEqual(len(reports), 2)
+            now[0] = 120.0
+            progress.emit()
+        self.assertEqual([report['elapsed_seconds'] for report in reports], [0.0, 60.0, 120.0])
+        self.assertEqual(reports[-1]['observed_output'], 'unknown')
+        self.assertEqual(reports[-1]['last_activity_seconds'], 61.0)
+        self.assertEqual(reports[-1]['quiet_seconds'], 59.0)
+        self.assertEqual(reports[-1]['bytes_received'], len(b'unrecognized private output'))
+        self.assertNotIn('private', guests.interactive_progress_detail(reports[-1]))
+
+    def test_guest_nonzero_exit_keeps_safe_progress_and_original_exit_when_reporting_fails(self):
+        source = "print('Setting up docker-ce private-adjacent'); print('private-transcript'); raise SystemExit(7)"
+        guest = guests.Guest.__new__(guests.Guest)
+        for broken_report in (False, True):
+            with self.subTest(broken_report=broken_report), tempfile.TemporaryDirectory() as temporary, contextlib.ExitStack() as stack:
+                work = Path(temporary)
+                (work / 'diagnostics').mkdir()
+                stack.enter_context(mock.patch.object(guests, 'WORK', work))
+                stack.enter_context(mock.patch.object(guest, 'ssh_command', return_value=[sys.executable, '-u', '-c', source]))
+                output = stack.enter_context(contextlib.redirect_stderr(io.StringIO()))
+                if broken_report:
+                    stack.enter_context(mock.patch.object(Path, 'write_text', side_effect=OSError('No space left on device')))
+                    stack.enter_context(mock.patch('builtins.print', side_effect=OSError('Broken pipe')))
+                with self.assertRaises(guests.InteractiveCommandFailure) as failure:
+                    guest.install()
+                error = failure.exception
+                self.assertEqual(error.returncode, 7)
+                self.assertIsNone(error.output)
+                self.assertEqual(error.cmd, ['interactive command omitted'])
+                self.assertIn('docker-package-output', error.stderr)
+                evidence = str(error) + error.stderr + output.getvalue()
+                if not broken_report:
+                    evidence += (work / 'diagnostics/install.log').read_text()
+                for private in ('private-adjacent', 'private-transcript', 'raise SystemExit'):
+                    self.assertNotIn(private, evidence)
+
+    def test_guest_transport_failure_and_timeout_preserve_safe_interactive_metadata(self):
+        progress = guests.InteractiveProgress(None).snapshot()
+        errors = (guests.InteractiveCommandFailure(255, progress), guests.InteractiveCommandTimeout(19, progress))
+        guest = guests.Guest.__new__(guests.Guest)
+        guest.key = Path('/temporary/ssh-key')
+        for error in errors:
+            with self.subTest(error=type(error).__name__), mock.patch.object(guests, 'run_interactive', side_effect=error) as run:
+                with self.assertRaises((guests.SSHTransportFailure, guests.SSHTransportTimeout)) as failure:
+                    guest.install('private-command')
+            safe = failure.exception
+            self.assertEqual(run.call_count, 1)
+            self.assertIsNone(safe.output)
+            self.assertIn('Installer interactive progress:', safe.stderr)
+            self.assertIn('"observed_output": "unknown"', safe.stderr)
+            self.assertNotIn('private-command', str(safe) + safe.stderr)
+
+
+class InstallDeadlines(unittest.TestCase):
+    def test_only_explicit_fresh_arm64_install_has_longer_deadline(self):
+        guest = guests.Guest.__new__(guests.Guest)
+        guest.key = Path('/temporary/ssh-key')
+        result = subprocess.CompletedProcess([], 0, '', '')
+        for arch, expected in (('arm64', 3600), ('amd64', 900)):
+            with self.subTest(arch=arch), mock.patch.dict(guests.os.environ, {'GUEST_ARCH': arch}), mock.patch.object(guests, 'run_interactive', return_value=result) as interactive:
+                guest.install(fresh=True)
+                guest.install()
+                guest.install(check=False)
+            self.assertEqual([call.kwargs['timeout'] for call in interactive.call_args_list], [expected, 900, 900])
+            self.assertEqual([call.kwargs['check'] for call in interactive.call_args_list], [True, True, False])
+            for call in interactive.call_args_list:
+                self.assertIs(call.kwargs['progress'], guests.report_install_progress)
+
+    def test_acceptance_marks_first_install_fresh_and_managed_rerun_keeps_default(self):
+        guest = mock.Mock()
+        image = 'ghcr.io/nyllon-software/ember@sha256:' + 'a' * 64
+        manifest = {'version': '1.0.0', 'image': image}
+        runtime = {'ACME_DIRECTORY': 'https://pebble.ember.test:14000/dir', 'SSL_CERT_FILE': '/run/ember-test-ca.pem'}
+        container = {'Config': {'Image': image, 'User': '1000:1000', 'Env': [key + '=' + value for key, value in runtime.items()]},
+                     'Mounts': [{'Source': '/etc/ember/test-ca.pem', 'Destination': '/run/ember-test-ca.pem', 'RW': False}]}
+        stop = RuntimeError('stop at managed rerun')
+        guest.install.side_effect = [subprocess.CompletedProcess([], 0, guests.HOSTNAME_PROMPT + '/first_run/access#token=' + 'a' * 64, ''), stop]
+
+        def ssh(command, **kwargs):
+            if command == 'command -v docker':
+                return subprocess.CompletedProcess([], 1, '', '')
+            outputs = {'cat /etc/ember/state.json': guests.json.dumps({'domain': guests.DOMAIN, 'release': manifest}),
+                       'cat /etc/ember/runtime.json': guests.json.dumps(runtime),
+                       'docker container inspect ember': guests.json.dumps([container])}
+            return subprocess.CompletedProcess([], 0, outputs.get(command, '123'), '')
+
+        guest.ssh.side_effect = ssh
+        with tempfile.TemporaryDirectory() as temporary, contextlib.ExitStack() as stack:
+            work = Path(temporary)
+            (work / 'release.json').write_text(guests.json.dumps(manifest))
+            stack.enter_context(mock.patch.object(guests, 'WORK', work))
+            for name in ('require_privilege_refusal', 'require_preflight_refusal', 'browser'):
+                stack.enter_context(mock.patch.object(guests, name))
+            with self.assertRaises(RuntimeError) as failure:
+                guests.acceptance(guest, work, work, {}, public=True)
+        self.assertIs(failure.exception, stop)
+        self.assertEqual(guest.install.call_args_list, [mock.call(fresh=True), mock.call()])
+
+
 class PreflightDiagnostics(unittest.TestCase):
     def test_expected_refusal_passes_without_logging_any_output(self):
         result = subprocess.CompletedProcess([], 1, "private stdout", "Conflicting package runc is installed")
