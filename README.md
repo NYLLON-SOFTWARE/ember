@@ -66,8 +66,9 @@ NYLLON's reviewed Docker installer and `emberctl` live in `deploy/installer/`. T
 Ubuntu 24.04 and Debian 13 servers on amd64 and arm64, preserve deployment secrets, pin images by
 digest, and use manual updates with complete offline backups. They refuse unmanaged Campfire/ONCE
 installations. Upstream changes enter through ordinary review; upstream releases cannot update
-an Ember server. Public installation remains unavailable until the stable release and public
-verification gates pass. See [release operation](deploy/release/README.md) for the rollout gates.
+an Ember server. Stable Ember **1.0.0** is available through the
+[public installer](https://get.nyllon.com/). See
+[release operation](deploy/release/README.md) for the rollout gates.
 
 ### Rejected sign-in forms
 
@@ -451,6 +452,30 @@ The single executable replacing Ruby, Puma, Redis, Resque, and Thruster is work 
 Rust. Ember still uses libvips and ffmpeg for media. The server architecture and historical
 performance improvements are inherited; the [benchmark figures below](#performance) are upstream
 measurements rather than new Ember measurements.
+
+## Install on a fresh Linux server
+
+Stable Ember **1.0.0** supports fresh **Ubuntu 24.04** and **Debian 13** servers on
+**amd64** and **arm64**. Use a server with at least 2 GB RAM, 10 GB free disk, root access,
+and inbound TCP ports **80 and 443** available. Point your hostname's DNS A record at the
+server's public IPv4 address. Any AAAA record must reach it too. Use DNS-only mode with Cloudflare.
+
+Connect to the server as root in an interactive terminal and run:
+
+```sh
+curl -fsSL https://get.nyllon.com/ember | sh --
+```
+
+Enter your hostname when prompted. The installer sets up Docker when needed, verifies the
+release bundle, generates persistent secrets, and starts the image pinned by its digest.
+After HTTPS is ready, it prints a private setup link. Open that link in your browser to create
+the first administrator using the existing setup form.
+
+Updates are manual: run `emberctl update` on the server as root to install the current stable
+release. Use `emberctl status` to check the service and `emberctl backup` to create a complete
+backup. The installer refuses unmanaged Campfire/ONCE installations; migration is a separate
+procedure. See the [installation and operations guide](https://get.nyllon.com/) for DNS,
+backups, recovery, and troubleshooting.
 
 ## Running it
 
