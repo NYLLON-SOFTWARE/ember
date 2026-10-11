@@ -38,43 +38,119 @@ def run(*args, capture=False, check=True, timeout=600, **kwargs):
                           stderr=subprocess.PIPE if capture else None, timeout=timeout, **kwargs)
 
 
-def run_interactive(command, responses, check=True, timeout=900):
-    """Drive the remote controlling terminal without putting replies in the command."""
+class InteractiveProgress:
+    markers = (
+        (b'Reading package lists', 'package-manager-output'),
+        (b'Building dependency tree', 'package-manager-output'),
+        (b'https://download.docker.com/linux/', 'docker-repository-output'),
+        (b'Unpacking docker-ce', 'docker-package-output'),
+        (b'Setting up docker-ce', 'docker-package-output'),
+        (b'Unpacking containerd.io', 'docker-package-output'),
+        (b'Setting up containerd.io', 'docker-package-output'),
+        (b'Pulling from nyllon-software/ember', 'image-pull-output'),
+        (b'Pulling fs layer', 'image-pull-output'),
+        (b'Pull complete', 'image-pull-output'),
+        (b'is ready. Open this private link to create the first administrator:', 'ready-message-output'),
+        (b'is already managed at https://', 'managed-installation-output'),
+    )
+
+    def __init__(self, report):
+        self.report = report
+        self.started = self.last_activity = self.last_report = time.monotonic()
+        self.bytes_received = 0
+        self.prompt_observed = self.reply_sent = False
+        self.observed_output = 'unknown'
+        self.previous = None
+        self.pending = b''
+
+    def observe(self, block):
+        self.bytes_received += len(block)
+        self.last_activity = time.monotonic()
+        window = self.pending + block
+        matches = [(window.rfind(marker), label) for marker, label in self.markers if marker in window]
+        if matches:
+            self.observed_output = max(matches)[1]
+        self.pending = window[-max(len(marker) for marker, _label in self.markers):]
+
+    def snapshot(self):
+        now = time.monotonic()
+        return {'observed_output': self.observed_output, 'prompt_observed': self.prompt_observed,
+                'reply_sent': self.reply_sent, 'bytes_received': self.bytes_received,
+                'elapsed_seconds': round(max(0, now - self.started), 1),
+                'last_activity_seconds': round(max(0, self.last_activity - self.started), 1),
+                'quiet_seconds': round(max(0, now - self.last_activity), 1)}
+
+    def emit(self, force=False):
+        current = (self.observed_output, self.prompt_observed, self.reply_sent)
+        now = time.monotonic()
+        if self.report and (force or current != self.previous or now - self.last_report >= 60):
+            self.report(self.snapshot())
+            self.last_report, self.previous = now, current
+
+
+def interactive_progress_detail(progress):
+    return 'Installer interactive progress: ' + json.dumps(progress, sort_keys=True)
+
+
+class InteractiveCommandFailure(subprocess.CalledProcessError):
+    def __init__(self, code, progress):
+        super().__init__(code, ['interactive command omitted'], stderr=interactive_progress_detail(progress))
+
+
+class InteractiveCommandTimeout(subprocess.TimeoutExpired):
+    def __init__(self, timeout, progress):
+        super().__init__(['interactive command omitted'], timeout, stderr=interactive_progress_detail(progress))
+
+
+def run_interactive(command, responses, check=True, timeout=900, progress=None):
+    """Drive the remote terminal; diagnostics contain only fixed labels and counters."""
     process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     output = bytearray()
     answered = set()
-    deadline = time.monotonic() + timeout
+    state = InteractiveProgress(progress)
+    deadline = state.started + timeout
     selector = selectors.DefaultSelector()
     selector.register(process.stdout, selectors.EVENT_READ)
     try:
+        state.emit()
         while selector.get_map():
+            state.emit()
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                raise subprocess.TimeoutExpired(command, timeout)
+                raise InteractiveCommandTimeout(timeout, state.snapshot())
             for key, _events in selector.select(min(remaining, 1)):
                 block = os.read(key.fileobj.fileno(), 65536)
                 if not block:
                     selector.unregister(key.fileobj)
                     continue
                 output.extend(block)
+                state.observe(block)
                 for index, (prompt, reply) in enumerate(responses):
                     if index not in answered and prompt.encode() in output:
+                        state.prompt_observed = True
+                        state.emit()
                         process.stdin.write((reply + '\n').encode())
                         process.stdin.flush()
                         answered.add(index)
+                        state.reply_sent = True
+                state.emit()
         code = process.wait(timeout=max(0.01, deadline - time.monotonic()))
-    except BaseException:
+    except BaseException as error:
         process.kill()
         process.wait()
+        state.emit(force=True)
+        if isinstance(error, subprocess.TimeoutExpired):
+            raise InteractiveCommandTimeout(timeout, state.snapshot()) from None
         raise
     finally:
         selector.close()
         process.stdin.close()
         process.stdout.close()
+    state.emit(force=True)
     result = subprocess.CompletedProcess(command, code, output.decode(errors='replace'), '')
     if check and code:
-        # A successful transcript contains the private setup link; never attach it to exceptions.
-        raise subprocess.CalledProcessError(code, command)
+        # The terminal can contain a setup link; retain only allowlisted progress metadata.
+        raise InteractiveCommandFailure(code, state.snapshot())
     return result
 
 
@@ -106,6 +182,10 @@ def write_diagnostic(name, detail, emit=False):
             print(detail, file=sys.stderr, flush=True)
         except OSError:
             pass
+
+
+def report_install_progress(progress):
+    write_diagnostic('install.log', interactive_progress_detail(progress), emit=True)
 
 
 class SSHTransportFailure(subprocess.CalledProcessError):
@@ -195,17 +275,20 @@ class Guest:
 
         wait_for(rebooted)
 
-    def install(self, command=INSTALL_COMMAND, check=True):
+    def install(self, command=INSTALL_COMMAND, check=True, fresh=False):
         session = installer_session_command(command)
         withheld = 'Interactive stderr unavailable: terminal output intentionally omitted to protect setup credentials.'
+        timeout = 3600 if fresh and os.environ.get('GUEST_ARCH') == 'arm64' else 900
         try:
             result = run_interactive(self.ssh_command(session, tty=True),
-                                     [(HOSTNAME_PROMPT, DOMAIN)], check=check)
+                                     [(HOSTNAME_PROMPT, DOMAIN)], check=check, timeout=timeout, progress=report_install_progress)
         except subprocess.TimeoutExpired as error:
-            raise SSHTransportTimeout(error.timeout, withheld, session) from None
+            detail = withheld + ('\n' + error.stderr if isinstance(error, InteractiveCommandTimeout) else '')
+            raise SSHTransportTimeout(error.timeout, detail, session) from None
         except subprocess.CalledProcessError as error:
             if error.returncode == 255:
-                raise SSHTransportFailure(withheld, session) from None
+                detail = withheld + ('\n' + error.stderr if isinstance(error, InteractiveCommandFailure) else '')
+                raise SSHTransportFailure(detail, session) from None
             raise
         if result.returncode == 255:
             raise SSHTransportFailure(withheld, session) from None
@@ -458,7 +541,7 @@ def acceptance(guest, assets, certs, overrides, public):
     guest.ssh("dpkg-query -W -f='${Status}' runc | grep -q 'install ok installed'")
     guest.ssh('test ! -e /etc/apt/sources.list.d/docker.sources && test ! -e /etc/ember')
     guest.ssh('DEBIAN_FRONTEND=noninteractive apt-get remove -y runc')
-    result = guest.install()
+    result = guest.install(fresh=True)
     assert result.stdout.count(HOSTNAME_PROMPT) == 1, 'The advertised command must prompt for the hostname through the real terminal'
     state = json.loads(guest.ssh('cat /etc/ember/state.json').stdout)
     manifest = json.loads((assets / 'release.json').read_text())

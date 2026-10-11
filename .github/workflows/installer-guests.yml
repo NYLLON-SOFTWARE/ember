@@ -16,7 +16,7 @@ jobs:
   installation:
     name: ${{ matrix.os }} / ${{ matrix.arch }} / public=${{ inputs.public }}
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 120
+    timeout-minutes: ${{ matrix.timeout }}
     permissions:
       contents: read
     strategy:
@@ -26,15 +26,19 @@ jobs:
           - os: ubuntu-24.04
             arch: amd64
             runner: ubuntu-24.04
+            timeout: 120
           - os: debian-13
             arch: amd64
             runner: ubuntu-24.04
+            timeout: 120
           - os: ubuntu-24.04
             arch: arm64
             runner: ubuntu-24.04-arm
+            timeout: 180
           - os: debian-13
             arch: arm64
             runner: ubuntu-24.04-arm
+            timeout: 180
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -69,7 +73,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/ember-diagnostics"
           chmod 700 "$RUNNER_TEMP/ember-diagnostics"
           # The guest workspace stays root-private, including SSH keys and test credentials.
-          for name in console.log dns.log boot.log preflight.log transport.log application.log result.json; do
+          for name in console.log dns.log boot.log preflight.log transport.log install.log application.log result.json; do
             source="$PWD/tmp/installer-verification/diagnostics/$name"
             if sudo test -f "$source"; then
               sudo cat "$source" > "$RUNNER_TEMP/ember-diagnostics/$name"
