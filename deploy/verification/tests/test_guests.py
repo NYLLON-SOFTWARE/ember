@@ -71,6 +71,7 @@ class InstallerProgress(unittest.TestCase):
     def test_real_timeout_retains_only_allowlisted_progress_after_split_prompt_and_marker(self):
         source = """
 import sys, time
+time.sleep(0.6)
 sys.stdout.write("Reading pack"); sys.stdout.flush()
 time.sleep(0.03)
 sys.stdout.write("age lists\\nhttps://chat.ember.test/first_run/access#token=private-fragment\\n"); sys.stdout.flush()
@@ -79,7 +80,7 @@ sys.stdout.write(prompt[:20]); sys.stdout.flush()
 time.sleep(0.03)
 sys.stdout.write(prompt[20:]); sys.stdout.flush()
 print("received=" + sys.stdin.readline().strip(), flush=True)
-time.sleep(5)
+time.sleep(30)
 """
         with tempfile.TemporaryDirectory() as temporary:
             work = Path(temporary)
@@ -88,10 +89,10 @@ time.sleep(5)
             with mock.patch.object(guests, 'WORK', work), contextlib.redirect_stderr(output):
                 with self.assertRaises(guests.InteractiveCommandTimeout) as failure:
                     guests.run_interactive([sys.executable, '-u', '-c', source],
-                        [(guests.HOSTNAME_PROMPT, 'private-reply')], timeout=0.5, progress=guests.report_install_progress)
+                        [(guests.HOSTNAME_PROMPT, 'private-reply')], timeout=5, progress=guests.report_install_progress)
             diagnostic = (work / 'diagnostics/install.log').read_text()
         error = failure.exception
-        self.assertEqual(error.timeout, 0.5)
+        self.assertEqual(error.timeout, 5)
         self.assertIsNone(error.output)
         self.assertEqual(error.cmd, ['interactive command omitted'])
         self.assertTrue(error.__suppress_context__)
@@ -110,7 +111,7 @@ time.sleep(5)
         self.assertEqual(snapshots[-1]['observed_output'], 'package-manager-output')
         self.assertTrue(snapshots[-1]['prompt_observed'] and snapshots[-1]['reply_sent'])
         self.assertGreater(snapshots[-1]['bytes_received'], len(guests.HOSTNAME_PROMPT))
-        self.assertGreaterEqual(snapshots[-1]['elapsed_seconds'], 0.5)
+        self.assertGreaterEqual(snapshots[-1]['elapsed_seconds'], 5)
         self.assertIn('package-manager-output', error.stderr)
         self.assertIn('package-manager-output', diagnostic)
         evidence = output.getvalue() + diagnostic + str(error) + error.stderr
@@ -118,12 +119,12 @@ time.sleep(5)
             self.assertNotIn(private, evidence)
 
     def test_terminal_eof_wait_timeout_retains_configured_deadline_and_safe_progress(self):
-        source = "import os,time; print('private-closed-terminal',flush=True); os.close(1); os.close(2); time.sleep(5)"
+        source = "import os,time; time.sleep(0.6); print('private-closed-terminal',flush=True); os.close(1); os.close(2); time.sleep(30)"
         reports = []
         with self.assertRaises(guests.InteractiveCommandTimeout) as failure:
-            guests.run_interactive([sys.executable, '-u', '-c', source], [], timeout=0.2, progress=reports.append)
+            guests.run_interactive([sys.executable, '-u', '-c', source], [], timeout=5, progress=reports.append)
         error = failure.exception
-        self.assertEqual(error.timeout, 0.2)
+        self.assertEqual(error.timeout, 5)
         self.assertIsNone(error.output)
         self.assertTrue(error.__suppress_context__)
         self.assertIn('Installer interactive progress:', error.stderr)
