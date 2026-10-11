@@ -514,9 +514,23 @@ def docker_override(guest, contents):
         guest.ssh('mv /usr/bin/docker-real /usr/bin/docker')
 
 
-def verify_reboot_persistence(guest, baseline):
+def verify_reboot_persistence(guest, baseline, certs):
     report_stage('reboot-health')
-    wait_for(lambda: guest.ssh('curl -fsS --connect-timeout 3 --max-time 10 https://' + DOMAIN + '/up', timeout=15))
+    # Measure HTTPS directly, independently of SSH connection and guest shell startup.
+    try:
+        wait_for(lambda: run('curl', '-fsS', '--connect-timeout', '3', '--max-time', '10',
+                             '--cacert', certs / 'combined.pem', '--noproxy', DOMAIN,
+                             '--resolve', DOMAIN + ':443:' + GUEST, 'https://' + DOMAIN + '/up',
+                             capture=True, timeout=15))
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as error:
+        if isinstance(error, subprocess.CalledProcessError):
+            outcome = {'probe': 'reboot-https', 'kind': 'curl-exit', 'exit_code': error.returncode}
+        elif isinstance(error, subprocess.TimeoutExpired):
+            outcome = {'probe': 'reboot-https', 'kind': 'process-timeout', 'timeout_seconds': error.timeout}
+        else:
+            outcome = {'probe': 'reboot-https', 'kind': 'os-error'}
+        write_diagnostic('transport.log', json.dumps(outcome, sort_keys=True) + '\n', emit=True)
+        raise
     report_stage('reboot-status')
     guest.ssh('emberctl status')
     report_stage('reboot-persistence')
@@ -597,7 +611,7 @@ def acceptance(guest, assets, certs, overrides, public):
     report_stage('reboot')
     run('docker', 'stop', 'ember-pebble', capture=True)  # Cached certificates must survive without the CA.
     guest.reboot()
-    verify_reboot_persistence(guest, baseline)
+    verify_reboot_persistence(guest, baseline, certs)
     run('docker', 'start', 'ember-pebble', capture=True)
     if not public:
         report_stage('update')
