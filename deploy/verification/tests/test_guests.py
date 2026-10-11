@@ -528,6 +528,68 @@ class GuestReboot(unittest.TestCase):
         sleep.assert_not_called()
 
 
+class PostRebootChecks(unittest.TestCase):
+    def setUp(self):
+        self.guest = guests.Guest.__new__(guests.Guest)
+        self.guest.key = Path('/temporary/ssh-key')
+        self.https = 'curl -fsS --connect-timeout 3 --max-time 10 https://' + guests.DOMAIN + '/up'
+        self.baseline = 'private environment checksum'
+
+    def test_https_precedes_one_checked_status_with_ordinary_command_budget(self):
+        results = [subprocess.CompletedProcess([], 0, '', ''),
+                   subprocess.CompletedProcess([], 0, 'informational manager status', ''),
+                   subprocess.CompletedProcess([], 0, self.baseline, '')]
+        with mock.patch.object(guests, 'run', side_effect=results) as run, mock.patch.object(guests, 'wait_for', wraps=guests.wait_for) as wait, mock.patch.object(guests, 'report_stage') as stage, mock.patch.object(guests, 'browser') as browser:
+            guests.verify_reboot_persistence(self.guest, self.baseline)
+        self.assertEqual([call.args[-1] for call in run.call_args_list], [self.https, 'emberctl status', 'sha256sum /etc/ember/app.env'])
+        self.assertEqual([call.kwargs for call in run.call_args_list], [
+            {'capture': True, 'check': False, 'timeout': 15},
+            {'capture': True, 'check': False, 'timeout': 900},
+            {'capture': True, 'check': False, 'timeout': 900}])
+        wait.assert_called_once_with(mock.ANY)
+        self.assertEqual(stage.call_args_list, [mock.call('reboot-health'), mock.call('reboot-status'), mock.call('reboot-persistence')])
+        browser.assert_called_once_with('persist')
+
+    def test_https_failure_exhausts_unchanged_readiness_window_before_status(self):
+        result = subprocess.CompletedProcess([], 22, '', 'HTTPS not ready')
+        with mock.patch.object(guests, 'run', return_value=result) as run, mock.patch.object(guests, 'report_stage') as stage, mock.patch.object(guests.time, 'monotonic', side_effect=[0, 600]), mock.patch.object(guests.time, 'sleep') as sleep, mock.patch.object(guests, 'browser') as browser:
+            with self.assertRaises(subprocess.CalledProcessError) as failure:
+                guests.verify_reboot_persistence(self.guest, self.baseline)
+        self.assertEqual(failure.exception.returncode, 22)
+        run.assert_called_once_with(*self.guest.ssh_command(self.https), capture=True, check=False, timeout=15)
+        stage.assert_called_once_with('reboot-health')
+        sleep.assert_not_called()
+        browser.assert_not_called()
+
+    def test_status_failure_or_timeout_is_fatal_and_never_retried(self):
+        failures = ((subprocess.CompletedProcess([], 7, '', 'manager refusal'), subprocess.CalledProcessError),
+                    (subprocess.CompletedProcess([], 255, '', 'connection reset'), guests.SSHTransportFailure),
+                    (subprocess.TimeoutExpired(['private command'], 900, output='private stdout'), guests.SSHTransportTimeout))
+        for result, expected in failures:
+            with self.subTest(failure=expected.__name__):
+                results = [subprocess.CompletedProcess([], 0, '', ''), result]
+                with mock.patch.object(guests, 'run', side_effect=results) as run, mock.patch.object(guests, 'report_stage') as stage, mock.patch.object(guests.time, 'sleep') as sleep, mock.patch.object(guests, 'browser') as browser:
+                    with self.assertRaises(expected) as failure:
+                        guests.verify_reboot_persistence(self.guest, self.baseline)
+                self.assertEqual([call.args[-1] for call in run.call_args_list], [self.https, 'emberctl status'])
+                self.assertEqual(run.call_args_list[1].kwargs, {'capture': True, 'check': False, 'timeout': 900})
+                self.assertEqual(stage.call_args_list, [mock.call('reboot-health'), mock.call('reboot-status')])
+                sleep.assert_not_called()
+                browser.assert_not_called()
+                if expected is guests.SSHTransportTimeout:
+                    self.assertEqual(failure.exception.timeout, 900)
+                    self.assertIsNone(failure.exception.output)
+
+    def test_changed_environment_still_fails_before_browser_persistence(self):
+        results = [subprocess.CompletedProcess([], 0, '', ''), subprocess.CompletedProcess([], 0, '', ''),
+                   subprocess.CompletedProcess([], 0, 'different checksum', '')]
+        with mock.patch.object(guests, 'run', side_effect=results) as run, mock.patch.object(guests, 'report_stage'), mock.patch.object(guests, 'browser') as browser:
+            with self.assertRaises(AssertionError):
+                guests.verify_reboot_persistence(self.guest, self.baseline)
+        self.assertEqual(run.call_count, 3)
+        browser.assert_not_called()
+
+
 class PublicRequests(unittest.TestCase):
     def test_public_bundle_and_guide_use_identified_requests_with_default_tls(self):
         version = '1.2.3'

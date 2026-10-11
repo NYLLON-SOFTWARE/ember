@@ -32,7 +32,7 @@ GUEST_BOOT_TIMEOUT = 1200
 VERIFICATION_STARTED = time.monotonic()
 VERIFICATION_STAGES = frozenset(('guest-boot', 'guest-ssh', 'guest-cloud-init', 'guest-packages',
     'preflight', 'first-install', 'browser-setup', 'managed-rerun', 'backup', 'reboot',
-    'reboot-ssh', 'reboot-health', 'update', 'explicit-recovery', 'restore', 'complete'))
+    'reboot-ssh', 'reboot-health', 'reboot-status', 'reboot-persistence', 'update', 'explicit-recovery', 'restore', 'complete'))
 PEBBLE = 'ghcr.io/letsencrypt/pebble@sha256:d9080f68f6cb6af8d82134ab26de0aaaf312ac9cba42aecc6d3aede6cb63007b'
 
 
@@ -514,6 +514,16 @@ def docker_override(guest, contents):
         guest.ssh('mv /usr/bin/docker-real /usr/bin/docker')
 
 
+def verify_reboot_persistence(guest, baseline):
+    report_stage('reboot-health')
+    wait_for(lambda: guest.ssh('curl -fsS --connect-timeout 3 --max-time 10 https://' + DOMAIN + '/up', timeout=15))
+    report_stage('reboot-status')
+    guest.ssh('emberctl status')
+    report_stage('reboot-persistence')
+    assert guest.ssh('sha256sum /etc/ember/app.env').stdout == baseline
+    browser('persist')
+
+
 def acceptance(guest, assets, certs, overrides, public):
     report_stage('preflight')
     guest.copy(certs / 'ca.pem', '/usr/local/share/ca-certificates/ember-runner.crt')
@@ -587,11 +597,7 @@ def acceptance(guest, assets, certs, overrides, public):
     report_stage('reboot')
     run('docker', 'stop', 'ember-pebble', capture=True)  # Cached certificates must survive without the CA.
     guest.reboot()
-    report_stage('reboot-health')
-    wait_for(lambda: guest.ssh('emberctl status', timeout=15))
-    wait_for(lambda: guest.ssh('curl -fsS --connect-timeout 3 --max-time 10 https://' + DOMAIN + '/up', timeout=15))
-    assert guest.ssh('sha256sum /etc/ember/app.env').stdout == baseline
-    browser('persist')
+    verify_reboot_persistence(guest, baseline)
     run('docker', 'start', 'ember-pebble', capture=True)
     if not public:
         report_stage('update')
