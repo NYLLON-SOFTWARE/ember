@@ -532,33 +532,80 @@ class PostRebootChecks(unittest.TestCase):
     def setUp(self):
         self.guest = guests.Guest.__new__(guests.Guest)
         self.guest.key = Path('/temporary/ssh-key')
-        self.https = 'curl -fsS --connect-timeout 3 --max-time 10 https://' + guests.DOMAIN + '/up'
+        self.certs = Path('/temporary/certificates')
+        self.https = ['curl', '-fsS', '--connect-timeout', '3', '--max-time', '10',
+                      '--cacert', str(self.certs / 'combined.pem'), '--noproxy', guests.DOMAIN,
+                      '--resolve', guests.DOMAIN + ':443:' + guests.GUEST, 'https://' + guests.DOMAIN + '/up']
         self.baseline = 'private environment checksum'
 
-    def test_https_precedes_one_checked_status_with_ordinary_command_budget(self):
+    def test_direct_verified_https_precedes_one_checked_status_with_ordinary_command_budget(self):
         results = [subprocess.CompletedProcess([], 0, '', ''),
                    subprocess.CompletedProcess([], 0, 'informational manager status', ''),
                    subprocess.CompletedProcess([], 0, self.baseline, '')]
-        with mock.patch.object(guests, 'run', side_effect=results) as run, mock.patch.object(guests, 'wait_for', wraps=guests.wait_for) as wait, mock.patch.object(guests, 'report_stage') as stage, mock.patch.object(guests, 'browser') as browser:
-            guests.verify_reboot_persistence(self.guest, self.baseline)
-        self.assertEqual([call.args[-1] for call in run.call_args_list], [self.https, 'emberctl status', 'sha256sum /etc/ember/app.env'])
+        with mock.patch.object(guests.subprocess, 'run', side_effect=results) as run, mock.patch.object(guests, 'wait_for', wraps=guests.wait_for) as wait, mock.patch.object(guests, 'report_stage') as stage, mock.patch.object(guests, 'browser') as browser:
+            guests.verify_reboot_persistence(self.guest, self.baseline, self.certs)
+        self.assertEqual([call.args[0] for call in run.call_args_list], [
+            self.https, self.guest.ssh_command('emberctl status'),
+            self.guest.ssh_command('sha256sum /etc/ember/app.env')])
         self.assertEqual([call.kwargs for call in run.call_args_list], [
-            {'capture': True, 'check': False, 'timeout': 15},
-            {'capture': True, 'check': False, 'timeout': 900},
-            {'capture': True, 'check': False, 'timeout': 900}])
+            {'check': True, 'text': True, 'stdout': subprocess.PIPE, 'stderr': subprocess.PIPE, 'timeout': 15},
+            {'check': False, 'text': True, 'stdout': subprocess.PIPE, 'stderr': subprocess.PIPE, 'timeout': 900},
+            {'check': False, 'text': True, 'stdout': subprocess.PIPE, 'stderr': subprocess.PIPE, 'timeout': 900}])
         wait.assert_called_once_with(mock.ANY)
         self.assertEqual(stage.call_args_list, [mock.call('reboot-health'), mock.call('reboot-status'), mock.call('reboot-persistence')])
         browser.assert_called_once_with('persist')
 
-    def test_https_failure_exhausts_unchanged_readiness_window_before_status(self):
-        result = subprocess.CompletedProcess([], 22, '', 'HTTPS not ready')
-        with mock.patch.object(guests, 'run', return_value=result) as run, mock.patch.object(guests, 'report_stage') as stage, mock.patch.object(guests.time, 'monotonic', side_effect=[0, 600]), mock.patch.object(guests.time, 'sleep') as sleep, mock.patch.object(guests, 'browser') as browser:
+    def test_https_failures_exhaust_unchanged_readiness_window_before_status(self):
+        failures = [subprocess.CalledProcessError(code, self.https, output='private response', stderr='private curl detail')
+                    for code in (22, 28, 35, 60)]
+        failures.append(subprocess.TimeoutExpired(self.https, 15, output='private response', stderr='private curl detail'))
+        for error in failures:
+            with self.subTest(error=type(error).__name__, code=getattr(error, 'returncode', None)):
+                with mock.patch.object(guests.subprocess, 'run', side_effect=error) as run, mock.patch.object(guests, 'report_stage') as stage, mock.patch.object(guests.time, 'monotonic', side_effect=[0, 0, 600]), mock.patch.object(guests.time, 'sleep') as sleep, mock.patch.object(guests, 'browser') as browser, mock.patch.object(guests, 'write_diagnostic') as diagnostic:
+                    with self.assertRaises(type(error)) as failure:
+                        guests.verify_reboot_persistence(self.guest, self.baseline, self.certs)
+                self.assertIs(failure.exception, error)
+                self.assertEqual(run.call_args_list, [mock.call(self.https, check=True, text=True,
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15)] * 2)
+                stage.assert_called_once_with('reboot-health')
+                sleep.assert_called_once_with(3)
+                browser.assert_not_called()
+                outcome = ({'probe': 'reboot-https', 'kind': 'curl-exit', 'exit_code': error.returncode}
+                           if isinstance(error, subprocess.CalledProcessError)
+                           else {'probe': 'reboot-https', 'kind': 'process-timeout', 'timeout_seconds': 15})
+                diagnostic.assert_called_once_with('transport.log', guests.json.dumps(outcome, sort_keys=True) + '\n', emit=True)
+                self.assertNotIn('private response', str(failure.exception))
+                self.assertNotIn('private curl detail', str(failure.exception))
+
+    def test_terminal_https_diagnostic_contains_only_fixed_outcome_and_preserves_exception(self):
+        private = 'private command output path and credentials'
+        failures = ((subprocess.CalledProcessError(60, [private], output=private, stderr=private),
+                     {'probe': 'reboot-https', 'kind': 'curl-exit', 'exit_code': 60}),
+                    (subprocess.TimeoutExpired([private], 15, output=private, stderr=private),
+                     {'probe': 'reboot-https', 'kind': 'process-timeout', 'timeout_seconds': 15}),
+                    (OSError(private), {'probe': 'reboot-https', 'kind': 'os-error'}))
+        for error, expected in failures:
+            with self.subTest(kind=expected['kind']), tempfile.TemporaryDirectory() as temporary:
+                work = Path(temporary)
+                (work / 'diagnostics').mkdir()
+                stderr = io.StringIO()
+                with mock.patch.object(guests, 'WORK', work), mock.patch.object(guests.subprocess, 'run', side_effect=error) as run, mock.patch.object(guests, 'report_stage'), mock.patch.object(guests.time, 'monotonic', side_effect=[0, 600]), mock.patch.object(guests, 'browser') as browser, contextlib.redirect_stderr(stderr):
+                    with self.assertRaises(type(error)) as failure:
+                        guests.verify_reboot_persistence(self.guest, self.baseline, self.certs)
+                self.assertIs(failure.exception, error)
+                detail = (work / 'diagnostics/transport.log').read_text()
+                self.assertEqual(guests.json.loads(detail), expected)
+                self.assertEqual(stderr.getvalue().strip(), detail.strip())
+                self.assertNotIn(private, detail + stderr.getvalue())
+                run.assert_called_once()
+                browser.assert_not_called()
+
+    def test_https_diagnostic_write_and_print_failures_preserve_original_exception(self):
+        error = subprocess.CalledProcessError(60, self.https, output='private response', stderr='private curl detail')
+        with mock.patch.object(guests.subprocess, 'run', side_effect=error), mock.patch.object(guests, 'report_stage'), mock.patch.object(guests.time, 'monotonic', side_effect=[0, 600]), mock.patch.object(guests, 'browser') as browser, mock.patch.object(Path, 'write_text', side_effect=OSError('disk full')), mock.patch('builtins.print', side_effect=OSError('stderr closed')):
             with self.assertRaises(subprocess.CalledProcessError) as failure:
-                guests.verify_reboot_persistence(self.guest, self.baseline)
-        self.assertEqual(failure.exception.returncode, 22)
-        run.assert_called_once_with(*self.guest.ssh_command(self.https), capture=True, check=False, timeout=15)
-        stage.assert_called_once_with('reboot-health')
-        sleep.assert_not_called()
+                guests.verify_reboot_persistence(self.guest, self.baseline, self.certs)
+        self.assertIs(failure.exception, error)
         browser.assert_not_called()
 
     def test_status_failure_or_timeout_is_fatal_and_never_retried(self):
@@ -568,11 +615,12 @@ class PostRebootChecks(unittest.TestCase):
         for result, expected in failures:
             with self.subTest(failure=expected.__name__):
                 results = [subprocess.CompletedProcess([], 0, '', ''), result]
-                with mock.patch.object(guests, 'run', side_effect=results) as run, mock.patch.object(guests, 'report_stage') as stage, mock.patch.object(guests.time, 'sleep') as sleep, mock.patch.object(guests, 'browser') as browser:
+                with mock.patch.object(guests.subprocess, 'run', side_effect=results) as run, mock.patch.object(guests, 'report_stage') as stage, mock.patch.object(guests.time, 'sleep') as sleep, mock.patch.object(guests, 'browser') as browser:
                     with self.assertRaises(expected) as failure:
-                        guests.verify_reboot_persistence(self.guest, self.baseline)
-                self.assertEqual([call.args[-1] for call in run.call_args_list], [self.https, 'emberctl status'])
-                self.assertEqual(run.call_args_list[1].kwargs, {'capture': True, 'check': False, 'timeout': 900})
+                        guests.verify_reboot_persistence(self.guest, self.baseline, self.certs)
+                self.assertEqual([call.args[0] for call in run.call_args_list], [self.https, self.guest.ssh_command('emberctl status')])
+                self.assertEqual(run.call_args_list[1].kwargs, {'check': False, 'text': True,
+                    'stdout': subprocess.PIPE, 'stderr': subprocess.PIPE, 'timeout': 900})
                 self.assertEqual(stage.call_args_list, [mock.call('reboot-health'), mock.call('reboot-status')])
                 sleep.assert_not_called()
                 browser.assert_not_called()
@@ -580,12 +628,27 @@ class PostRebootChecks(unittest.TestCase):
                     self.assertEqual(failure.exception.timeout, 900)
                     self.assertIsNone(failure.exception.output)
 
+    def test_probe_and_status_output_remain_private(self):
+        private = 'private response and credentials'
+        results = [subprocess.CompletedProcess([], 0, private, private),
+                   subprocess.CompletedProcess([], 0, private, private),
+                   subprocess.CompletedProcess([], 0, self.baseline, '')]
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with mock.patch.object(guests.subprocess, 'run', side_effect=results), mock.patch.object(guests, 'browser'), contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            guests.verify_reboot_persistence(self.guest, self.baseline, self.certs)
+        self.assertEqual(stdout.getvalue(), '')
+        self.assertNotIn(private, stderr.getvalue())
+        self.assertNotIn(self.baseline, stderr.getvalue())
+        self.assertIn('reboot-health', stderr.getvalue())
+        self.assertIn('reboot-status', stderr.getvalue())
+        self.assertIn('reboot-persistence', stderr.getvalue())
+
     def test_changed_environment_still_fails_before_browser_persistence(self):
         results = [subprocess.CompletedProcess([], 0, '', ''), subprocess.CompletedProcess([], 0, '', ''),
                    subprocess.CompletedProcess([], 0, 'different checksum', '')]
-        with mock.patch.object(guests, 'run', side_effect=results) as run, mock.patch.object(guests, 'report_stage'), mock.patch.object(guests, 'browser') as browser:
+        with mock.patch.object(guests.subprocess, 'run', side_effect=results) as run, mock.patch.object(guests, 'report_stage'), mock.patch.object(guests, 'browser') as browser:
             with self.assertRaises(AssertionError):
-                guests.verify_reboot_persistence(self.guest, self.baseline)
+                guests.verify_reboot_persistence(self.guest, self.baseline, self.certs)
         self.assertEqual(run.call_count, 3)
         browser.assert_not_called()
 
