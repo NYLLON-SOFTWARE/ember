@@ -115,7 +115,7 @@ jobs:
             ember-toolchain sh -ec '
               cargo build --locked -p ember --bin ember
               node parity/node_modules/playwright/cli.js install --with-deps chromium
-              node --test --test-name-pattern="reused client message IDs|rapid messages" parity/kro/workspace.test.mjs
+              node --test --test-name-pattern="reused client message IDs|rapid messages|real release version" parity/kro/workspace.test.mjs
               node --test --test-name-pattern="protected setup" parity/kro/protected-setup.test.mjs
             '
 
