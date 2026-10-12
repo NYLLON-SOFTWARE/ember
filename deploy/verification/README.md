@@ -1,6 +1,30 @@
-# Installer benchmarks
+# Installer verification
 
-The installer acceptance harness can compare ARM64 KVM hardware acceleration with the existing QEMU TCG software emulation. Both modes use the same 2-vCPU, 4096-MiB Ubuntu 24.04 guest, published Ember 1.0.0 artifacts, and all 14 candidate acceptance gates. This measures installation and lifecycle verification, including browser setup, chat, uploads, WebSockets, push enrollment, repeat installation, backup/restore, reboot, update, and injected recovery failures. It does not measure application throughput or change the release workflow.
+## Optional hardware-accelerated stable releases
+
+The stable `publish-image.yml` dispatch accepts `hardware_accelerated` (default `false`) and `arm_runner_group` (default `ember-release-arm`). Hardware mode requires `workflow_dispatch` on `NYLLON-SOFTWARE/ember` at `refs/heads/main`; a GitHub-hosted validation job rejects other requests before any self-hosted job can be scheduled. The default remains the existing GitHub-hosted TCG matrix.
+
+Hardware mode requires KVM on **all four** Ubuntu 24.04/Debian 13 × AMD64/ARM64 guests. AMD64 stays on GitHub-hosted `ubuntu-24.04`; ARM64 uses the selected organization runner group with the `self-hosted`, `Linux`, `ARM64`, and `ember-release-kvm` labels. Each actual job checks native `/dev/kvm` API 12 and VM creation before expensive dependencies. QMP must then confirm KVM enabled; unavailable KVM fails the release gate without falling back to TCG. All 14 candidate gates and all 10 public gates still run for every platform before the existing promotion/deployment/final-publication dependencies can proceed.
+
+Before dispatch, configure an organization runner group allowing only this repository and the trusted reusable workflow at its **exact merged commit**: `NYLLON-SOFTWARE/ember/.github/workflows/installer-guests.yml@FULL_MERGED_SHA`. Labels alone do not restrict untrusted PR workflows. Verify the selected-workflow policy is active before registering a runner; do not place these runners in the default group. The GitHub-hosted build, signing, promotion, Cloudflare deployment, rollback, and final-alias jobs keep their existing runners and credentials. Guest jobs have only repository read permission, no inherited secrets or release environment, and checkout does not persist credentials.
+
+Use a fresh disposable native ARM64 Linux VM for each of the four ARM jobs (two candidate, two public), with an ephemeral single-job runner registered in that group. The temporary M5 setup below uses no Mac filesystem mounts or forwarded SSH agent. Run the agent as an ordinary user with sudo and a working rootful Docker daemon. Prepare QEMU/cloud-image/network/trust tools before registration; the workflow checks them and skips the host QEMU package installation on prepared ARM machines. Chromium dependencies still install, then [`pin-arm-firmware.sh`](pin-arm-firmware.sh) reapplies and verifies the exact tested firmware after dependency setup. Preserve the documented outer-kernel G1 trapping configuration on this M5 setup.
+
+An ephemeral registration is automatically removed after one job; the external controller must also destroy its VM, including on failure. Do not reuse a completed host: the harness changes root trust, `/etc/hosts`, interfaces, forwarding/NAT, Docker and its private workspace. Bring fresh runners online for the public phase after candidate verification and deployment. No Cloudflare token, release-writing token, Mac home directory, or registration-management credential belongs inside these guest runners.
+
+For an unused stable version and the exact selected main commit, dispatch with:
+
+```sh
+gh workflow run publish-image.yml --ref main \
+  -f version="$VERSION" -f commit="$COMMIT" \
+  -f hardware_accelerated=true -f arm_runner_group=ember-release-arm
+```
+
+The hardware invocation enables the existing metrics flag alongside `--accel kvm`; it does not replace acceptance with a separate benchmark. Every successful hardware guest artifact includes the unchanged `result.json` plus `benchmark.json`, binding all 14/10 gates, `accelerator: "kvm"`, `kvm_enabled: true`, QEMU version and the harness/release-manifest/result hashes. Check these against the exact run, source commit and candidate artifacts for all eight guest jobs. This mode is opt-in infrastructure; adding it does not register runners or claim that a new release has passed.
+
+## Installer benchmarks
+
+The installer acceptance harness can compare ARM64 KVM hardware acceleration with the existing QEMU TCG software emulation. Both modes use the same 2-vCPU, 4096-MiB Ubuntu 24.04 guest, published Ember 1.0.0 artifacts, and all 14 candidate acceptance gates. This measures installation and lifecycle verification, including browser setup, chat, uploads, WebSockets, push enrollment, repeat installation, backup/restore, reboot, update, and injected recovery failures. These standalone benchmark runs do not measure application throughput or publish a release.
 
 Run it only on a fresh, disposable native ARM64 Linux host with root access. The harness changes networking, `/etc/hosts`, local trust stores, and Docker state. KVM mode fails unless `/dev/kvm` supports API version 12 and VM creation; QEMU's QMP response must also confirm that KVM is enabled before guest acceptance begins. There is no automatic TCG fallback.
 

@@ -237,7 +237,7 @@ mod tests {
     fn production_defaults() {
         let config = config(&[("SECRET_KEY_BASE", "abc")]).unwrap();
         assert!(!config.disable_ssl);
-        assert_eq!(config.app_version, "1.0");
+        assert_eq!(config.app_version, "1.1");
         assert_eq!(config.git_revision, None);
         assert_eq!(config.storage.database, PathBuf::from("storage/db/production.sqlite3"));
         assert_eq!(config.storage.files, PathBuf::from("storage/files"));
@@ -264,7 +264,7 @@ mod tests {
         let configured = config(&[("SECRET_KEY_BASE", "abc"), ("APP_VERSION", "1.2.3"), ("GIT_REVISION", "abc123")]).unwrap();
         assert_eq!(configured.app_version, "1.2.3");
         assert_eq!(configured.git_revision.as_deref(), Some("abc123"));
-        assert_eq!(config(&[("SECRET_KEY_BASE", "abc"), ("APP_VERSION", " "), ("GIT_REVISION", " ")]).unwrap().app_version, "1.0");
+        assert_eq!(config(&[("SECRET_KEY_BASE", "abc"), ("APP_VERSION", " "), ("GIT_REVISION", " ")]).unwrap().app_version, "1.1");
     }
 
     #[test]

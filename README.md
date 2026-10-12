@@ -66,7 +66,7 @@ NYLLON's reviewed Docker installer and `emberctl` live in `deploy/installer/`. T
 Ubuntu 24.04 and Debian 13 servers on amd64 and arm64, preserve deployment secrets, pin images by
 digest, and use manual updates with complete offline backups. They refuse unmanaged Campfire/ONCE
 installations. Upstream changes enter through ordinary review; upstream releases cannot update
-an Ember server. Stable Ember **1.0.0** is available through the
+an Ember server. Stable Ember is available through the
 [public installer](https://get.nyllon.com/). See
 [release operation](deploy/release/README.md) for the rollout gates.
 
@@ -326,7 +326,7 @@ MIME type, and inherited asset module paths remain compatible. Keep the existing
 secrets, and deployment identity when upgrading to preserve data and sessions.
 
 The footer and `X-Version` header now default to the compiled Cargo release version, currently
-`1.0.0` displayed as `1.0`, instead of `0`. `APP_VERSION`, then `GIT_REVISION`, still override it.
+`1.1.0` displayed as `1.1`, instead of `0`. `APP_VERSION`, then `GIT_REVISION`, still override it.
 `X-Rev` carries an explicitly configured Git revision. Version information comes from build or
 deployment configuration rather than an editable database setting.
 
@@ -455,7 +455,7 @@ measurements rather than new Ember measurements.
 
 ## Install on a fresh Linux server
 
-Stable Ember **1.0.0** supports fresh **Ubuntu 24.04** and **Debian 13** servers on
+The stable Ember installer supports fresh **Ubuntu 24.04** and **Debian 13** servers on
 **amd64** and **arm64**. Use a server with at least 2 GB RAM, 10 GB free disk, root access,
 and inbound TCP ports **80 and 443** available. Point your hostname's DNS A record at the
 server's public IPv4 address. Any AAAA record must reach it too. Use DNS-only mode with Cloudflare.
@@ -511,8 +511,8 @@ The application crate lives in `crates/ember/`. Configuration uses `EMBER_*` nam
   stable across restarts. The room-header bell requests browser permission and saves the subscription
   before showing per-room settings. Embedded browsers without Push support show instructions to
   use a supported browser; iOS/iPadOS users must install the Home Screen app.
-- The release version comes from the binary's Cargo package metadata (currently `1.0.0`, displayed
-  as `1.0`). `APP_VERSION`, then `GIT_REVISION`, retain their deployment-override precedence.
+- The release version comes from the binary's Cargo package metadata (currently `1.1.0`, displayed
+  as `1.1`). `APP_VERSION`, then `GIT_REVISION`, retain their deployment-override precedence.
   The footer and `X-Version` header use the same value; `X-Rev` carries an explicitly configured
   Git revision. Version information is build configuration, not an editable database preference.
 - The app listener on `TARGET_PORT` (3000) binds loopback. `TARGET_BIND` overrides this; that listener

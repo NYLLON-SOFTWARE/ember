@@ -1250,8 +1250,8 @@ test("notification bell explains missing configuration and shows the real releas
   await dialog.getByRole("button", { name: "Close", exact: true }).click()
   await dialog.waitFor({ state: "hidden" })
   await page.goto("/account/edit")
-  assert.match(await page.locator("#footer").innerText(), /Ember™ version 1\.0/)
-  assert.equal((await context.request.get("/account/edit")).headers()["x-version"], "1.0")
+  assert.match(await page.locator("#footer").innerText(), /Ember™ version 1\.1/)
+  assert.equal((await context.request.get("/account/edit")).headers()["x-version"], "1.1")
 })
 
 test("follow-up timestamps sit after message content without shifting it", { timeout: 90_000 }, async (t) => {

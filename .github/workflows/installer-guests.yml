@@ -11,11 +11,44 @@ on:
       public:
         required: true
         type: boolean
+      hardware_accelerated:
+        required: false
+        default: false
+        type: boolean
+      arm_runner_group:
+        required: false
+        default: ember-release-arm
+        type: string
 permissions: {}
 jobs:
+  configuration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Validate hardware release request
+        env:
+          HARDWARE_ACCELERATED: ${{ inputs.hardware_accelerated }}
+          ARM_RUNNER_GROUP: ${{ inputs.arm_runner_group }}
+        run: |
+          python3 - <<'PY'
+          import os, re
+          hardware = os.environ['HARDWARE_ACCELERATED']
+          if hardware not in ('true', 'false'):
+              raise SystemExit('Invalid hardware acceleration request')
+          if hardware == 'true':
+              if (os.environ['GITHUB_EVENT_NAME'] != 'workflow_dispatch'
+                      or os.environ['GITHUB_REPOSITORY'] != 'NYLLON-SOFTWARE/ember'
+                      or os.environ['GITHUB_REF'] != 'refs/heads/main'):
+                  raise SystemExit('Hardware guests require a stable dispatch on NYLLON-SOFTWARE/ember main')
+              if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,63}', os.environ['ARM_RUNNER_GROUP']):
+                  raise SystemExit('Select the restricted organization ARM runner group')
+          PY
+
   installation:
+    needs: configuration
     name: ${{ matrix.os }} / ${{ matrix.arch }} / public=${{ inputs.public }}
-    runs-on: ${{ matrix.runner }}
+    runs-on: ${{ inputs.hardware_accelerated && matrix.hardware_runner || matrix.runner }}
     timeout-minutes: ${{ matrix.timeout }}
     permissions:
       contents: read
@@ -26,24 +59,53 @@ jobs:
           - os: ubuntu-24.04
             arch: amd64
             runner: ubuntu-24.04
+            hardware_runner: ubuntu-24.04
             timeout: 120
           - os: debian-13
             arch: amd64
             runner: ubuntu-24.04
+            hardware_runner: ubuntu-24.04
             timeout: 120
           - os: ubuntu-24.04
             arch: arm64
             runner: ubuntu-24.04-arm
+            hardware_runner:
+              group: ${{ inputs.arm_runner_group }}
+              labels: [self-hosted, Linux, ARM64, ember-release-kvm]
             timeout: 180
           - os: debian-13
             arch: arm64
             runner: ubuntu-24.04-arm
+            hardware_runner:
+              group: ${{ inputs.arm_runner_group }}
+              labels: [self-hosted, Linux, ARM64, ember-release-kvm]
             timeout: 180
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ inputs.commit }}
           persist-credentials: false
+      - name: Require native KVM and a fresh disposable host
+        if: inputs.hardware_accelerated
+        timeout-minutes: 1
+        env:
+          GUEST_ARCH: ${{ matrix.arch }}
+          PREPARED_ARM: ${{ matrix.arch == 'arm64' }}
+        run: |
+          sudo --preserve-env=GUEST_ARCH,PREPARED_ARM python3 - <<'PY'
+          import importlib.util, os, shutil
+          spec = importlib.util.spec_from_file_location('guests', 'deploy/verification/guests.py')
+          guests = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(guests)
+          guests.require_kvm(os.environ['GUEST_ARCH'])
+          assert not guests.WORK.exists(), 'Use a fresh disposable runner for each guest'
+          if os.environ['PREPARED_ARM'] == 'true':
+              tools = ('qemu-system-aarch64', 'qemu-img', 'cloud-localds', 'dnsmasq',
+                       'iptables', 'ip', 'openssl', 'ssh', 'scp', 'curl', 'dpkg-deb')
+              assert all(shutil.which(tool) for tool in tools), 'Prepared ARM guest tools are incomplete'
+          print('Native KVM device and fresh host preflight passed')
+          PY
+          sudo docker info >/dev/null
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           name: ${{ inputs.artifact }}
@@ -55,27 +117,41 @@ jobs:
         env:
           # The root-run guest browser must use this same download location.
           PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ember-playwright
+          PREPARED_ARM: ${{ inputs.hardware_accelerated && matrix.arch == 'arm64' }}
         run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y qemu-system-x86 qemu-system-arm qemu-utils cloud-image-utils ovmf qemu-efi-aarch64 dnsmasq-base libnss3-tools socat
+          if [ "$PREPARED_ARM" != true ]; then
+            sudo apt-get update
+            sudo apt-get install --no-install-recommends -y qemu-system-x86 qemu-system-arm qemu-utils cloud-image-utils ovmf qemu-efi-aarch64 dnsmasq-base libnss3-tools socat
+          fi
           npm ci --ignore-scripts --prefix parity
           parity/node_modules/.bin/playwright install --with-deps chromium
+      - name: Reapply and verify the tested ARM firmware after dependencies
+        if: inputs.hardware_accelerated && matrix.arch == 'arm64'
+        run: sudo sh deploy/verification/pin-arm-firmware.sh
       - name: Run fresh guest with real test-CA ACME validation
         env:
           PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ember-playwright
           GUEST_OS: ${{ matrix.os }}
           GUEST_ARCH: ${{ matrix.arch }}
           PUBLIC_INSTALLER: ${{ inputs.public }}
-        run: sudo --preserve-env=PATH,GITHUB_ACTIONS,GUEST_OS,GUEST_ARCH,PUBLIC_INSTALLER,PLAYWRIGHT_BROWSERS_PATH python3 deploy/verification/guests.py --assets release-assets
+          HARDWARE_ACCELERATED: ${{ inputs.hardware_accelerated }}
+        run: |
+          args=(--assets release-assets)
+          if [ "$HARDWARE_ACCELERATED" = true ]; then
+            args+=(--accel kvm --benchmark-disposable-runner)
+          fi
+          sudo --preserve-env=PATH,GITHUB_ACTIONS,GUEST_OS,GUEST_ARCH,PUBLIC_INSTALLER,PLAYWRIGHT_BROWSERS_PATH python3 deploy/verification/guests.py "${args[@]}"
       - name: Collect non-secret acceptance diagnostics
         if: always()
         run: |
           mkdir -p "$RUNNER_TEMP/ember-diagnostics"
           chmod 700 "$RUNNER_TEMP/ember-diagnostics"
           # The guest workspace stays root-private, including SSH keys and test credentials.
-          for name in console.log dns.log boot.log preflight.log transport.log install.log application.log result.json; do
+          for name in console.log dns.log boot.log preflight.log transport.log install.log application.log result.json benchmark.json; do
             source="$PWD/tmp/installer-verification/diagnostics/$name"
             if sudo test -f "$source"; then
+              # The redirect intentionally creates a runner-owned diagnostic copy.
+              # shellcheck disable=SC2024
               sudo cat "$source" > "$RUNNER_TEMP/ember-diagnostics/$name"
             fi
           done
