@@ -139,6 +139,45 @@ class HardwareRelease(unittest.TestCase):
         self.assertIn("assert not guests.WORK.exists()", preflight)
         self.assertLess(self.installation.index('Require native KVM'), self.installation.index('Install guest tools and browser'))
 
+    def test_actual_preflight_rejects_each_missing_prepared_tool_before_setup(self):
+        source = shell(step(self.installation, 'Require native KVM and a fresh disposable host'))
+        python = source.split("python3 - <<'PY'\n", 1)[1].rsplit('\nPY', 1)[0]
+        required = ('qemu-system-aarch64', 'qemu-img', 'cloud-localds', 'dnsmasq',
+                    'iptables', 'ip', 'sysctl', 'openssl', 'ssh', 'ssh-keygen',
+                    'scp', 'curl', 'certutil', 'dpkg-deb')
+        for missing in (None, *required):
+            with self.subTest(missing=missing):
+                guests = mock.Mock(spec=['require_kvm', 'WORK', 'network', 'certificates',
+                                         'mirror', 'Guest', 'acceptance'])
+                guests.WORK.exists.return_value = False
+                spec = mock.Mock()
+                output = io.StringIO()
+                environment = {'GUEST_ARCH': 'arm64', 'PREPARED_ARM': 'true'}
+                with mock.patch.dict(os.environ, environment, clear=True), \
+                     mock.patch('importlib.util.spec_from_file_location', return_value=spec), \
+                     mock.patch('importlib.util.module_from_spec', return_value=guests), \
+                     mock.patch('shutil.which', side_effect=lambda tool: None if tool == missing else '/bin/' + tool) as which, \
+                     contextlib.redirect_stdout(output):
+                    if missing is None:
+                        exec(compile(python, str(GUESTS), 'exec'), {})
+                    else:
+                        with self.assertRaisesRegex(AssertionError, '^Prepared ARM guest tools are incomplete$'):
+                            exec(compile(python, str(GUESTS), 'exec'), {})
+                spec.loader.exec_module.assert_called_once_with(guests)
+                guests.require_kvm.assert_called_once_with('arm64')
+                guests.WORK.exists.assert_called_once_with()
+                guests.WORK.mkdir.assert_not_called()
+                for setup in (guests.network, guests.certificates, guests.mirror, guests.Guest, guests.acceptance):
+                    setup.assert_not_called()
+                if missing is None:
+                    self.assertEqual([call.args[0] for call in which.call_args_list], list(required))
+                    self.assertEqual(output.getvalue(), 'Native KVM device and fresh host preflight passed\n')
+                else:
+                    self.assertEqual(which.call_args_list[-1], mock.call(missing))
+                    self.assertEqual(output.getvalue(), '')
+        self.assertLess(self.installation.index('Require native KVM'), self.installation.index('Install guest tools and browser'))
+        self.assertLess(self.installation.index('Require native KVM'), self.installation.index('Run fresh guest'))
+
     def test_prepared_arm_preserves_guest_tools_and_rechecks_firmware_after_browser_dependencies(self):
         dependencies = shell(step(self.installation, 'Install guest tools and browser'))
         for prepared in ('true', 'false'):

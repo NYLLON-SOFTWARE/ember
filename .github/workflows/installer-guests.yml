@@ -101,7 +101,8 @@ jobs:
           assert not guests.WORK.exists(), 'Use a fresh disposable runner for each guest'
           if os.environ['PREPARED_ARM'] == 'true':
               tools = ('qemu-system-aarch64', 'qemu-img', 'cloud-localds', 'dnsmasq',
-                       'iptables', 'ip', 'openssl', 'ssh', 'scp', 'curl', 'dpkg-deb')
+                       'iptables', 'ip', 'sysctl', 'openssl', 'ssh', 'ssh-keygen',
+                       'scp', 'curl', 'certutil', 'dpkg-deb')
               assert all(shutil.which(tool) for tool in tools), 'Prepared ARM guest tools are incomplete'
           print('Native KVM device and fresh host preflight passed')
           PY
