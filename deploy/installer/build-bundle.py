@@ -33,7 +33,7 @@ def build(version, image_digest, source_sha, output):
                 info.mode = 0o755 if name in {"install.sh", "emberctl"} else 0o644
                 archive.addfile(info, io.BytesIO(data))
     bundle_sha = hashlib.sha256(bundle.read_bytes()).hexdigest()
-    release["bundle"] = {"url": manager.release_url(version, bundle_name), "sha256": bundle_sha}
+    release["bundle"] = {"url": manager.bundle_url(version), "sha256": bundle_sha}
     manager.validate_manifest(release)
     (output / "release.json").write_text(json.dumps(release, sort_keys=True, indent=2) + "\n")
     # Keep all executable statements inside main: an interrupted download must not start installation.

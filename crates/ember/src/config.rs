@@ -192,7 +192,7 @@ fn default_vapid_subject(tls_domains: Option<String>) -> String {
     let domain = tls_domains.as_deref().and_then(|domains| domains.split(',').map(str::trim).find(|domain| !domain.is_empty()));
     match domain {
         Some(domain) => format!("https://{domain}"),
-        None => "https://github.com/NYLLON-SOFTWARE/ember".into(),
+        None => "https://github.com/NYLLON-SOFTWARE/ember-rust".into(),
     }
 }
 
@@ -284,7 +284,7 @@ mod tests {
         let subject = |vars: &[(&str, &str)]| config(&[&[("SECRET_KEY_BASE", "abc")], vars].concat()).unwrap().vapid_subject;
         assert_eq!(subject(&[("VAPID_SUBJECT", "mailto:ops@example.com"), ("TLS_DOMAIN", "chat.example.com")]), "mailto:ops@example.com");
         assert_eq!(subject(&[("TLS_DOMAIN", " , chat.example.com,other.example.com")]), "https://chat.example.com");
-        assert_eq!(subject(&[("VAPID_SUBJECT", " ")]), "https://github.com/NYLLON-SOFTWARE/ember");
+        assert_eq!(subject(&[("VAPID_SUBJECT", " ")]), "https://github.com/NYLLON-SOFTWARE/ember-rust");
     }
 
     #[test]

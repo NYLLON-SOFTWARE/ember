@@ -21,5 +21,5 @@ emberctl restore BACKUP_ID --accept-data-loss</code></pre>
 <p>Updates download and validate the new image before stopping Ember and create a complete backup before starting it. A failure before the new version starts can resume the old version. Once the new version touches live data, recovery requires an explicit restore. Restoring discards data written since that backup; the failure message names the backup and restore command. Do not remove the recovery journal before resolving it.</p>
 <h2>Troubleshooting</h2><p>Check <code>emberctl status</code> and <code>emberctl logs</code>. For HTTPS failures, verify DNS, any AAAA record, ports 80/443, and the server clock. Registry and download failures leave the current installation intact before cutover. Rerunning the installer preserves managed configuration, data, and secrets. It refuses unmanaged Campfire or ONCE installations; migration is a separate project.</p>
 <p>Configuration is in <code>/etc/ember</code>; persistent data is in <code>/var/lib/ember/storage</code>. Do not edit or delete these during recovery.</p>
-<p><a href="https://github.com/NYLLON-SOFTWARE/ember">Source, releases, and support</a></p>
+<p><a href="https://github.com/NYLLON-SOFTWARE/ember-rust">Source, releases, and support</a></p>
 </html>

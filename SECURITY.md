@@ -1,7 +1,7 @@
 # Security
 
 For Ember-specific vulnerabilities, use this repository's
-[Security tab](https://github.com/nyllon-software/ember/security). Ember is independently
+[Security tab](https://github.com/nyllon-software/ember-rust/security). Ember is independently
 maintained and does not operate the Basecamp bounty program. For issues in upstream Campfire,
 follow the [upstream security policy](https://github.com/basecamp/once-campfire-rust/security/policy).
 

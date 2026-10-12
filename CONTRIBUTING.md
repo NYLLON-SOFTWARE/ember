@@ -1,6 +1,6 @@
 # Contributing to Ember
 
-Use [Ember issues](https://github.com/nyllon-software/ember/issues) for bugs, feature requests,
+Use [Ember issues](https://github.com/nyllon-software/ember-rust/issues) for bugs, feature requests,
 and questions, and open pull requests against this repository. Ember is independently maintained;
 please report fork-specific behavior here. Contributions are licensed under the [MIT License](MIT-LICENSE).
 

@@ -55,7 +55,7 @@ jobs:
           STABLE: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
           set -euo pipefail
-          test "$GITHUB_REPOSITORY" = NYLLON-SOFTWARE/ember
+          test "$GITHUB_REPOSITORY" = NYLLON-SOFTWARE/ember-rust
           if [ "$STABLE" = true ]; then test "$GITHUB_REF" = refs/heads/main; fi
           commit=$(git rev-parse HEAD)
           version=${commit:0:12}
@@ -114,7 +114,7 @@ jobs:
           build-args: |
             APP_VERSION=${{ needs.identity.outputs.version }}
             GIT_REVISION=${{ needs.identity.outputs.commit }}
-            OCI_SOURCE=https://github.com/NYLLON-SOFTWARE/ember
+            OCI_SOURCE=https://github.com/NYLLON-SOFTWARE/ember-rust
           cache-from: type=gha,scope=linux/${{ matrix.arch }}
           cache-to: type=gha,scope=linux/${{ matrix.arch }},mode=max
           sbom: false
@@ -265,7 +265,7 @@ jobs:
           DIGEST: ${{ needs.index.outputs.digest }}
         run: |
           set -euo pipefail
-          cosign verify --certificate-identity "https://github.com/NYLLON-SOFTWARE/ember/.github/workflows/publish-image.yml@refs/heads/main" --certificate-oidc-issuer https://token.actions.githubusercontent.com "$IMAGE@$DIGEST"
+          cosign verify --certificate-identity "https://github.com/NYLLON-SOFTWARE/ember-rust/.github/workflows/publish-image.yml@refs/heads/main" --certificate-oidc-issuer https://token.actions.githubusercontent.com "$IMAGE@$DIGEST"
           python3 deploy/release/release.py reserve "$VERSION" "$COMMIT"
           docker buildx imagetools create --tag "$IMAGE:v$VERSION" --tag "$IMAGE:$VERSION" "$IMAGE@$DIGEST"
           for tag in "v$VERSION" "$VERSION"; do
@@ -275,7 +275,7 @@ jobs:
           # The release note deliberately includes literal Markdown backticks.
           # shellcheck disable=SC2016
           printf 'Source: `%s`\n\nImage: `%s@%s`\n\nAll four installation and recovery guests passed against these exact artifacts.\n' "$COMMIT" "$IMAGE" "$DIGEST" > release-notes.md
-          gh release create "v$VERSION" release-assets/* --verify-tag --repo NYLLON-SOFTWARE/ember --target "$COMMIT" --title "Ember $VERSION" --notes-file release-notes.md --latest=false
+          gh release create "v$VERSION" release-assets/* --verify-tag --repo NYLLON-SOFTWARE/ember-rust --target "$COMMIT" --title "Ember $VERSION" --notes-file release-notes.md --latest=false
 
   deploy:
     needs: [identity, promote]
@@ -423,6 +423,6 @@ jobs:
             actual=$(docker buildx imagetools inspect "$IMAGE:$tag" --format '{{json .Manifest}}' | jq -r .digest)
             test "$actual" = "$DIGEST"
           done
-          gh release edit "v$VERSION" --repo NYLLON-SOFTWARE/ember --latest
+          gh release edit "v$VERSION" --repo NYLLON-SOFTWARE/ember-rust --latest
           echo 'Public installation passed on Ubuntu 24.04 and Debian 13, amd64 and arm64.' >> "$GITHUB_STEP_SUMMARY"
           echo 'Website installation link: https://get.nyllon.com/' >> "$GITHUB_STEP_SUMMARY"

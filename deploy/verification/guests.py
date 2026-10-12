@@ -22,6 +22,7 @@ import sys
 import tempfile
 import threading
 import time
+import urllib.parse
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -29,6 +30,7 @@ WORK = ROOT / 'tmp/installer-verification'
 HOST = '192.0.2.1'
 GUEST = '192.0.2.10'
 DOMAIN = 'chat.ember.test'
+RELEASE_REPOSITORIES = ('NYLLON-SOFTWARE/ember-rust', 'NYLLON-SOFTWARE/ember')
 INSTALL_COMMAND = 'curl -fsSL https://get.nyllon.com/ember | sh --'
 HOSTNAME_PROMPT = 'Hostname pointing to this server (for example chat.example.com): '
 # Ubuntu arm64 under TCG reached cloud-final at 759s; allow bounded slow guest boots.
@@ -564,6 +566,21 @@ def public_get(url):
     return urllib.request.urlopen(request, timeout=30)
 
 
+def release_asset_paths(version, name):
+    # GitHub redirects the old repository; installed 1.0 managers still request that path.
+    return tuple('/' + repository + '/releases/download/v' + version + '/' + name
+                 for repository in RELEASE_REPOSITORIES)
+
+
+def stage_release(manifest, version, overrides):
+    directory = WORK / ('release-' + version)
+    run('python3', ROOT / 'deploy/installer/build-bundle.py', '--version', version,
+        '--source-sha', manifest['source_sha'], '--image-digest', manifest['image'].split('@')[1], '--output-dir', directory)
+    for file in directory.iterdir():
+        for path in release_asset_paths(version, file.name):
+            overrides[path] = file.read_bytes()
+
+
 def mirror(assets, certs, public):
     overrides = {}
     manifest = json.loads((assets / 'release.json').read_text())
@@ -582,7 +599,7 @@ def mirror(assets, certs, public):
                 body = (assets / 'bootstrap.sh').read_bytes()
             if body is None and path == '/releases/stable.json':
                 body = (assets / 'release.json').read_bytes()
-            if body is None and path.startswith('/NYLLON-SOFTWARE/ember/releases/download/v' + version + '/') and name in (bundle_name, 'release.json', 'SHA256SUMS'):
+            if body is None and path in release_asset_paths(version, name) and name in (bundle_name, 'release.json', 'SHA256SUMS'):
                 body = (assets / name).read_bytes()
             if body is None:
                 self.send_error(404)
@@ -690,7 +707,7 @@ def acceptance(guest, assets, certs, overrides, public):
     if not public:
         manifest = json.loads((assets / 'release.json').read_text())
         bundle_name = 'ember-installer-' + manifest['version'] + '.tar.gz'
-        bundle_path = '/NYLLON-SOFTWARE/ember/releases/download/v' + manifest['version'] + '/' + bundle_name
+        bundle_path = urllib.parse.urlsplit(manifest['bundle']['url']).path
         bundle = (assets / bundle_name).read_bytes()
         overrides[bundle_path] = bundle[:len(bundle) // 2]
         try:
@@ -756,15 +773,8 @@ def acceptance(guest, assets, certs, overrides, public):
         parts = list(map(int, manifest['version'].split('.')))
         parts[2] += 1
 
-        def stage_release(selected_version):
-            directory = WORK / ('release-' + selected_version)
-            run('python3', ROOT / 'deploy/installer/build-bundle.py', '--version', selected_version,
-                '--source-sha', manifest['source_sha'], '--image-digest', manifest['image'].split('@')[1], '--output-dir', directory)
-            for file in directory.iterdir():
-                overrides['/NYLLON-SOFTWARE/ember/releases/download/v' + selected_version + '/' + file.name] = file.read_bytes()
-
         next_version = '.'.join(map(str, parts))
-        stage_release(next_version)
+        stage_release(manifest, next_version, overrides)
         state_before = guest.ssh('sha256sum /etc/ember/state.json /etc/ember/app.env').stdout
         container_before = guest.ssh("docker inspect --format '{{.Id}} {{.State.Running}} {{.State.StartedAt}}' ember").stdout
         backup_before = guest.ssh('find /var/lib/ember/backups -mindepth 1 -maxdepth 1 -type d | sort').stdout
@@ -782,7 +792,7 @@ def acceptance(guest, assets, certs, overrides, public):
         # Startup fault injection uses the real daemon, backup, journal, and health deadline.
         parts[2] += 1
         failed_version = '.'.join(map(str, parts))
-        stage_release(failed_version)
+        stage_release(manifest, failed_version, overrides)
         startup_failure = '#!/bin/sh\nif [ "$1" = create ]; then shift; exec /usr/bin/docker-real create --entrypoint /bin/false "$@"; fi\nexec /usr/bin/docker-real "$@"\n'
         with docker_override(guest, startup_failure):
             failed = guest.ssh('emberctl update ' + failed_version, check=False)

@@ -659,7 +659,7 @@ class PublicRequests(unittest.TestCase):
         version = '1.2.3'
         bundle = b'tested public installer bundle'
         bootstrap = '#!/bin/sh\n# tested installer\n'
-        bundle_url = 'https://github.com/NYLLON-SOFTWARE/ember/releases/download/v1.2.3/ember-installer-1.2.3.tar.gz'
+        bundle_url = 'https://github.com/NYLLON-SOFTWARE/ember-rust/releases/download/v1.2.3/ember-installer-1.2.3.tar.gz'
         manifest = {'version': version, 'bundle': {'url': bundle_url, 'sha256': guests.hashlib.sha256(bundle).hexdigest()}}
         guide = (guests.ROOT / 'deploy/release/guide.html').read_bytes().replace(b'{{VERSION}}', version.encode())
         fetched = []
@@ -694,6 +694,92 @@ class PublicRequests(unittest.TestCase):
             self.assertEqual(guests.mirror(assets, assets, public=True), {})
         self.assertEqual(fetched, [bundle_url, 'https://get.nyllon.com/'])
         self.assertEqual(open_request.call_count, 2)
+
+
+class ReleaseMirrors(unittest.TestCase):
+    def test_mirror_serves_exact_legacy_and_renamed_release_paths_without_rewriting_bytes(self):
+        for version in ('1.0.0', '1.1.0'):
+            with self.subTest(version=version), tempfile.TemporaryDirectory() as temporary, contextlib.ExitStack() as stack:
+                assets = Path(temporary)
+                files = {'release.json': guests.json.dumps({'version': version}).encode(),
+                         'SHA256SUMS': b'published checksums', 'ember-installer-' + version + '.tar.gz': b'published bundle'}
+                for name, body in files.items():
+                    (assets / name).write_bytes(body)
+                server = stack.enter_context(mock.patch.object(guests.http.server, 'ThreadingHTTPServer'))
+                stack.enter_context(mock.patch.object(guests.ssl, 'SSLContext'))
+                stack.enter_context(mock.patch.object(guests.threading, 'Thread'))
+                stack.enter_context(mock.patch.object(guests.atexit, 'register'))
+                overrides = guests.mirror(assets, assets, public=False)
+                handler_type = server.call_args.args[1]
+                for name, body in files.items():
+                    for path in guests.release_asset_paths(version, name):
+                        handler = handler_type.__new__(handler_type)
+                        handler.path, handler.wfile = path, io.BytesIO()
+                        for method in ('send_response', 'send_header', 'end_headers', 'send_error'):
+                            setattr(handler, method, mock.Mock())
+                        handler.do_GET()
+                        self.assertEqual(handler.wfile.getvalue(), body)
+                        handler.send_response.assert_called_once_with(200)
+                        handler.send_error.assert_not_called()
+                handler.path = '/NYLLON-SOFTWARE/unrelated/releases/download/v' + version + '/release.json'
+                handler.wfile = io.BytesIO()
+                handler.do_GET()
+                handler.send_error.assert_called_once_with(404)
+                self.assertEqual(handler.wfile.getvalue(), b'')
+                self.assertEqual(overrides, {})
+
+    def test_staged_updates_serve_identical_bytes_to_original_and_new_managers(self):
+        manifest = {'source_sha': 'b' * 40, 'image': 'ghcr.io/nyllon-software/ember@sha256:' + 'a' * 64}
+        version = '1.1.1'
+        files = {'release.json': b'legacy bundle URL metadata', 'SHA256SUMS': b'exact checksum bytes',
+                 'ember-installer-' + version + '.tar.gz': b'exact staged bundle', 'bootstrap.sh': b'exact bootstrap'}
+        overrides = {}
+        with tempfile.TemporaryDirectory() as temporary:
+            work = Path(temporary)
+            def build(*args):
+                self.assertEqual(args, ('python3', guests.ROOT / 'deploy/installer/build-bundle.py', '--version', version,
+                    '--source-sha', manifest['source_sha'], '--image-digest', manifest['image'].split('@')[1],
+                    '--output-dir', work / ('release-' + version)))
+                directory = args[-1]
+                directory.mkdir()
+                for name, body in files.items():
+                    (directory / name).write_bytes(body)
+            with mock.patch.object(guests, 'WORK', work), mock.patch.object(guests, 'run', side_effect=build) as command:
+                guests.stage_release(manifest, version, overrides)
+            command.assert_called_once()
+        expected = {path: body for name, body in files.items() for path in guests.release_asset_paths(version, name)}
+        self.assertEqual(overrides, expected)
+        self.assertEqual(len(overrides), 8)
+
+    def test_interrupted_download_overrides_the_manifest_url_for_both_repository_names(self):
+        for repository in ('NYLLON-SOFTWARE/ember', 'NYLLON-SOFTWARE/ember-rust'):
+            with self.subTest(repository=repository), tempfile.TemporaryDirectory() as temporary:
+                assets = Path(temporary)
+                name = 'ember-installer-1.1.0.tar.gz'
+                path = '/' + repository + '/releases/download/v1.1.0/' + name
+                manifest = {'version': '1.1.0', 'bundle': {'url': 'https://github.com' + path}}
+                (assets / 'release.json').write_text(guests.json.dumps(manifest))
+                (assets / name).write_bytes(b'complete bundle')
+                overrides, observed = {}, []
+                stop = RuntimeError('stop after interrupted download cleanup')
+                def ssh(command, **kwargs):
+                    if command == 'command -v docker':
+                        return subprocess.CompletedProcess([], 1, '', '')
+                    if 'curl -fsSL' in command:
+                        observed.append(dict(overrides))
+                        return subprocess.CompletedProcess([], 1, '', 'checksum mismatch')
+                    if command.startswith('test ! -e /etc/ember &&'):
+                        raise stop
+                    return subprocess.CompletedProcess([], 0, '', '')
+                guest = mock.Mock()
+                guest.ssh.side_effect = ssh
+                with mock.patch.object(guests, 'WORK', assets), mock.patch.object(guests, 'report_stage'):
+                    with self.assertRaises(RuntimeError) as failure:
+                        guests.acceptance(guest, assets, assets, overrides, public=False)
+                self.assertIs(failure.exception, stop)
+                self.assertEqual(observed, [{path: b'complete bundle'[:len(b'complete bundle') // 2]}])
+                self.assertEqual(overrides, {})
+                guest.install.assert_not_called()
 
 
 class MirrorCertificates(unittest.TestCase):

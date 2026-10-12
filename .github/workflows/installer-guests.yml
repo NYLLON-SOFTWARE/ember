@@ -38,9 +38,9 @@ jobs:
               raise SystemExit('Invalid hardware acceleration request')
           if hardware == 'true':
               if (os.environ['GITHUB_EVENT_NAME'] != 'workflow_dispatch'
-                      or os.environ['GITHUB_REPOSITORY'] != 'NYLLON-SOFTWARE/ember'
+                      or os.environ['GITHUB_REPOSITORY'] != 'NYLLON-SOFTWARE/ember-rust'
                       or os.environ['GITHUB_REF'] != 'refs/heads/main'):
-                  raise SystemExit('Hardware guests require a stable dispatch on NYLLON-SOFTWARE/ember main')
+                  raise SystemExit('Hardware guests require a stable dispatch on NYLLON-SOFTWARE/ember-rust main')
               if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,63}', os.environ['ARM_RUNNER_GROUP']):
                   raise SystemExit('Select the restricted organization ARM runner group')
           PY
