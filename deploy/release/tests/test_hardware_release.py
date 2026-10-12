@@ -48,7 +48,7 @@ class HardwareRelease(unittest.TestCase):
         source = shell(step(job(self.guests, 'configuration'), 'Validate hardware release request'))
         python = source.split("python3 - <<'PY'\n", 1)[1].rsplit('\nPY', 1)[0]
         environment = {'HARDWARE_ACCELERATED': 'true', 'ARM_RUNNER_GROUP': 'ember-release-arm',
-            'GITHUB_EVENT_NAME': 'workflow_dispatch', 'GITHUB_REPOSITORY': 'NYLLON-SOFTWARE/ember',
+            'GITHUB_EVENT_NAME': 'workflow_dispatch', 'GITHUB_REPOSITORY': 'NYLLON-SOFTWARE/ember-rust',
             'GITHUB_REF': 'refs/heads/main'}
         environment.update(overrides)
         with mock.patch.dict(os.environ, environment, clear=True), contextlib.redirect_stdout(io.StringIO()):
@@ -57,7 +57,8 @@ class HardwareRelease(unittest.TestCase):
     def test_actual_hosted_guard_accepts_only_trusted_hardware_dispatch_before_runner_scheduling(self):
         self.validate()
         invalid = ({'GITHUB_EVENT_NAME': event} for event in ('pull_request', 'pull_request_target', 'push'))
-        for overrides in (*invalid, {'GITHUB_REPOSITORY': 'fork/ember'}, {'GITHUB_REF': 'refs/pull/1/merge'},
+        for overrides in (*invalid, {'GITHUB_REPOSITORY': 'fork/ember'},
+                          {'GITHUB_REPOSITORY': 'NYLLON-SOFTWARE/ember'}, {'GITHUB_REF': 'refs/pull/1/merge'},
                           {'GITHUB_REF': 'refs/tags/v1.1.0'}, {'ARM_RUNNER_GROUP': ''},
                           {'ARM_RUNNER_GROUP': 'private\nrunner'}, {'ARM_RUNNER_GROUP': '{"labels":"private"}'},
                           {'HARDWARE_ACCELERATED': 'auto'}):

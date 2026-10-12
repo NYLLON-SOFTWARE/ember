@@ -11,7 +11,7 @@ from pathlib import Path
 VERSION = re.compile(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\Z')
 SHA = re.compile(r'[0-9a-f]{40}\Z')
 DIGEST = re.compile(r'sha256:[0-9a-f]{64}\Z')
-REPOSITORY = 'NYLLON-SOFTWARE/ember'
+REPOSITORY = 'NYLLON-SOFTWARE/ember-rust'
 IMAGE = 'ghcr.io/nyllon-software/ember'
 
 

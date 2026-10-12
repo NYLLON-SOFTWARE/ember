@@ -56,7 +56,7 @@ jobs:
           mkdir -m 700 release-assets
           for name in SHA256SUMS bootstrap.sh ember-installer-1.0.0.tar.gz release.json; do
             curl -fsSL --connect-timeout 10 --max-time 120 --user-agent Ember-installer-benchmark \
-              "https://github.com/NYLLON-SOFTWARE/ember/releases/download/v1.0.0/$name" \
+              "https://github.com/NYLLON-SOFTWARE/ember-rust/releases/download/v1.0.0/$name" \
               --output "release-assets/$name"
           done
           python3 - <<'PY'

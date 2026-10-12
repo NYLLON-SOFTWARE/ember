@@ -72,8 +72,9 @@ Passwords and setup tokens are never passed in process arguments.
 
 Updates are manual. With no version, `update` reads the stable release manifest
 at `https://get.nyllon.com/releases/stable.json`; a specified version reads that
-version's GitHub release manifest. Only stable semantic versions from the NYLLON
-image repository, pinned by SHA256 digest, are accepted. The target image and
+version's GitHub release manifest in `NYLLON-SOFTWARE/ember-rust`. Only stable
+semantic versions from the NYLLON image repository, pinned by SHA256 digest, are
+accepted. The target image and
 matching checked installer bundle are downloaded before stopping the app.
 After a complete cold backup, the manager starts the candidate and verifies
 HTTPS readiness. A successful update also installs the matching manager code.
@@ -132,7 +133,7 @@ Build the bundle once from the exact candidate image index and source commit:
 
 ```sh
 python3 deploy/installer/build-bundle.py \
-  --version 1.0.0 \
+  --version 1.1.0 \
   --image-digest sha256:FULL_MULTIARCH_INDEX_DIGEST \
   --source-sha FULL_40_CHARACTER_COMMIT_SHA \
   --output-dir tmp/release-assets
@@ -147,15 +148,25 @@ The public `release.json` contract is:
 ```json
 {
   "schema": 1,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "source_sha": "40 lowercase hex characters",
   "image": "ghcr.io/nyllon-software/ember@sha256:64 lowercase hex characters",
   "bundle": {
-    "url": "https://github.com/NYLLON-SOFTWARE/ember/releases/download/v1.0.0/ember-installer-1.0.0.tar.gz",
+    "url": "https://github.com/NYLLON-SOFTWARE/ember/releases/download/v1.1.0/ember-installer-1.1.0.tar.gz",
     "sha256": "64 lowercase hex characters"
   }
 }
 ```
+
+GitHub API, release-page, and source links use the renamed repository,
+[`NYLLON-SOFTWARE/ember-rust`](https://github.com/NYLLON-SOFTWARE/ember-rust).
+The manifest's bundle URL and the bootstrap deliberately retain the former
+`NYLLON-SOFTWARE/ember` redirect alias: published 1.0 managers validate that exact
+URL before they can install updated management code. New managers accept either
+repository name only at the exact versioned bundle path; image names and digests
+remain `ghcr.io/nyllon-software/ember`. Do not reuse the former repository name,
+because existing managers, bootstraps, and restored backups depend on its redirect.
+Published 1.0 assets are unchanged.
 
 `install.json` contains the same identity without `bundle`, avoiding a circular
 checksum. Test these exact artifacts in all four fresh OS/architecture guests,

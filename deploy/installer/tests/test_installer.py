@@ -37,7 +37,7 @@ def release(version="1.0.0", char="a"):
 
 class Response(io.BytesIO):
     status = 200
-    url = "https://github.com/NYLLON-SOFTWARE/ember/releases/download/v2.0.0/asset"
+    url = "https://github.com/NYLLON-SOFTWARE/ember-rust/releases/download/v2.0.0/asset"
 
 
 class Docker:
@@ -150,6 +150,27 @@ class Lifecycle(unittest.TestCase):
         self.output = contextlib.redirect_stdout(self.stdout)
         self.output.__enter__()
         self.addCleanup(lambda: self.output.__exit__(None, None, None))
+
+    def test_renamed_release_updates_existing_state_and_restores_its_original_backup(self):
+        output = self.manager.data.parent / "renamed-release"
+        manifest = builder.build("1.1.0", "sha256:" + "e" * 64, "f" * 40, output)
+        bundle = (output / "ember-installer-1.1.0.tar.gz").read_bytes()
+        with mock.patch.object(m, "download_manifest", return_value=manifest), \
+             mock.patch.object(m.urllib.request, "urlopen", return_value=Response(bundle)) as network:
+            self.manager.update(self.manager.state(), "1.1.0")
+        self.assertEqual(network.call_args.args[0].full_url,
+                         "https://github.com/NYLLON-SOFTWARE/ember/releases/download/v1.1.0/ember-installer-1.1.0.tar.gz")
+        updated = self.manager.state()
+        self.assertEqual(updated["release"]["version"], "1.1.0")
+        self.assertEqual(updated["release"]["image"], m.IMAGE + "@sha256:" + "e" * 64)
+        self.assertEqual((self.manager.lib / "emberctl.py").read_bytes(), (HERE / "emberctl.py").read_bytes())
+        self.assertIn(b"private-secret", (self.manager.config / "app.env").read_bytes())
+        backup, = self.manager.backups.iterdir()
+        self.manager.validate_backup(backup.name, updated)
+        self.manager.restore(updated, backup.name, True)
+        self.assertEqual(self.manager.state(), self.state)
+        self.assertEqual((self.manager.lib / "emberctl.py").read_bytes(), b"original-manager")
+        self.assertTrue(self.docker.containers["ember"]["State"]["Running"])
 
     def test_real_cold_backup_restores_sqlite_upload_secrets_cert_and_manager(self):
         identifier = self.manager.backup(self.state)
@@ -576,6 +597,36 @@ class Contracts(unittest.TestCase):
         for version in ("../1.0.0", "1.0", "1.0.0-rc1", "01.0.0", "$(touch /tmp/owned)"):
             with self.assertRaises(m.Failure):
                 m.validate_manifest(release(version), bundle=False)
+
+    def test_renamed_release_lookup_and_exact_legacy_bundle_urls_remain_compatible(self):
+        self.assertEqual(m.REPOSITORY, "NYLLON-SOFTWARE/ember-rust")
+        self.assertEqual(m.IMAGE, "ghcr.io/nyllon-software/ember")
+        for version in ("1.0.0", "1.1.0"):
+            legacy = f"https://github.com/NYLLON-SOFTWARE/ember/releases/download/v{version}/ember-installer-{version}.tar.gz"
+            canonical = legacy.replace("/ember/releases/", "/ember-rust/releases/")
+            for url in (legacy, canonical):
+                with self.subTest(version=version, url=url):
+                    manifest = {**release(version), "bundle": {"url": url, "sha256": "f" * 64}}
+                    with mock.patch.object(m.urllib.request, "urlopen", return_value=Response(json.dumps(manifest).encode())) as network:
+                        self.assertEqual(m.download_manifest(version), manifest)
+                    self.assertEqual(network.call_args.args[0].full_url,
+                                     f"https://github.com/NYLLON-SOFTWARE/ember-rust/releases/download/v{version}/release.json")
+        for url in (legacy.replace("/NYLLON-SOFTWARE/", "/attacker/"), canonical + "?download=1",
+                    canonical.replace("github.com/", "github.com.attacker/"), canonical.replace("https:", "http:"),
+                    canonical.replace("v1.1.0/", "v1.0.0/"), canonical + "/../other.tar.gz", [], None):
+            with self.subTest(url=url), self.assertRaises(m.Failure):
+                m.validate_manifest({**release("1.1.0"), "bundle": {"url": url, "sha256": "f" * 64}})
+
+    def test_generated_renamed_release_preserves_published_10_managers_strict_url_contract(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary)
+            manifest = builder.build("1.1.0", "sha256:" + "a" * 64, "b" * 40, output)
+            # The published 1.0 validate_manifest compares against precisely this former repository URL.
+            expected = "https://github.com/NYLLON-SOFTWARE/ember/releases/download/v1.1.0/ember-installer-1.1.0.tar.gz"
+            self.assertEqual(manifest["bundle"]["url"], expected)
+            self.assertIn(expected, (output / "bootstrap.sh").read_text())
+            self.assertEqual(manifest["bundle"]["sha256"], m.digest_file(output / "ember-installer-1.1.0.tar.gz"))
+            m.validate_manifest(manifest)
 
     def test_hostname_cannot_inject_env_url_shell_or_port(self):
         for value in ("https://chat.example.com", "chat.example.com:443", "example.com/evil", "a\nSECRET=x", "127.0.0.1", "-bad.example.com"):

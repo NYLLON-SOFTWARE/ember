@@ -9,7 +9,7 @@ redesigned workspace and new ways to organize rooms, start conversations, and ma
 It keeps the Rust server and Campfire chat features, along with compatibility with existing
 SQLite databases, uploaded files, and current signed/encrypted cookies.
 
-[MIT licensed](MIT-LICENSE) · [Ember on GitHub](https://github.com/nyllon-software/ember) ·
+[MIT licensed](MIT-LICENSE) · [Ember on GitHub](https://github.com/nyllon-software/ember-rust) ·
 [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
 Ember is independently maintained by [NYLLON-SOFTWARE](https://github.com/nyllon-software).
@@ -482,8 +482,8 @@ backups, recovery, and troubleshooting.
 Build Ember from this repository, including the pinned upstream submodule:
 
 ```sh
-git clone --recurse-submodules https://github.com/nyllon-software/ember.git
-cd ember
+git clone --recurse-submodules https://github.com/nyllon-software/ember-rust.git
+cd ember-rust
 docker build -t ember .
 ```
 

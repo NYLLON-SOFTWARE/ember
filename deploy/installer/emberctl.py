@@ -24,7 +24,8 @@ import urllib.parse
 import urllib.request
 import uuid
 
-REPOSITORY = "NYLLON-SOFTWARE/ember"
+REPOSITORY = "NYLLON-SOFTWARE/ember-rust"
+LEGACY_REPOSITORY = "NYLLON-SOFTWARE/ember"
 IMAGE = "ghcr.io/nyllon-software/ember"
 VERSION = re.compile(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\Z")
 DIGEST = re.compile(re.escape(IMAGE) + r"@sha256:[0-9a-f]{64}\Z")
@@ -145,15 +146,23 @@ def validate_manifest(value, version=None, bundle=True):
     require(isinstance(value["source_sha"], str) and re.fullmatch(r"[0-9a-f]{40}", value["source_sha"]), "Invalid source commit.")
     require(isinstance(value["image"], str) and DIGEST.fullmatch(value["image"]), "Release image must use the NYLLON repository and an immutable SHA256 digest.")
     if bundle:
-        expected = release_url(value["version"], f"ember-installer-{value['version']}.tar.gz")
+        expected = {bundle_url(value["version"]),
+                    release_url(value["version"], f"ember-installer-{value['version']}.tar.gz")}
         require(isinstance(value["bundle"], dict) and set(value["bundle"]) == {"url", "sha256"}, "Invalid bundle metadata.")
-        require(value["bundle"]["url"] == expected and isinstance(value["bundle"]["sha256"], str)
+        require(isinstance(value["bundle"]["url"], str) and value["bundle"]["url"] in expected
+                and isinstance(value["bundle"]["sha256"], str)
                 and re.fullmatch(r"[0-9a-f]{64}", value["bundle"]["sha256"]), "Invalid first-party bundle URL or checksum.")
     return value
 
 
 def release_url(version, name):
     return f"https://github.com/{REPOSITORY}/releases/download/v{version}/{name}"
+
+
+def bundle_url(version):
+    # Published 1.0 managers require this exact former repo URL before updating themselves.
+    # GitHub redirects it to ember-rust; the old repository name must not be reused.
+    return f"https://github.com/{LEGACY_REPOSITORY}/releases/download/v{version}/ember-installer-{version}.tar.gz"
 
 
 def download_manifest(version=None):

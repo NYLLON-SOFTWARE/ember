@@ -2,11 +2,11 @@
 
 ## Optional hardware-accelerated stable releases
 
-The stable `publish-image.yml` dispatch accepts `hardware_accelerated` (default `false`) and `arm_runner_group` (default `ember-release-arm`). Hardware mode requires `workflow_dispatch` on `NYLLON-SOFTWARE/ember` at `refs/heads/main`; a GitHub-hosted validation job rejects other requests before any self-hosted job can be scheduled. The default remains the existing GitHub-hosted TCG matrix.
+The stable `publish-image.yml` dispatch accepts `hardware_accelerated` (default `false`) and `arm_runner_group` (default `ember-release-arm`). Hardware mode requires `workflow_dispatch` on `NYLLON-SOFTWARE/ember-rust` at `refs/heads/main`; a GitHub-hosted validation job rejects other requests before any self-hosted job can be scheduled. The default remains the existing GitHub-hosted TCG matrix.
 
 Hardware mode requires KVM on **all four** Ubuntu 24.04/Debian 13 × AMD64/ARM64 guests. AMD64 stays on GitHub-hosted `ubuntu-24.04`; ARM64 uses the selected organization runner group with the `self-hosted`, `Linux`, `ARM64`, and `ember-release-kvm` labels. Each actual job checks native `/dev/kvm` API 12 and VM creation before expensive dependencies. QMP must then confirm KVM enabled; unavailable KVM fails the release gate without falling back to TCG. All 14 candidate gates and all 10 public gates still run for every platform before the existing promotion/deployment/final-publication dependencies can proceed.
 
-Before dispatch, configure an organization runner group allowing only this repository and the trusted reusable workflow at its **exact merged commit**: `NYLLON-SOFTWARE/ember/.github/workflows/installer-guests.yml@FULL_MERGED_SHA`. Labels alone do not restrict untrusted PR workflows. Verify the selected-workflow policy is active before registering a runner; do not place these runners in the default group. The GitHub-hosted build, signing, promotion, Cloudflare deployment, rollback, and final-alias jobs keep their existing runners and credentials. Guest jobs have only repository read permission, no inherited secrets or release environment, and checkout does not persist credentials.
+Before dispatch, configure an organization runner group allowing only this repository and the trusted reusable workflow at its **exact merged commit**: `NYLLON-SOFTWARE/ember-rust/.github/workflows/installer-guests.yml@FULL_MERGED_SHA`. Labels alone do not restrict untrusted PR workflows. Verify the selected-workflow policy is active before registering a runner; do not place these runners in the default group. The GitHub-hosted build, signing, promotion, Cloudflare deployment, rollback, and final-alias jobs keep their existing runners and credentials. Guest jobs have only repository read permission, no inherited secrets or release environment, and checkout does not persist credentials.
 
 Use a fresh disposable native ARM64 Linux VM for each of the four ARM jobs (two candidate, two public), with an ephemeral single-job runner registered in that group. The temporary M5 setup below uses no Mac filesystem mounts or forwarded SSH agent. Run the agent as an ordinary user with sudo and a working rootful Docker daemon. Prepare QEMU/cloud-image/network/trust tools before registration; the workflow checks them and skips the host QEMU package installation on prepared ARM machines. Chromium dependencies still install, then [`pin-arm-firmware.sh`](pin-arm-firmware.sh) reapplies and verifies the exact tested firmware after dependency setup. Preserve the documented outer-kernel G1 trapping configuration on this M5 setup.
 
@@ -21,6 +21,8 @@ gh workflow run publish-image.yml --ref main \
 ```
 
 The hardware invocation enables the existing metrics flag alongside `--accel kvm`; it does not replace acceptance with a separate benchmark. Every successful hardware guest artifact includes the unchanged `result.json` plus `benchmark.json`, binding all 14/10 gates, `accelerator: "kvm"`, `kvm_enabled: true`, QEMU version and the harness/release-manifest/result hashes. Check these against the exact run, source commit and candidate artifacts for all eight guest jobs. This mode is opt-in infrastructure; adding it does not register runners or claim that a new release has passed.
+
+The canonical GitHub repository is `NYLLON-SOFTWARE/ember-rust`; the image stays at `ghcr.io/nyllon-software/ember`. Versioned installer manifests retain the former `/NYLLON-SOFTWARE/ember/releases/download/` bundle URL alias so installed 1.0.0 managers can validate updates after the repository rename.
 
 ## Installer benchmarks
 
@@ -118,7 +120,7 @@ Both fresh cases passed all 14 candidate gates, with QMP confirming KVM enabled 
 | Reboot SSH readiness phase | 16.2 s | 135.9 s |
 | Update with failure injection phase | 189.6 s | 235.5 s |
 
-The measured harness is from [commit `c8677af`](https://github.com/NYLLON-SOFTWARE/ember/commit/c8677afb4161ed4ce75a7c3477f0cc1e100463b1), SHA256 `e87af393659ffb3cf3ec77f4bce971af6cda81c591de82aa218563876f519ea2`, before the later QMP robustness changes. The separate `benchmark.json` file SHA256 values are:
+The measured harness is from [commit `c8677af`](https://github.com/NYLLON-SOFTWARE/ember-rust/commit/c8677afb4161ed4ce75a7c3477f0cc1e100463b1), SHA256 `e87af393659ffb3cf3ec77f4bce971af6cda81c591de82aa218563876f519ea2`, before the later QMP robustness changes. The separate `benchmark.json` file SHA256 values are:
 
 - KVM: `4fd14b0f6d32cb98bbdc32ba7ac9e46cb2b5d9e0396cea5f8c643b6c7e0e7b14`.
 - TCG: `0235f5174268fba4f74dce58f4ff3ed857c22b14a5f06835f97df9509ea33353`.

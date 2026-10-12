@@ -1,6 +1,8 @@
 import importlib.util
+import json
 from pathlib import Path
 import unittest
+from unittest import mock
 
 spec = importlib.util.spec_from_file_location('release', Path(__file__).parents[1] / 'release.py')
 release = importlib.util.module_from_spec(spec)
@@ -69,6 +71,28 @@ class ImmutableImageTags(unittest.TestCase):
 
 
 class PublicDistribution(unittest.TestCase):
+    def test_renamed_repository_keeps_release_history_and_reserves_in_new_namespace(self):
+        commit = 'a' * 40
+        history = [{'tag_name': 'v1.0.0', 'target_commitish': 'b' * 40}]
+        def command(*args):
+            if args == ('gh', 'api', 'repos/NYLLON-SOFTWARE/ember-rust'):
+                return json.dumps({'private': False})
+            if args == ('gh', 'api', '--paginate', '--slurp', 'repos/NYLLON-SOFTWARE/ember-rust/releases?per_page=100'):
+                return json.dumps([history])
+            if args == ('git', 'rev-parse', 'HEAD'):
+                return commit
+            return ''
+        with mock.patch.object(release, 'run', side_effect=command) as commands, \
+             mock.patch.object(release, 'registry_tag_exists', return_value=False) as registry:
+            release.reserve('1.1.0', commit)
+            self.assertEqual(registry.call_args_list, [mock.call('v1.1.0'), mock.call('1.1.0')])
+            self.assertIn(mock.call('gh', 'api', '--method', 'POST', 'repos/NYLLON-SOFTWARE/ember-rust/git/refs',
+                                    '-f', 'ref=refs/tags/v1.1.0', '-f', 'sha=' + commit), commands.call_args_list)
+            with self.assertRaisesRegex(ValueError, 'already reserved'):
+                release.guard('1.0.0', commit)
+        self.assertEqual(release.IMAGE, 'ghcr.io/nyllon-software/ember')
+        self.assertFalse(any('repos/NYLLON-SOFTWARE/ember/' in str(call) for call in commands.call_args_list))
+
     def test_repository_must_explicitly_be_public(self):
         release.require_public_repository({'private': False})
         for metadata in ({'private': True}, {}):
