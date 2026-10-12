@@ -1,5 +1,6 @@
 """Execute release workflow guards and shell branches without provisioning runners."""
 import contextlib
+import hashlib
 import io
 import json
 import os
@@ -41,7 +42,12 @@ def stub(path):
 class HardwareRelease(unittest.TestCase):
     def setUp(self):
         self.publish = PUBLISH.read_text()
-        self.guests = GUESTS.read_text()
+        guest_bytes = GUESTS.read_bytes()
+        # Bind local contract execution to the pinned workflow, including in shallow CI.
+        self.assertEqual(hashlib.sha256(guest_bytes).hexdigest(),
+                         'f786fbbdb4b85080acc0a77ee5968c3d4351641120c39cb839a6b107377866e5',
+                         'Local installer-guests.yml must match reviewed pinned workflow 873946ef5610ac0598e23875cbb0e9b53f8c9532')
+        self.guests = guest_bytes.decode()
         self.installation = job(self.guests, 'installation')
 
     def validate(self, **overrides):
