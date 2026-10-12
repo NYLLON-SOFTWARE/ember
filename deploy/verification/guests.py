@@ -19,6 +19,7 @@ import socket
 import ssl
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import urllib.request
@@ -70,7 +71,7 @@ def require_kvm(arch):
         raise RuntimeError('KVM is unavailable on this disposable runner') from None
 
 
-def qemu_command(arch, accel, monitor=False):
+def qemu_command(arch, accel, qmp=None):
     assert arch in ('amd64', 'arm64') and accel in ('tcg', 'kvm'), 'Unsupported guest architecture or accelerator'
     cpu = 'host' if accel == 'kvm' else 'max'
     if arch == 'amd64':
@@ -79,8 +80,8 @@ def qemu_command(arch, accel, monitor=False):
         machine = 'virt,gic-version=host' if accel == 'kvm' else 'virt'
         command = ['qemu-system-aarch64', '-machine', machine, '-cpu', cpu, '-bios', '/usr/share/qemu-efi-aarch64/QEMU_EFI.fd']
     command += ['-accel', accel, '-smp', '2', '-m', '4096', '-nographic', '-drive', f'file={WORK}/disk.qcow2,format=qcow2,if=virtio', '-drive', f'file={WORK}/seed.iso,format=raw,if=virtio,readonly=on', '-netdev', 'tap,id=net0,ifname=embertap0,script=no,downscript=no', '-device', 'virtio-net-pci,netdev=net0,mac=52:54:00:12:34:56']
-    if monitor:
-        command += ['-qmp', f'unix:{WORK}/qmp.sock,server=on,wait=off']
+    if qmp is not None:
+        command += ['-qmp', f'unix:{qmp},server=on,wait=off']
     return command
 
 
@@ -91,12 +92,14 @@ def qmp_remaining(deadline):
     return remaining
 
 
-def qmp_connection(deadline):
+def qmp_connection(qmp, deadline, process):
     while True:
+        if process is not None and process.poll() is not None:
+            raise RuntimeError('QEMU exited before QMP became available')
         connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         try:
             connection.settimeout(qmp_remaining(deadline))
-            connection.connect(str(WORK / 'qmp.sock'))
+            connection.connect(str(qmp))
             return connection
         except (FileNotFoundError, ConnectionRefusedError):
             connection.close()
@@ -131,11 +134,11 @@ def qmp_message(connection, pending, deadline):
     raise RuntimeError('Too many QMP events')
 
 
-def qmp_acceleration(accel, timeout=30):
+def qmp_acceleration(accel, qmp, process=None, timeout=30):
     # One wall-clock budget covers startup and every read/write, even trickling output.
     deadline = time.monotonic() + timeout
     try:
-        with qmp_connection(deadline) as connection:
+        with qmp_connection(qmp, deadline, process) as connection:
             pending = bytearray()
             greeting = qmp_message(connection, pending, deadline)
             try:
@@ -452,12 +455,19 @@ class Guest:
         run('cloud-localds', '--network-config=' + str(WORK / 'network-config'), WORK / 'seed.iso', WORK / 'user-data', WORK / 'meta-data')
         accel = getattr(self, 'accel', 'tcg')
         monitor = getattr(self, 'benchmark', False) or accel == 'kvm'
-        command = qemu_command(arch, accel, monitor)
-        log = (WORK / 'diagnostics/console.log').open('w')
-        self.process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT)
-        atexit.register(self.process.terminate)
-        if monitor:
-            self.acceleration = qmp_acceleration(accel)
+        # Unix socket path limits must not depend on the checkout location.
+        with tempfile.TemporaryDirectory(prefix='ember-qmp-', dir='/tmp') if monitor else contextlib.nullcontext() as temporary:
+            qmp = Path(temporary) / 'qmp.sock' if monitor else None
+            command = qemu_command(arch, accel, qmp)
+            with (WORK / 'diagnostics/console.log').open('w') as log:
+                self.process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT)
+            atexit.register(self.process.terminate)
+            if monitor:
+                try:
+                    self.acceleration = qmp_acceleration(accel, qmp, self.process)
+                except (OSError, RuntimeError) as error:
+                    self.report_boot_failure(error, 'QMP')
+                    raise
         report_stage('guest-ssh')
         self.wait_for_ssh()
         report_stage('guest-cloud-init')
@@ -474,20 +484,23 @@ class Guest:
         try:
             wait_for(ready, timeout=GUEST_BOOT_TIMEOUT)
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError, RuntimeError) as error:
-            console = WORK / 'diagnostics/console.log'
-            tail = b''
-            try:
-                with console.open('rb') as source:
-                    source.seek(max(0, console.stat().st_size - 16384))
-                    tail = source.read(16384)
-            except OSError:
-                pass
-            status = self.process.poll()
-            detail = (f'Guest SSH readiness failed; QEMU exit status: {status}\n'
-                      f'Final SSH/error: {sanitized_output(getattr(error, "stderr", None) or str(error))}\n'
-                      f'Console tail:\n{sanitized_output(tail, limit=16384)}\n')
-            write_diagnostic('boot.log', detail, emit=True)
+            self.report_boot_failure(error, 'SSH')
             raise
+
+    def report_boot_failure(self, error, readiness):
+        console = WORK / 'diagnostics/console.log'
+        tail = b''
+        try:
+            with console.open('rb') as source:
+                source.seek(max(0, console.stat().st_size - 16384))
+                tail = source.read(16384)
+        except OSError:
+            pass
+        status = self.process.poll()
+        detail = (f'Guest {readiness} readiness failed; QEMU exit status: {status}\n'
+                  f'Final {readiness}/error: {sanitized_output(getattr(error, "stderr", None) or str(error))}\n'
+                  f'Console tail:\n{sanitized_output(tail, limit=16384)}\n')
+        write_diagnostic('boot.log', detail, emit=True)
 
 
 def network(public):

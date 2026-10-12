@@ -821,11 +821,13 @@ class VerificationProgress(unittest.TestCase):
             stack.enter_context(mock.patch.object(guests, 'run', side_effect=run))
             popen = stack.enter_context(mock.patch.object(guests.subprocess, 'Popen'))
             stack.enter_context(mock.patch.object(guests.atexit, 'register'))
+            monitor_directory = stack.enter_context(mock.patch.object(guests.tempfile, 'TemporaryDirectory'))
             wait = stack.enter_context(mock.patch.object(guest, 'wait_for_ssh'))
             ssh = stack.enter_context(mock.patch.object(guest, 'ssh', return_value=subprocess.CompletedProcess([], 0, 'private SSH output', 'private stderr')))
             output = stack.enter_context(contextlib.redirect_stderr(io.StringIO()))
             guest.boot('ubuntu-24.04', 'arm64')
             popen.call_args.kwargs['stdout'].close()
+            monitor_directory.assert_not_called()
         snapshots = [guests.json.loads(line.split(': ', 1)[1]) for line in output.getvalue().splitlines()]
         self.assertEqual([item['stage'] for item in snapshots], ['guest-boot', 'guest-ssh', 'guest-cloud-init', 'guest-packages'])
         self.assertNotIn('private', output.getvalue())
@@ -886,6 +888,132 @@ class BootDiagnostics(unittest.TestCase):
 
 
 
+class QmpBootDiagnostics(unittest.TestCase):
+    @contextlib.contextmanager
+    def boot_fixture(self, source):
+        with tempfile.TemporaryDirectory() as temporary, contextlib.ExitStack() as stack:
+            root = Path(temporary) / ('long-checkout-' * 10)
+            work = root / 'tmp/installer-verification'
+            (work / 'diagnostics').mkdir(parents=True)
+            (root / 'deploy/verification').mkdir(parents=True)
+            guest = guests.Guest.__new__(guests.Guest)
+            guest.accel, guest.benchmark = 'kvm', True
+            guest.key = work / 'ssh'
+            guest.key.with_suffix('.pub').write_text('ssh-ed25519 disposable-test-public-key')
+            image = b'disposable cloud image'
+            lock = {'ubuntu-24.04/arm64': {'url': 'https://example.invalid/base.qcow2',
+                'algorithm': 'sha256', 'checksum': guests.hashlib.sha256(image).hexdigest()}}
+            (root / 'deploy/verification/guests.lock.json').write_text(guests.json.dumps(lock))
+            paths, permissions, children = [], [], []
+            real_popen = subprocess.Popen
+
+            def run(*args, **kwargs):
+                if args[0] == 'curl':
+                    (work / 'base.qcow2').write_bytes(image)
+                return subprocess.CompletedProcess([], 0, '', '')
+
+            def popen(command, **kwargs):
+                path = Path(command[command.index('-qmp') + 1].removeprefix('unix:').split(',')[0])
+                paths.append(path)
+                permissions.append(path.parent.stat().st_mode & 0o777)
+                child = real_popen([sys.executable, '-u', '-c', source, str(path)], **kwargs)
+                children.append(child)
+                return child
+
+            stack.enter_context(mock.patch.object(guests, 'ROOT', root))
+            stack.enter_context(mock.patch.object(guests, 'WORK', work))
+            stack.enter_context(mock.patch.object(guests, 'run', side_effect=run))
+            stack.enter_context(mock.patch.object(guests.subprocess, 'Popen', side_effect=popen))
+            stack.enter_context(mock.patch.object(guests.atexit, 'register'))
+            wait = stack.enter_context(mock.patch.object(guest, 'wait_for_ssh'))
+            ssh = stack.enter_context(mock.patch.object(guest, 'ssh'))
+            output = stack.enter_context(contextlib.redirect_stderr(io.StringIO()))
+            try:
+                yield guest, work, paths, permissions, wait, ssh, output
+            finally:
+                for child in children:
+                    if child.poll() is None:
+                        child.terminate()
+                    child.wait(timeout=5)
+
+    def test_long_checkout_uses_real_short_private_socket_and_cleans_after_proof(self):
+        source = """
+import json, socket, sys
+with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
+    server.bind(sys.argv[1]); server.listen(1); server.settimeout(5)
+    with server.accept()[0] as connection, connection.makefile('rwb') as stream:
+        stream.write(b'{"QMP":{"version":{"qemu":{"major":10,"minor":2,"micro":1}}}}\\n'); stream.flush()
+        assert json.loads(stream.readline()) == {'execute': 'qmp_capabilities'}
+        stream.write(b'{"return":{}}\\n'); stream.flush()
+        assert json.loads(stream.readline()) == {'execute': 'query-kvm'}
+        stream.write(b'{"return":{"present":true,"enabled":true}}\\n'); stream.flush()
+"""
+        with self.boot_fixture(source) as (guest, work, paths, permissions, wait, ssh, output):
+            self.assertGreater(len(guests.os.fsencode(work / 'qmp.sock')), 107)
+            guest.boot('ubuntu-24.04', 'arm64')
+            self.assertEqual(guest.acceleration, {'accelerator': 'kvm', 'kvm_enabled': True,
+                'qemu_version': {'major': 10, 'minor': 2, 'micro': 1}})
+            self.assertEqual(len(paths), 1)
+            self.assertLess(len(guests.os.fsencode(paths[0])), 104)
+            self.assertEqual(paths[0].parent.parent, Path('/tmp'))
+            self.assertNotIn(str(work), str(paths[0]))
+            self.assertEqual(permissions, [0o700])
+            self.assertFalse(paths[0].parent.exists())
+            wait.assert_called_once_with()
+            self.assertEqual(ssh.call_count, 2)
+            self.assertNotIn('readiness failed', output.getvalue())
+
+    def test_real_child_early_exit_is_prompt_and_emits_bounded_redacted_boot_evidence(self):
+        source = """
+print('x' * 30000)
+print('\\x1b[31mfirmware startup failed\\x1b[0m')
+print('SECRET_KEY_BASE=private-secret')
+print('VAPID_PRIVATE_KEY=private-vapid')
+print('EMBER_SETUP_TOKEN=private-env-token')
+print('https://chat.ember.test/first_run/access#token=private-fragment')
+print('Cookie: session=private-cookie')
+print('Authorization: Bearer private-authorization')
+raise SystemExit(23)
+"""
+        with self.boot_fixture(source) as (guest, work, paths, permissions, wait, ssh, output):
+            started = guests.time.monotonic()
+            with self.assertRaisesRegex(RuntimeError, '^QEMU exited before QMP became available$') as raised:
+                guest.boot('ubuntu-24.04', 'arm64')
+            self.assertLess(guests.time.monotonic() - started, 3)
+            wait.assert_not_called()
+            ssh.assert_not_called()
+            diagnostic = (work / 'diagnostics/boot.log').read_text()
+            self.assertEqual(output.getvalue().split('Guest QMP readiness failed;', 1)[1], diagnostic.split('Guest QMP readiness failed;', 1)[1] + '\n')
+            self.assertIn('Guest QMP readiness failed; QEMU exit status: 23', diagnostic)
+            self.assertIn('firmware startup failed', diagnostic)
+            self.assertLess(len(diagnostic), 17000)
+            self.assertFalse(paths[0].parent.exists())
+            for private in ('private-secret', 'private-vapid', 'private-env-token', 'private-fragment',
+                            'private-cookie', 'private-authorization', '\x1b'):
+                self.assertNotIn(private, diagnostic + output.getvalue() + str(raised.exception))
+
+    def test_failed_proof_cleans_socket_directory_and_preserves_error_when_diagnostics_fail(self):
+        failure = RuntimeError('QMP accelerator proof timed out')
+        write_text = Path.write_text
+
+        def write(path, *args, **kwargs):
+            if path.name == 'boot.log':
+                raise OSError('No space left on device')
+            return write_text(path, *args, **kwargs)
+
+        with self.boot_fixture('import time; time.sleep(30)') as (guest, work, paths, permissions, wait, ssh, output):
+            with mock.patch.object(guests, 'qmp_acceleration', side_effect=failure) as proof, \
+                    mock.patch.object(Path, 'write_text', new=write), \
+                    mock.patch('builtins.print', side_effect=OSError('Broken pipe')):
+                with self.assertRaises(RuntimeError) as raised:
+                    guest.boot('ubuntu-24.04', 'arm64')
+            self.assertIs(raised.exception, failure)
+            self.assertFalse(paths[0].parent.exists())
+            self.assertEqual(proof.call_args.args, ('kvm', paths[0], guest.process))
+            wait.assert_not_called()
+            ssh.assert_not_called()
+
+
 class QemuAcceleration(unittest.TestCase):
     def test_default_tcg_keeps_existing_machines_cpu_firmware_and_resources(self):
         for arch, executable, machine in (('amd64', 'qemu-system-x86_64', 'q35'), ('arm64', 'qemu-system-aarch64', 'virt')):
@@ -903,13 +1031,13 @@ class QemuAcceleration(unittest.TestCase):
     def test_kvm_uses_only_one_accelerator_with_native_cpu_and_arm_host_gic(self):
         for arch in ('amd64', 'arm64'):
             with self.subTest(arch=arch):
-                command = guests.qemu_command(arch, 'kvm', monitor=True)
+                command = guests.qemu_command(arch, 'kvm', Path('/tmp/private-qmp/qmp.sock'))
                 self.assertEqual(command.count('-accel'), 1)
                 self.assertEqual(command[command.index('-accel') + 1], 'kvm')
                 self.assertNotIn('tcg', command)
                 self.assertEqual(command[command.index('-cpu') + 1], 'host')
                 self.assertEqual(command[command.index('-machine') + 1], 'q35' if arch == 'amd64' else 'virt,gic-version=host')
-                self.assertEqual(command[command.index('-qmp') + 1], f'unix:{guests.WORK}/qmp.sock,server=on,wait=off')
+                self.assertEqual(command[command.index('-qmp') + 1], 'unix:/tmp/private-qmp/qmp.sock,server=on,wait=off')
         for arch, accel in (('riscv64', 'kvm'), ('arm64', 'auto'), ('arm64', 'kvm:tcg')):
             with self.subTest(arch=arch, accel=accel), self.assertRaises(AssertionError):
                 guests.qemu_command(arch, accel)
@@ -973,10 +1101,10 @@ class QemuAcceleration(unittest.TestCase):
                     with mock.patch.object(guests, 'WORK', work):
                         if requested == 'kvm' and not enabled:
                             with self.assertRaisesRegex(RuntimeError, '^QEMU did not enable the requested accelerator$') as raised:
-                                guests.qmp_acceleration(requested)
+                                guests.qmp_acceleration(requested, work / 'qmp.sock')
                             self.assertNotIn('private', str(raised.exception))
                         else:
-                            result = guests.qmp_acceleration(requested)
+                            result = guests.qmp_acceleration(requested, work / 'qmp.sock')
                             self.assertEqual(result, {'accelerator': requested, 'kvm_enabled': enabled, 'qemu_version': {'major': 10, 'minor': 1, 'micro': 2}})
                     worker.join(5)
                     self.assertFalse(worker.is_alive())
@@ -1019,7 +1147,7 @@ class QemuAcceleration(unittest.TestCase):
                     try:
                         with mock.patch.object(guests, 'WORK', work), contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
                             with self.assertRaisesRegex(RuntimeError, '^QMP accelerator proof timed out$') as raised:
-                                guests.qmp_acceleration('kvm', timeout=0.12)
+                                guests.qmp_acceleration('kvm', work / 'qmp.sock', timeout=0.12)
                     finally:
                         stop.set()
                         worker.join(2)
@@ -1033,7 +1161,7 @@ class QemuAcceleration(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix='ember-qmp-', dir='/tmp') as temporary:
             started = guests.time.monotonic()
             with mock.patch.object(guests, 'WORK', Path(temporary)), self.assertRaisesRegex(RuntimeError, '^QMP accelerator proof timed out$'):
-                guests.qmp_acceleration('kvm', timeout=0.05)
+                guests.qmp_acceleration('kvm', Path(temporary) / 'qmp.sock', timeout=0.05)
             self.assertLess(guests.time.monotonic() - started, 0.5)
 
 

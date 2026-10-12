@@ -36,6 +36,31 @@ The local setup uses an Apple M5 Max running macOS 27.0.1, with Lima 2.2.1 using
 
 The inner guest stays at 2 vCPUs and 4096 MiB using the [pinned Ubuntu 24.04 ARM64 image](guests.lock.json), SHA256 `1d6bffe64b848468ac97f821d369a4846d983de1800ccf6b5ec8853e85cefc55`, and the same published Ember 1.0.0 assets. The harness runs inside Linux, not directly on macOS. Local Mac timings do not establish Depot performance.
 
+The Ubuntu 26.04 host firmware, `qemu-efi-aarch64` version `2025.11-3ubuntu7.3`, had SHA256 `e264b5d66d05ad3abad9ec0b63dcf0c956007a3af9345dd03f79c5246ffcb392`. The TCG comparison stalled at its UEFI banner before Linux started. An [upstream EDK2 report](https://github.com/tianocore/edk2/issues/11962) documents the same early-banner symptom with 2025.11 firmware, QEMU 10.2, and `-cpu max`; its [LPA2 page-table fix](https://github.com/tianocore/edk2/pull/12545) is absent from this Ubuntu package. This is a matching upstream failure, not proof of the local stall's cause.
+
+For the paired reruns, pin the same official Ubuntu 24.04 firmware on the unused prepared outer VM **before cloning either case**. The following extracts the [pinned `2024.02-2ubuntu0.10` package](https://packages.ubuntu.com/noble-updates/all/qemu-efi-aarch64/download) without installing or downgrading a host package, checks both package and firmware hashes, and replaces only the firmware file used by the harness. Run this only in the disposable benchmark base; the harness and stable release defaults remain unchanged.
+
+```sh
+set -eu
+firmware_dir=$(mktemp -d)
+trap 'rm -rf "$firmware_dir"' EXIT
+curl -fsSL --output "$firmware_dir/firmware.deb" \
+  https://archive.ubuntu.com/ubuntu/pool/main/e/edk2/qemu-efi-aarch64_2024.02-2ubuntu0.10_all.deb
+printf '%s  %s\n' \
+  fad8e80e929cd00dae8c5c8e5dd3ec85f37d9a832eea776957e5e2cf86ef2ab5 \
+  "$firmware_dir/firmware.deb" | sha256sum --check --status
+dpkg-deb --extract "$firmware_dir/firmware.deb" "$firmware_dir/extracted"
+firmware_source="$firmware_dir/extracted/usr/share/qemu-efi-aarch64/QEMU_EFI.fd"
+printf '%s  %s\n' \
+  d2d1228a664adbaed2148c2661e30c930af9bf09f03b6d5aa2a8bbc9cb5cab43 \
+  "$firmware_source" | sha256sum --check --status
+sudo install -o root -g root -m 0644 "$firmware_source" \
+  /usr/share/qemu-efi-aarch64/QEMU_EFI.fd
+printf '%s  %s\n' \
+  d2d1228a664adbaed2148c2661e30c930af9bf09f03b6d5aa2a8bbc9cb5cab43 \
+  /usr/share/qemu-efi-aarch64/QEMU_EFI.fd | sha256sum --check --status
+```
+
 On this host, the inner guest boot required `kvm-arm.vgic_v3_group1_trap=1` on the **outer Linux kernel command line**. Configure the outer VM's bootloader, reboot it, then clone both KVM and TCG cases from that base. This documented KVM option traps guest accesses to GICv3 group-1 system registers; Linux reports reduced performance when it is enabled. [Linux 7 parameter definition](https://github.com/torvalds/linux/blob/028ef9c96e96197026887c0f092424679298aae8/Documentation/admin-guide/kernel-parameters.txt#L3257-L3259), [activation message](https://github.com/torvalds/linux/blob/028ef9c96e96197026887c0f092424679298aae8/arch/arm64/kvm/vgic/vgic-v3.c#L884-L888).
 
 Verify activation inside each outer VM:
@@ -59,16 +84,21 @@ Use `--accel tcg` only for the separate software-emulation comparison. Each invo
 
 ### Local measurements (2026-10-11)
 
-One complete KVM run passed all 14 candidate gates with QMP-confirmed KVM acceleration. The TCG run is pending, so no paired speedup is claimed. The cases run sequentially on fresh clones of the same prepared outer VM, with the same G1 trapping boot option, artifacts, tools, and inner guest resources.
+Both fresh cases passed all 14 candidate gates, with QMP confirming KVM enabled for the KVM case and disabled for TCG. TCG took **3.80 times the KVM elapsed time** in this single paired trial (1578.8 / 415.5). The cases ran sequentially on fresh clones of the same prepared outer VM, with matching G1 trapping boot option, pinned firmware, public artifacts, tools, and inner guest resources.
 
 | Measurement | KVM | TCG |
 | --- | --- | --- |
-| Complete candidate gates | 14/14 passed | Pending |
-| Harness elapsed time | 444.2 s (7 min 24.2 s) | Pending |
-| First-install phase | 44.4 s | Pending |
-| Reboot SSH readiness phase | 18.9 s | Pending |
-| Update with failure injection phase | 191.2 s | Pending |
+| Complete candidate gates | 14/14 passed | 14/14 passed |
+| Harness elapsed time | 415.5 s (6 min 55.5 s) | 1578.8 s (26 min 18.8 s) |
+| First-install phase | 39.0 s | 275.4 s |
+| Reboot SSH readiness phase | 16.2 s | 135.9 s |
+| Update with failure injection phase | 189.6 s | 235.5 s |
 
-The update phase includes an intentional approximately 180-second failed-start health deadline; it is not a normal update-time measurement. These are single-run lifecycle timings, including guest boot and package/download work; outer runner provisioning and dependency setup were not timed. Local cloud compute charges were $0. This result does not measure Depot performance or application throughput.
+The measured harness is from [commit `c8677af`](https://github.com/NYLLON-SOFTWARE/ember/commit/c8677afb4161ed4ce75a7c3477f0cc1e100463b1), SHA256 `e87af393659ffb3cf3ec77f4bce971af6cda81c591de82aa218563876f519ea2`, before the later QMP robustness changes. The separate `benchmark.json` file SHA256 values are:
 
-The run used harness SHA256 `e87af393659ffb3cf3ec77f4bce971af6cda81c591de82aa218563876f519ea2`; its complete result SHA256 is `cce113202ff868c8da1660a60c770d178dbacf028766911d79adf91215980274`. Raw benchmark and result JSON remain outside version control.
+- KVM: `4fd14b0f6d32cb98bbdc32ba7ac9e46cb2b5d9e0396cea5f8c643b6c7e0e7b14`.
+- TCG: `0235f5174268fba4f74dce58f4ff3ed857c22b14a5f06835f97df9509ea33353`.
+
+Both complete result files have SHA256 `cce113202ff868c8da1660a60c770d178dbacf028766911d79adf91215980274`: their platform and gate lists are identical, while the benchmark files contain the distinct timings. Raw benchmark, result, and case-provenance JSON remain outside version control.
+
+This experiment used one run per mode; package and image downloads can vary between sequential runs. TCG uses `-cpu max` with the default `virt` machine, while KVM uses `-cpu host` and `virt,gic-version=host`. It compares the practical harness modes, not an isolated accelerator change. The update phase includes an intentional approximately 180-second failed-start health deadline; it is not a normal update-time measurement. Timings include guest boot and package/download work; outer runner provisioning and dependency setup were not timed. Local cloud compute charges were $0. These figures do not measure managed-provider performance or application throughput.
