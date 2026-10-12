@@ -219,7 +219,7 @@ jobs:
 
   guests:
     needs: [identity, bundle]
-    uses: ./.github/workflows/installer-guests.yml
+    uses: NYLLON-SOFTWARE/ember-rust/.github/workflows/installer-guests.yml@873946ef5610ac0598e23875cbb0e9b53f8c9532
     with:
       commit: ${{ needs.identity.outputs.commit }}
       artifact: stable-candidate
@@ -351,7 +351,7 @@ jobs:
 
   public-verification:
     needs: [identity, deploy]
-    uses: ./.github/workflows/installer-guests.yml
+    uses: NYLLON-SOFTWARE/ember-rust/.github/workflows/installer-guests.yml@873946ef5610ac0598e23875cbb0e9b53f8c9532
     with:
       commit: ${{ needs.identity.outputs.commit }}
       artifact: stable-candidate

@@ -1,5 +1,6 @@
 """Execute release workflow guards and shell branches without provisioning runners."""
 import contextlib
+import hashlib
 import io
 import json
 import os
@@ -41,7 +42,12 @@ def stub(path):
 class HardwareRelease(unittest.TestCase):
     def setUp(self):
         self.publish = PUBLISH.read_text()
-        self.guests = GUESTS.read_text()
+        guest_bytes = GUESTS.read_bytes()
+        # Bind local contract execution to the pinned workflow, including in shallow CI.
+        self.assertEqual(hashlib.sha256(guest_bytes).hexdigest(),
+                         'f786fbbdb4b85080acc0a77ee5968c3d4351641120c39cb839a6b107377866e5',
+                         'Local installer-guests.yml must match reviewed pinned workflow 873946ef5610ac0598e23875cbb0e9b53f8c9532')
+        self.guests = guest_bytes.decode()
         self.installation = job(self.guests, 'installation')
 
     def validate(self, **overrides):
@@ -95,10 +101,16 @@ class HardwareRelease(unittest.TestCase):
         self.assertEqual(len(platforms), 4)
 
     def test_candidate_and_public_share_exact_commit_artifact_and_hardware_settings(self):
+        reviewed = ('NYLLON-SOFTWARE/ember-rust/.github/workflows/installer-guests.yml@'
+                    '873946ef5610ac0598e23875cbb0e9b53f8c9532')
+        references = []
         for name, public in (('guests', 'false'), ('public-verification', 'true')):
             with self.subTest(job=name):
                 call = job(self.publish, name)
-                self.assertIn('    uses: ./.github/workflows/installer-guests.yml\n', call)
+                reference = re.search(r'^    uses: (\S+)$', call, re.M).group(1)
+                self.assertRegex(reference, r'^NYLLON-SOFTWARE/ember-rust/\.github/workflows/installer-guests\.yml@[0-9a-f]{40}$')
+                self.assertEqual(reference, reviewed, 'Caller pin must match the reviewed runner-group workflow')
+                references.append(reference)
                 self.assertIn('      commit: ${{ needs.identity.outputs.commit }}\n', call)
                 self.assertIn('      artifact: stable-candidate\n', call)
                 self.assertIn('      public: ' + public + '\n', call)
@@ -106,6 +118,7 @@ class HardwareRelease(unittest.TestCase):
                 self.assertIn("      arm_runner_group: ${{ inputs.arm_runner_group || 'ember-release-arm' }}\n", call)
                 self.assertNotIn('secrets:', call)
                 self.assertNotIn('write', call)
+        self.assertEqual(references, [reviewed, reviewed])
         for source in (self.publish, self.guests):
             self.assertRegex(source, r'      hardware_accelerated:\n(?:        [^\n]+\n)*        default: false\n')
             self.assertRegex(source, r'      arm_runner_group:\n(?:        [^\n]+\n)*        default: ember-release-arm\n')
